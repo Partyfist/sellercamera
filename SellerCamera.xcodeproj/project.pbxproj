@@ -8,6 +8,9 @@
 
 /* Begin PBXFileReference section */
 		148245972F794E9E003C8259 /* SellerCamera.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SellerCamera.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		148245BF2F7BBE68003C8259 /* SellerCamera.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = SellerCamera.xcodeproj; sourceTree = "<group>"; };
+		148245DC2F7CBC73003C8259 /* SellerCamera.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = SellerCamera.xcodeproj; sourceTree = "<group>"; };
+		148245F82F7CC3CB003C8259 /* SellerCamera.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = SellerCamera.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -42,6 +45,21 @@
 			children = (
 				148245972F794E9E003C8259 /* SellerCamera.app */,
 			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		148245C12F7BBE68003C8259 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		148245DE2F7CBC73003C8259 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		148245FA2F7CC3CB003C8259 /* Products */ = {
+			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -97,6 +115,20 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 148245982F794E9E003C8259 /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 148245FA2F7CC3CB003C8259 /* Products */;
+					ProjectRef = 148245F82F7CC3CB003C8259 /* SellerCamera.xcodeproj */;
+				},
+				{
+					ProductGroup = 148245DE2F7CBC73003C8259 /* Products */;
+					ProjectRef = 148245DC2F7CBC73003C8259 /* SellerCamera.xcodeproj */;
+				},
+				{
+					ProductGroup = 148245C12F7BBE68003C8259 /* Products */;
+					ProjectRef = 148245BF2F7BBE68003C8259 /* SellerCamera.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				148245962F794E9E003C8259 /* SellerCamera */,
@@ -178,7 +210,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -236,7 +268,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -256,6 +288,8 @@
 				DEVELOPMENT_TEAM = XXFWYJU8YF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Seller Camera uses the camera to provide live preview for product shooting.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Seller Camera needs photo library access to export ready results.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +322,8 @@
 				DEVELOPMENT_TEAM = XXFWYJU8YF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Seller Camera uses the camera to provide live preview for product shooting.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Seller Camera needs photo library access to export ready results.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

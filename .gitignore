@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific files
+xcuserdata/
+**/xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+
+# Build artifacts
+DerivedData/
+.build/
+
+# Swift Package Manager
+.swiftpm/
+
+# Environment / secrets
+.env
+.env.*
+*.p12
+*.cer
+*.pem
+*.key
+*.mobileprovision
+
+# Logs / temporary files
+*.log
+tmp/
+
+# Local Codex metadata
+.codex/
+.agents/
