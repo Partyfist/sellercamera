@@ -35,6 +35,180 @@ enum CaptureWhiteBackgroundProcessorError: LocalizedError {
 }
 
 struct CaptureWhiteBackgroundProcessor {
+    private enum ProcessingConfig {
+        enum Refinement {
+            static let closedMaskMorphologyRadius = 1.1
+            static let coreMaskRadius = 0.8
+            static let expandedMaskRadius = 1.8
+            static let edgeBandDetailBoostFactor: CGFloat = 0.42
+            static let edgeTransitionBlurRadius = 0.26
+            static let reflectiveTransitionBlurRadius = 1.25
+            static let thinStructureBoostFactor: CGFloat = 0.24
+            static let hardEdgeContinuityBlurRadius = 0.55
+            static let hardEdgeStabilizedMaximumRadius = 0.62
+            static let hardEdgeStabilizedMinimumRadius = 0.48
+            static let finalEdgeBlurRadius = 0.08
+            static let coreAnchorMinimumRadius = 0.2
+            static let coreAnchorMaximumRadius = 0.45
+            static let coreAnchorBlurRadius = 0.06
+            static let deepCoreMinimumRadius = 0.62
+            static let deepCoreBlurRadius = 0.04
+        }
+
+        enum Decontamination {
+            static let strongSaturation = 0.992
+            static let adaptiveRiskBlurRadius = 0.55
+            static let highlightPreserveMinimum: CGFloat = 0.78
+            static let highlightPreserveBlurRadius = 0.55
+            static let darkRiskExpandedBlurRadius = 0.9
+            static let adaptiveRiskWeight: CGFloat = 0.3
+            static let subjectCoreRadius = 1.25
+            static let subjectCoreBlurRadius = 0.35
+            static let outerRingNarrowRadius = 0.88
+            static let outerRingBlurRadius = 0.11
+            static let safeEdgeBandWeight: CGFloat = 0.34
+            static let topShiftY: CGFloat = -1.9
+            static let topInfluenceBlurRadius = 0.68
+            static let topGrayBandReductionWeight: CGFloat = 0.38
+        }
+
+        enum BoundaryRecovery {
+            static let innerMaskRadius = 0.95
+            static let outerMaskRadius = 1.65
+            static let hardBoundaryBlurRadius = 0.75
+            static let darkHardBoundaryBlurRadius = 0.62
+            static let softBoundaryBlurRadius = 1.1
+            static let hardRecoverUnsharpRadius = 0.85
+            static let hardRecoverUnsharpIntensity = 0.34
+            static let darkDensityUnsharpRadius = 0.7
+            static let darkDensityUnsharpIntensity = 0.24
+            static let darkDensityBrightness = -0.006
+            static let darkDensityContrast = 1.035
+            static let darkRecoverWeight: CGFloat = 0.52
+            static let softRecoverContrast = 1.025
+            static let softRecoverWeight: CGFloat = 0.34
+            static let softMaskBlurRadius = 0.8
+        }
+
+        enum Fidelity {
+            static let washoutRiskNormalizeStart = 0.025
+            static let washoutRiskNormalizeRange = 0.23
+            static let subjectCoreRadius = 1.45
+            static let subjectCoreBlurRadius = 0.75
+            static let innerMaskRadius = 0.85
+            static let outerMaskRadius = 1.45
+            static let darkBoundaryBlurRadius = 0.72
+            static let hardBoundaryBlurRadius = 0.58
+            static let subjectToneCoreWeightBase: CGFloat = 0.12
+            static let subjectToneCoreWeightRiskScale: CGFloat = 0.45
+            static let subjectToneWashoutWeightBase: CGFloat = 0.1
+            static let subjectToneWashoutWeightRiskScale: CGFloat = 0.42
+            static let subjectToneBlurRadius = 0.72
+            static let toneRecoveryBrightnessBase = -0.001
+            static let toneRecoveryBrightnessRiskScale = -0.012
+            static let toneRecoveryContrastBase = 1.015
+            static let toneRecoveryContrastRiskScale = 0.055
+            static let combinedCoreWeightBase: CGFloat = 0.14
+            static let combinedCoreWeightRiskScale: CGFloat = 0.14
+            static let combinedHardWeightBase: CGFloat = 0.24
+            static let combinedHardWeightRiskScale: CGFloat = 0.18
+            static let combinedDarkWeightBase: CGFloat = 0.48
+            static let combinedDarkWeightRiskScale: CGFloat = 0.22
+            static let combinedMaskBlurRadius = 0.65
+            static let densityRecoveryBrightnessBase = -0.003
+            static let densityRecoveryBrightnessRiskScale = -0.009
+            static let densityRecoveryContrastBase = 1.02
+            static let densityRecoveryContrastRiskScale = 0.06
+            static let darkEdgeRecoveryUnsharpRadius = 0.72
+            static let darkEdgeRecoveryUnsharpIntensity = 0.18
+            static let darkEdgeRecoveryBrightness = -0.007
+            static let darkEdgeRecoveryContrast = 1.04
+            static let darkEdgeRecoveryMaskWeightBase: CGFloat = 0.46
+            static let darkEdgeRecoveryMaskWeightRiskScale: CGFloat = 0.24
+            static let washoutMaskBlurRadius = 0.75
+        }
+
+        enum Quality {
+            static let coverageRiskLower = 0.015
+            static let coverageRiskUpper = 0.93
+            static let coverageReviewLower = 0.04
+            static let coverageReviewUpper = 0.84
+
+            static let riskForegroundWashout = 0.14
+            static let riskDarkEdgeWashout = 0.13
+            static let riskHardEdgeInstability = 0.12
+            static let riskFringe = 0.18
+            static let riskHighlightCut = 0.2
+            static let riskThinEdge = 0.09
+            static let riskSoftEdge = 0.075
+
+            static let reviewEdgeComplexity = 0.14
+            static let reviewEdgeRatio = 0.11
+            static let reviewForegroundWashout = 0.09
+            static let reviewDarkEdgeWashout = 0.08
+            static let reviewHardEdgeInstability = 0.075
+            static let reviewFringe = 0.12
+            static let reviewThinEdge = 0.055
+
+            static let hardCaseDarkEdgeWashout = 0.12
+            static let hardCaseForegroundWashout = 0.11
+            static let hardCaseHardEdgeInstability = 0.09
+            static let hardCaseFringe = 0.16
+            static let hardCaseHighlightCut = 0.19
+            static let hardCaseThinEdge = 0.065
+            static let hardCaseSoftEdge = 0.075
+        }
+
+        enum DynamicRadii {
+            static func maskFeatherRadius(for extent: CGRect) -> Double {
+                max(0.8, min(2.2, Double(min(extent.width, extent.height)) / 1200))
+            }
+
+            static func edgeBandRadius(for extent: CGRect) -> Double {
+                max(1.2, min(3.5, Double(min(extent.width, extent.height)) / 640))
+            }
+
+            static func shadowBlurRadius(for extent: CGRect) -> Double {
+                max(2.2, min(10.0, Double(min(extent.width, extent.height)) * 0.012))
+            }
+
+            static func shadowYOffset(for extent: CGRect) -> CGFloat {
+                max(2, extent.height * 0.006)
+            }
+
+            static func shadowOpacity(for extent: CGRect) -> CGFloat {
+                let normalized = max(0, min(1, extent.width / 1800))
+                return 0.07 + normalized * 0.02
+            }
+        }
+    }
+
+    private struct SegmentationProvider {
+        let makeMask: (_ sourceImage: CIImage, _ extent: CGRect) throws -> CIImage
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static let visionSegmentationProvider = SegmentationProvider { sourceImage, extent in
+        let request = VNGenerateForegroundInstanceMaskRequest()
+        let requestHandler = VNImageRequestHandler(ciImage: sourceImage, options: [:])
+        try requestHandler.perform([request])
+
+        guard let observation = request.results?.first else {
+            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
+        }
+
+        let instances = observation.allInstances
+        guard !instances.isEmpty else {
+            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
+        }
+
+        let maskPixelBuffer = try observation.generateScaledMaskForImage(
+            forInstances: instances,
+            from: requestHandler
+        )
+        return CIImage(cvPixelBuffer: maskPixelBuffer).cropped(to: extent)
+    }
+
     nonisolated static func process(confirmedStillPhoto: CaptureStillPhotoResult) async throws -> CaptureProcessedPhotoResult {
         try await Task.detached(priority: .userInitiated) {
             try processSync(confirmedStillPhoto: confirmedStillPhoto)
@@ -52,34 +226,23 @@ struct CaptureWhiteBackgroundProcessor {
 
     @available(iOS 17.0, *)
     private nonisolated static func processOnSupportedSystem(
-        confirmedStillPhoto: CaptureStillPhotoResult
+        confirmedStillPhoto: CaptureStillPhotoResult,
+        segmentationProvider: SegmentationProvider = visionSegmentationProvider
     ) throws -> CaptureProcessedPhotoResult {
         guard let inputImage = CIImage(data: confirmedStillPhoto.imageData) else {
             throw CaptureWhiteBackgroundProcessorError.invalidInputImage
         }
         let extent = inputImage.extent.integral
+        let renderContext = CIContext()
 
-        let request = VNGenerateForegroundInstanceMaskRequest()
-        let requestHandler = VNImageRequestHandler(ciImage: inputImage, options: [:])
-        try requestHandler.perform([request])
-
-        guard let observation = request.results?.first else {
-            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
-        }
-
-        let instances = observation.allInstances
-        guard !instances.isEmpty else {
-            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
-        }
-
-        let maskPixelBuffer = try observation.generateScaledMaskForImage(
-            forInstances: instances,
-            from: requestHandler
+        let subjectMask = try segmentationProvider.makeMask(
+            inputImage,
+            extent
         )
-        let maskImage = CIImage(cvPixelBuffer: maskPixelBuffer).cropped(to: extent)
-        let refinementArtifacts = refineSubjectMask(maskImage, sourceImage: inputImage, extent: extent)
+        let refinementArtifacts = refineSubjectMask(subjectMask, sourceImage: inputImage, extent: extent)
         let refinedMaskImage = refinementArtifacts.refinedMask
-        let decontaminatedSubjectImage = applyEdgeDecontamination(
+
+        let decontaminatedSubjectImage = runEdgeDecontaminationStage(
             sourceImage: inputImage,
             refinedMask: refinedMaskImage,
             edgeBandMask: refinementArtifacts.edgeBandMask,
@@ -87,24 +250,12 @@ struct CaptureWhiteBackgroundProcessor {
             darkEdgeRiskMask: refinementArtifacts.darkEdgeRiskMask,
             extent: extent
         )
-        let whiteBackground = CIImage(
-            color: CIColor(red: 1, green: 1, blue: 1, alpha: 1)
-        ).cropped(to: extent)
-        let backgroundWithShadow = applyContactShadow(
-            on: whiteBackground,
+        let compositedImage = try composeOnWhiteBackgroundStage(
+            subjectImage: decontaminatedSubjectImage,
             refinedMask: refinedMaskImage,
             extent: extent
         )
-
-        let blendFilter = CIFilter.blendWithMask()
-        blendFilter.inputImage = decontaminatedSubjectImage
-        blendFilter.maskImage = refinedMaskImage
-        blendFilter.backgroundImage = backgroundWithShadow
-
-        guard let compositedImage = blendFilter.outputImage else {
-            throw CaptureWhiteBackgroundProcessorError.outputCompositionFailed
-        }
-        let outputImage = applyBoundaryContrastRecovery(
+        let outputImage = runBoundaryContrastRecoveryStage(
             compositedImage: compositedImage,
             sourceImage: inputImage,
             refinedMask: refinedMaskImage,
@@ -112,8 +263,7 @@ struct CaptureWhiteBackgroundProcessor {
             darkEdgeRiskMask: refinementArtifacts.darkEdgeRiskMask,
             extent: extent
         )
-        let renderContext = CIContext()
-        let fidelityPreservedImage = applyForegroundFidelityConservation(
+        let fidelityPreservedImage = runForegroundFidelityStage(
             compositedImage: outputImage,
             sourceImage: inputImage,
             refinedMask: refinedMaskImage,
@@ -151,20 +301,105 @@ struct CaptureWhiteBackgroundProcessor {
     }
 
     @available(iOS 17.0, *)
+    private nonisolated static func runEdgeDecontaminationStage(
+        sourceImage: CIImage,
+        refinedMask: CIImage,
+        edgeBandMask: CIImage,
+        chromaSpillRiskMask: CIImage,
+        darkEdgeRiskMask: CIImage,
+        extent: CGRect
+    ) -> CIImage {
+        applyEdgeDecontamination(
+            sourceImage: sourceImage,
+            refinedMask: refinedMask,
+            edgeBandMask: edgeBandMask,
+            chromaSpillRiskMask: chromaSpillRiskMask,
+            darkEdgeRiskMask: darkEdgeRiskMask,
+            extent: extent
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func composeOnWhiteBackgroundStage(
+        subjectImage: CIImage,
+        refinedMask: CIImage,
+        extent: CGRect
+    ) throws -> CIImage {
+        let whiteBackground = CIImage(
+            color: CIColor(red: 1, green: 1, blue: 1, alpha: 1)
+        ).cropped(to: extent)
+        let backgroundWithShadow = applyContactShadow(
+            on: whiteBackground,
+            refinedMask: refinedMask,
+            extent: extent
+        )
+
+        let blendFilter = CIFilter.blendWithMask()
+        blendFilter.inputImage = subjectImage
+        blendFilter.maskImage = refinedMask
+        blendFilter.backgroundImage = backgroundWithShadow
+
+        guard let compositedImage = blendFilter.outputImage else {
+            throw CaptureWhiteBackgroundProcessorError.outputCompositionFailed
+        }
+        return compositedImage
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func runBoundaryContrastRecoveryStage(
+        compositedImage: CIImage,
+        sourceImage: CIImage,
+        refinedMask: CIImage,
+        hardEdgeMask: CIImage,
+        darkEdgeRiskMask: CIImage,
+        extent: CGRect
+    ) -> CIImage {
+        applyBoundaryContrastRecovery(
+            compositedImage: compositedImage,
+            sourceImage: sourceImage,
+            refinedMask: refinedMask,
+            hardEdgeMask: hardEdgeMask,
+            darkEdgeRiskMask: darkEdgeRiskMask,
+            extent: extent
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func runForegroundFidelityStage(
+        compositedImage: CIImage,
+        sourceImage: CIImage,
+        refinedMask: CIImage,
+        hardEdgeMask: CIImage,
+        darkEdgeRiskMask: CIImage,
+        extent: CGRect,
+        renderContext: CIContext
+    ) -> CIImage {
+        applyForegroundFidelityConservation(
+            compositedImage: compositedImage,
+            sourceImage: sourceImage,
+            refinedMask: refinedMask,
+            hardEdgeMask: hardEdgeMask,
+            darkEdgeRiskMask: darkEdgeRiskMask,
+            extent: extent,
+            renderContext: renderContext
+        )
+    }
+
+    @available(iOS 17.0, *)
     private nonisolated static func refineSubjectMask(
         _ maskImage: CIImage,
         sourceImage: CIImage,
         extent: CGRect
     ) -> MaskRefinementArtifacts {
         let closedMask = maskImage
-            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 1.1])
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 1.1])
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.closedMaskMorphologyRadius])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.closedMaskMorphologyRadius])
 
         let coreMask = closedMask
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 0.8])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.coreMaskRadius])
             .cropped(to: extent)
         let expandedMask = closedMask
-            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 1.8])
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.expandedMaskRadius])
             .cropped(to: extent)
         let edgeBandMask = expandedMask
             .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: coreMask])
@@ -214,7 +449,10 @@ struct CaptureWhiteBackgroundProcessor {
         let edgeBandDetail = edgeGuideMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: edgeBandMask])
             .cropped(to: extent)
-        let scaledEdgeBandDetail = scaleMask(edgeBandDetail, factor: 0.42)
+        let scaledEdgeBandDetail = scaleMask(
+            edgeBandDetail,
+            factor: ProcessingConfig.Refinement.edgeBandDetailBoostFactor
+        )
         let boostedMask = featheredMask
             .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: scaledEdgeBandDetail])
             .cropped(to: extent)
@@ -226,12 +464,12 @@ struct CaptureWhiteBackgroundProcessor {
         let edgeRefinedMask = (edgeRefinedBlend.outputImage ?? featheredMask)
             .clampedToExtent()
             // R1.3: narrow transition width to avoid semi-transparent spill into subject body.
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.26])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.edgeTransitionBlurRadius])
             .cropped(to: extent)
 
         let reflectiveTransitionMask = highlightEdgeMask
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.25])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.reflectiveTransitionBlurRadius])
             .cropped(to: extent)
         let reflectiveProtectedBlend = CIFilter.blendWithMask()
         reflectiveProtectedBlend.inputImage = featheredMask
@@ -240,7 +478,10 @@ struct CaptureWhiteBackgroundProcessor {
         let reflectiveProtectedMask = (reflectiveProtectedBlend.outputImage ?? edgeRefinedMask)
             .cropped(to: extent)
 
-        let thinStructureBoost = scaleMask(thinStructureMask, factor: 0.24)
+        let thinStructureBoost = scaleMask(
+            thinStructureMask,
+            factor: ProcessingConfig.Refinement.thinStructureBoostFactor
+        )
         let thinStructureRestoredMask = reflectiveProtectedMask
             .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: thinStructureBoost])
             .cropped(to: extent)
@@ -248,11 +489,11 @@ struct CaptureWhiteBackgroundProcessor {
         let hardEdgeContinuityMask = hardEdgeMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: edgeBandMask])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.55])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.hardEdgeContinuityBlurRadius])
             .cropped(to: extent)
         let hardEdgeStabilizedCandidate = thinStructureRestoredMask
-            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 0.62])
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 0.48])
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.hardEdgeStabilizedMaximumRadius])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.hardEdgeStabilizedMinimumRadius])
             .cropped(to: extent)
         let hardEdgeBlend = CIFilter.blendWithMask()
         hardEdgeBlend.inputImage = hardEdgeStabilizedCandidate
@@ -264,7 +505,7 @@ struct CaptureWhiteBackgroundProcessor {
         let finalRefinedMask = hardEdgeStabilizedMask
             .clampedToExtent()
             // R1.3: keep edge smoothing minimal so core area stays dense.
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.08])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.finalEdgeBlurRadius])
             .applyingFilter(
                 "CIColorClamp",
                 parameters: [
@@ -276,10 +517,10 @@ struct CaptureWhiteBackgroundProcessor {
         // R1 regression fix: anchor subject core opacity to prevent whole-foreground washout.
         let subjectCoreAnchorMask = coreMask
             // R1.3: lift core alpha floor by widening core anchor coverage, while preserving soft edges.
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 0.2])
-            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 0.45])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.coreAnchorMinimumRadius])
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.coreAnchorMaximumRadius])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.06])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.coreAnchorBlurRadius])
             .cropped(to: extent)
         let fullOpacityMask = CIImage(color: .white).cropped(to: extent)
         let anchorBlend = CIFilter.blendWithMask()
@@ -292,9 +533,9 @@ struct CaptureWhiteBackgroundProcessor {
         // R1.4: raise alpha floor only in deep subject core.
         // Keep edge transition untouched by using a stronger-eroded interior mask.
         let deepCoreMask = coreMask
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 0.62])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.deepCoreMinimumRadius])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.04])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.deepCoreBlurRadius])
             .cropped(to: extent)
         let deepCoreAnchorBlend = CIFilter.blendWithMask()
         deepCoreAnchorBlend.inputImage = fullOpacityMask
@@ -337,34 +578,34 @@ struct CaptureWhiteBackgroundProcessor {
         let stronglyDecontaminated = sourceImage.applyingFilter(
             "CIColorControls",
             parameters: [
-                kCIInputSaturationKey: 0.992,
+                kCIInputSaturationKey: ProcessingConfig.Decontamination.strongSaturation,
                 kCIInputBrightnessKey: 0.0,
                 kCIInputContrastKey: 1.0
             ]
         )
         let adaptiveRiskMask = chromaSpillRiskMask
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.55])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.adaptiveRiskBlurRadius])
             .cropped(to: extent)
         let highlightPreserveMask = sourceImage
             .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
             .applyingFilter(
                 "CIColorClamp",
                 parameters: [
-                    "inputMinComponents": CIVector(x: 0.78, y: 0.78, z: 0.78, w: 0),
+                    "inputMinComponents": CIVector(x: ProcessingConfig.Decontamination.highlightPreserveMinimum, y: ProcessingConfig.Decontamination.highlightPreserveMinimum, z: ProcessingConfig.Decontamination.highlightPreserveMinimum, w: 0),
                     "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
                 ]
             )
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: refinedMask])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.55])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.highlightPreserveBlurRadius])
             .cropped(to: extent)
         // Recover 2.1's effective fringe/highlight cleanup with stricter dark-edge protection:
         // spill cleanup stays strong on risky chroma edges, but is suppressed around dark edges
         // to avoid re-introducing whole-foreground washout.
         let darkRiskExpanded = darkEdgeRiskMask
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.9])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.darkRiskExpandedBlurRadius])
             .cropped(to: extent)
         let nonDarkEdgeMask = darkRiskExpanded
             .applyingFilter("CIColorInvert")
@@ -376,7 +617,10 @@ struct CaptureWhiteBackgroundProcessor {
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nonDarkEdgeMask])
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nonHighlightMask])
             .cropped(to: extent)
-        let tonedAdaptiveRiskMask = weightMask(guardedAdaptiveRiskMask, factor: 0.3)
+        let tonedAdaptiveRiskMask = weightMask(
+            guardedAdaptiveRiskMask,
+            factor: ProcessingConfig.Decontamination.adaptiveRiskWeight
+        )
             .cropped(to: extent)
         let adaptiveBlend = CIFilter.blendWithMask()
         adaptiveBlend.inputImage = stronglyDecontaminated
@@ -385,9 +629,9 @@ struct CaptureWhiteBackgroundProcessor {
         let adaptiveDecontaminated = adaptiveBlend.outputImage?.cropped(to: extent) ?? mildlyDecontaminated
 
         let subjectCoreMask = refinedMask
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 1.25])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.subjectCoreRadius])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.35])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.subjectCoreBlurRadius])
             .cropped(to: extent)
         let subjectInnerRing = refinedMask
             .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: subjectCoreMask])
@@ -411,9 +655,9 @@ struct CaptureWhiteBackgroundProcessor {
             // R1.2: force bypass of foreground inner/core to prevent washout.
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: subjectBypassInvertedMask])
             // R1.5: further narrow to extreme boundary only, reduce residual gray band.
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 0.88])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.outerRingNarrowRadius])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.11])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.outerRingBlurRadius])
             .cropped(to: extent)
         let safeEdgeBand = outerRingMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nonDarkEdgeMask])
@@ -421,10 +665,10 @@ struct CaptureWhiteBackgroundProcessor {
                 "CIColorMatrix",
                 parameters: [
                     // R1.5: lower blend weight to avoid edge-side haze while preserving contour stability.
-                    "inputRVector": CIVector(x: 0.34, y: 0, z: 0, w: 0),
-                    "inputGVector": CIVector(x: 0, y: 0.34, z: 0, w: 0),
-                    "inputBVector": CIVector(x: 0, y: 0, z: 0.34, w: 0),
-                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.34),
+                    "inputRVector": CIVector(x: ProcessingConfig.Decontamination.safeEdgeBandWeight, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: ProcessingConfig.Decontamination.safeEdgeBandWeight, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: ProcessingConfig.Decontamination.safeEdgeBandWeight, w: 0),
+                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: ProcessingConfig.Decontamination.safeEdgeBandWeight),
                     "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 0)
                 ]
             )
@@ -433,7 +677,7 @@ struct CaptureWhiteBackgroundProcessor {
         // Only reduce residual gray halo around the upper boundary (top-lid lower edge feel),
         // without touching global band strategy or subject core density.
         let topShiftedMask = refinedMask
-            .transformed(by: CGAffineTransform(translationX: 0, y: -1.9))
+            .transformed(by: CGAffineTransform(translationX: 0, y: ProcessingConfig.Decontamination.topShiftY))
             .cropped(to: extent)
         let topInteriorStrip = refinedMask
             .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: topShiftedMask])
@@ -447,11 +691,14 @@ struct CaptureWhiteBackgroundProcessor {
             .cropped(to: extent)
         let topOuterRingInfluence = topInteriorStrip
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.68])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.topInfluenceBlurRadius])
             .cropped(to: extent)
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: outerRingMask])
             .cropped(to: extent)
-        let topGrayBandReductionMask = weightMask(topOuterRingInfluence, factor: 0.38)
+        let topGrayBandReductionMask = weightMask(
+            topOuterRingInfluence,
+            factor: ProcessingConfig.Decontamination.topGrayBandReductionWeight
+        )
         let grayBandReducedEdgeBand = safeEdgeBand
             .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: topGrayBandReductionMask])
             .applyingFilter(
@@ -530,10 +777,10 @@ struct CaptureWhiteBackgroundProcessor {
         extent: CGRect
     ) -> CIImage {
         let innerMask = refinedMask
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 0.95])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.BoundaryRecovery.innerMaskRadius])
             .cropped(to: extent)
         let outerMask = refinedMask
-            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 1.65])
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: ProcessingConfig.BoundaryRecovery.outerMaskRadius])
             .cropped(to: extent)
         let boundaryBandMask = outerMask
             .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: innerMask])
@@ -541,20 +788,26 @@ struct CaptureWhiteBackgroundProcessor {
         let hardBoundaryMask = boundaryBandMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: hardEdgeMask])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.75])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.BoundaryRecovery.hardBoundaryBlurRadius])
             .cropped(to: extent)
         let darkHardBoundaryMask = hardBoundaryMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: darkEdgeRiskMask])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.62])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.BoundaryRecovery.darkHardBoundaryBlurRadius])
             .cropped(to: extent)
         let softBoundaryMask = boundaryBandMask
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.1])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.BoundaryRecovery.softBoundaryBlurRadius])
             .cropped(to: extent)
 
         let hardEdgeDetailSource = sourceImage
-            .applyingFilter("CIUnsharpMask", parameters: ["inputRadius": 0.85, "inputIntensity": 0.34])
+            .applyingFilter(
+                "CIUnsharpMask",
+                parameters: [
+                    "inputRadius": ProcessingConfig.BoundaryRecovery.hardRecoverUnsharpRadius,
+                    "inputIntensity": ProcessingConfig.BoundaryRecovery.hardRecoverUnsharpIntensity
+                ]
+            )
             .cropped(to: extent)
         let hardRecoverBlend = CIFilter.blendWithMask()
         hardRecoverBlend.inputImage = hardEdgeDetailSource
@@ -563,20 +816,29 @@ struct CaptureWhiteBackgroundProcessor {
         let hardRecoveredImage = hardRecoverBlend.outputImage?.cropped(to: extent) ?? compositedImage
 
         let darkEdgeDensitySource = sourceImage
-            .applyingFilter("CIUnsharpMask", parameters: ["inputRadius": 0.7, "inputIntensity": 0.24])
+            .applyingFilter(
+                "CIUnsharpMask",
+                parameters: [
+                    "inputRadius": ProcessingConfig.BoundaryRecovery.darkDensityUnsharpRadius,
+                    "inputIntensity": ProcessingConfig.BoundaryRecovery.darkDensityUnsharpIntensity
+                ]
+            )
             .applyingFilter(
                 "CIColorControls",
                 parameters: [
                     kCIInputSaturationKey: 1.0,
-                    kCIInputBrightnessKey: -0.006,
-                    kCIInputContrastKey: 1.035
+                    kCIInputBrightnessKey: ProcessingConfig.BoundaryRecovery.darkDensityBrightness,
+                    kCIInputContrastKey: ProcessingConfig.BoundaryRecovery.darkDensityContrast
                 ]
             )
             .cropped(to: extent)
         let darkRecoverBlend = CIFilter.blendWithMask()
         darkRecoverBlend.inputImage = darkEdgeDensitySource
         darkRecoverBlend.backgroundImage = hardRecoveredImage
-        darkRecoverBlend.maskImage = weightMask(darkHardBoundaryMask, factor: 0.52)
+        darkRecoverBlend.maskImage = weightMask(
+            darkHardBoundaryMask,
+            factor: ProcessingConfig.BoundaryRecovery.darkRecoverWeight
+        )
         let darkRecoveredImage = darkRecoverBlend.outputImage?.cropped(to: extent) ?? hardRecoveredImage
 
         let softEdgeContrastSource = sourceImage
@@ -585,13 +847,16 @@ struct CaptureWhiteBackgroundProcessor {
                 parameters: [
                     kCIInputSaturationKey: 1.0,
                     kCIInputBrightnessKey: 0.0,
-                    kCIInputContrastKey: 1.025
+                    kCIInputContrastKey: ProcessingConfig.BoundaryRecovery.softRecoverContrast
                 ]
             )
             .cropped(to: extent)
-        let softMask = weightMask(softBoundaryMask, factor: 0.34)
+        let softMask = weightMask(
+            softBoundaryMask,
+            factor: ProcessingConfig.BoundaryRecovery.softRecoverWeight
+        )
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.8])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.BoundaryRecovery.softMaskBlurRadius])
             .cropped(to: extent)
         let softRecoverBlend = CIFilter.blendWithMask()
         softRecoverBlend.inputImage = softEdgeContrastSource
@@ -730,9 +995,7 @@ struct CaptureWhiteBackgroundProcessor {
             "thin_edge_risk_score": String(format: "%.4f", thinEdgeRiskScore),
             "soft_edge_risk_score": String(format: "%.4f", softEdgeRiskScore),
             "hard_case_signal": hardCaseSignal.rawValue,
-            "hard_case_hint": hardCaseHintText(for: hardCaseSignal),
-            "quality_level": qualityLevel.rawValue,
-            "quality_hint": qualityHintText(for: qualityLevel)
+            "quality_level": qualityLevel.rawValue
         ]
     }
 
@@ -759,24 +1022,23 @@ struct CaptureWhiteBackgroundProcessor {
     }
 
     private nonisolated static func maskFeatherRadius(for extent: CGRect) -> Double {
-        max(0.8, min(2.2, Double(min(extent.width, extent.height)) / 1200))
+        ProcessingConfig.DynamicRadii.maskFeatherRadius(for: extent)
     }
 
     private nonisolated static func edgeBandRadius(for extent: CGRect) -> Double {
-        max(1.2, min(3.5, Double(min(extent.width, extent.height)) / 640))
+        ProcessingConfig.DynamicRadii.edgeBandRadius(for: extent)
     }
 
     private nonisolated static func shadowBlurRadius(for extent: CGRect) -> Double {
-        max(2.2, min(10.0, Double(min(extent.width, extent.height)) * 0.012))
+        ProcessingConfig.DynamicRadii.shadowBlurRadius(for: extent)
     }
 
     private nonisolated static func shadowYOffset(for extent: CGRect) -> CGFloat {
-        max(2, extent.height * 0.006)
+        ProcessingConfig.DynamicRadii.shadowYOffset(for: extent)
     }
 
     private nonisolated static func shadowOpacity(for extent: CGRect) -> CGFloat {
-        let normalized = max(0, min(1, extent.width / 1800))
-        return 0.07 + normalized * 0.02
+        ProcessingConfig.DynamicRadii.shadowOpacity(for: extent)
     }
 
     private enum WhiteBackgroundQualityLevel: String {
@@ -808,30 +1070,31 @@ struct CaptureWhiteBackgroundProcessor {
         thinEdgeRisk: Double,
         softEdgeRisk: Double
     ) -> WhiteBackgroundQualityLevel {
-        if coverageRatio < 0.015 || coverageRatio > 0.93 {
+        if coverageRatio < ProcessingConfig.Quality.coverageRiskLower || coverageRatio > ProcessingConfig.Quality.coverageRiskUpper {
             return .risk
         }
-        if coverageRatio < 0.04 || coverageRatio > 0.84 {
+        if coverageRatio < ProcessingConfig.Quality.coverageReviewLower || coverageRatio > ProcessingConfig.Quality.coverageReviewUpper {
             return .review
         }
-        if foregroundWashoutRisk > 0.14 || darkEdgeWashoutRisk > 0.13 || hardEdgeInstabilityRisk > 0.12 || fringeRisk > 0.18 || highlightCutRisk > 0.2 || thinEdgeRisk > 0.09 || softEdgeRisk > 0.075 {
+        if foregroundWashoutRisk > ProcessingConfig.Quality.riskForegroundWashout
+            || darkEdgeWashoutRisk > ProcessingConfig.Quality.riskDarkEdgeWashout
+            || hardEdgeInstabilityRisk > ProcessingConfig.Quality.riskHardEdgeInstability
+            || fringeRisk > ProcessingConfig.Quality.riskFringe
+            || highlightCutRisk > ProcessingConfig.Quality.riskHighlightCut
+            || thinEdgeRisk > ProcessingConfig.Quality.riskThinEdge
+            || softEdgeRisk > ProcessingConfig.Quality.riskSoftEdge {
             return .risk
         }
-        if edgeComplexity > 0.14 || edgeRatio > 0.11 || foregroundWashoutRisk > 0.09 || darkEdgeWashoutRisk > 0.08 || hardEdgeInstabilityRisk > 0.075 || fringeRisk > 0.12 || thinEdgeRisk > 0.055 {
+        if edgeComplexity > ProcessingConfig.Quality.reviewEdgeComplexity
+            || edgeRatio > ProcessingConfig.Quality.reviewEdgeRatio
+            || foregroundWashoutRisk > ProcessingConfig.Quality.reviewForegroundWashout
+            || darkEdgeWashoutRisk > ProcessingConfig.Quality.reviewDarkEdgeWashout
+            || hardEdgeInstabilityRisk > ProcessingConfig.Quality.reviewHardEdgeInstability
+            || fringeRisk > ProcessingConfig.Quality.reviewFringe
+            || thinEdgeRisk > ProcessingConfig.Quality.reviewThinEdge {
             return .review
         }
         return .ready
-    }
-
-    private nonisolated static func qualityHintText(for qualityLevel: WhiteBackgroundQualityLevel) -> String {
-        switch qualityLevel {
-        case .ready:
-            return "白底质量可直接使用"
-        case .review:
-            return "白底边缘建议复核"
-        case .risk:
-            return "白底风险较高，建议补拍"
-        }
     }
 
     private struct MaskRefinementArtifacts {
@@ -1096,18 +1359,25 @@ struct CaptureWhiteBackgroundProcessor {
             extent: extent,
             renderContext: renderContext
         )
-        let normalizedWashoutRisk = max(0, min(1, (washoutRiskScore - 0.025) / 0.23))
+        let normalizedWashoutRisk = max(
+            0,
+            min(
+                1,
+                (washoutRiskScore - ProcessingConfig.Fidelity.washoutRiskNormalizeStart) /
+                    ProcessingConfig.Fidelity.washoutRiskNormalizeRange
+            )
+        )
 
         let subjectCoreMask = refinedMask
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 1.45])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.subjectCoreRadius])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.75])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.subjectCoreBlurRadius])
             .cropped(to: extent)
         let innerMask = refinedMask
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 0.85])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.innerMaskRadius])
             .cropped(to: extent)
         let outerMask = refinedMask
-            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 1.45])
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.outerMaskRadius])
             .cropped(to: extent)
         let boundaryBandMask = outerMask
             .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: innerMask])
@@ -1115,29 +1385,29 @@ struct CaptureWhiteBackgroundProcessor {
         let darkBoundaryMask = darkEdgeRiskMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: boundaryBandMask])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.72])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.darkBoundaryBlurRadius])
             .cropped(to: extent)
         let hardBoundaryMask = hardEdgeMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: boundaryBandMask])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.58])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.hardBoundaryBlurRadius])
             .cropped(to: extent)
 
         let subjectToneMask = weightMask(
             subjectCoreMask,
-            factor: 0.12 + CGFloat(normalizedWashoutRisk) * 0.45
+            factor: ProcessingConfig.Fidelity.subjectToneCoreWeightBase + CGFloat(normalizedWashoutRisk) * ProcessingConfig.Fidelity.subjectToneCoreWeightRiskScale
         )
             .applyingFilter(
                 "CIAdditionCompositing",
                 parameters: [
                     kCIInputBackgroundImageKey: weightMask(
                         washoutRiskMask,
-                        factor: 0.1 + CGFloat(normalizedWashoutRisk) * 0.42
+                        factor: ProcessingConfig.Fidelity.subjectToneWashoutWeightBase + CGFloat(normalizedWashoutRisk) * ProcessingConfig.Fidelity.subjectToneWashoutWeightRiskScale
                     )
                 ]
             )
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.72])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.subjectToneBlurRadius])
             .cropped(to: extent)
 
         let toneRecoveredSource = sourceImage
@@ -1145,8 +1415,8 @@ struct CaptureWhiteBackgroundProcessor {
                 "CIColorControls",
                 parameters: [
                     kCIInputSaturationKey: 1.0,
-                    kCIInputBrightnessKey: -0.001 - normalizedWashoutRisk * 0.012,
-                    kCIInputContrastKey: 1.015 + normalizedWashoutRisk * 0.055
+                    kCIInputBrightnessKey: ProcessingConfig.Fidelity.toneRecoveryBrightnessBase + normalizedWashoutRisk * ProcessingConfig.Fidelity.toneRecoveryBrightnessRiskScale,
+                    kCIInputContrastKey: ProcessingConfig.Fidelity.toneRecoveryContrastBase + normalizedWashoutRisk * ProcessingConfig.Fidelity.toneRecoveryContrastRiskScale
                 ]
             )
             .cropped(to: extent)
@@ -1156,13 +1426,16 @@ struct CaptureWhiteBackgroundProcessor {
         toneBlend.maskImage = subjectToneMask
         let toneRecoveredImage = toneBlend.outputImage?.cropped(to: extent) ?? compositedImage
 
-        let combinedMask = weightMask(subjectCoreMask, factor: 0.14 + CGFloat(normalizedWashoutRisk) * 0.14)
+        let combinedMask = weightMask(
+            subjectCoreMask,
+            factor: ProcessingConfig.Fidelity.combinedCoreWeightBase + CGFloat(normalizedWashoutRisk) * ProcessingConfig.Fidelity.combinedCoreWeightRiskScale
+        )
             .applyingFilter(
                 "CIAdditionCompositing",
                 parameters: [
                     kCIInputBackgroundImageKey: weightMask(
                         hardBoundaryMask,
-                        factor: 0.24 + CGFloat(normalizedWashoutRisk) * 0.18
+                        factor: ProcessingConfig.Fidelity.combinedHardWeightBase + CGFloat(normalizedWashoutRisk) * ProcessingConfig.Fidelity.combinedHardWeightRiskScale
                     )
                 ]
             )
@@ -1171,7 +1444,7 @@ struct CaptureWhiteBackgroundProcessor {
                 parameters: [
                     kCIInputBackgroundImageKey: weightMask(
                         darkBoundaryMask,
-                        factor: 0.48 + CGFloat(normalizedWashoutRisk) * 0.22
+                        factor: ProcessingConfig.Fidelity.combinedDarkWeightBase + CGFloat(normalizedWashoutRisk) * ProcessingConfig.Fidelity.combinedDarkWeightRiskScale
                     )
                 ]
             )
@@ -1183,7 +1456,7 @@ struct CaptureWhiteBackgroundProcessor {
                 ]
             )
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.65])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.combinedMaskBlurRadius])
             .cropped(to: extent)
 
         let densityPreservedSource = sourceImage
@@ -1191,8 +1464,8 @@ struct CaptureWhiteBackgroundProcessor {
                 "CIColorControls",
                 parameters: [
                     kCIInputSaturationKey: 1.0,
-                    kCIInputBrightnessKey: -0.003 - normalizedWashoutRisk * 0.009,
-                    kCIInputContrastKey: 1.02 + normalizedWashoutRisk * 0.06
+                    kCIInputBrightnessKey: ProcessingConfig.Fidelity.densityRecoveryBrightnessBase + normalizedWashoutRisk * ProcessingConfig.Fidelity.densityRecoveryBrightnessRiskScale,
+                    kCIInputContrastKey: ProcessingConfig.Fidelity.densityRecoveryContrastBase + normalizedWashoutRisk * ProcessingConfig.Fidelity.densityRecoveryContrastRiskScale
                 ]
             )
             .cropped(to: extent)
@@ -1203,13 +1476,19 @@ struct CaptureWhiteBackgroundProcessor {
         let densityRecoveredImage = densityBlend.outputImage?.cropped(to: extent) ?? toneRecoveredImage
 
         let darkEdgeRecoveredSource = sourceImage
-            .applyingFilter("CIUnsharpMask", parameters: ["inputRadius": 0.72, "inputIntensity": 0.18])
+            .applyingFilter(
+                "CIUnsharpMask",
+                parameters: [
+                    "inputRadius": ProcessingConfig.Fidelity.darkEdgeRecoveryUnsharpRadius,
+                    "inputIntensity": ProcessingConfig.Fidelity.darkEdgeRecoveryUnsharpIntensity
+                ]
+            )
             .applyingFilter(
                 "CIColorControls",
                 parameters: [
                     kCIInputSaturationKey: 1.0,
-                    kCIInputBrightnessKey: -0.007,
-                    kCIInputContrastKey: 1.04
+                    kCIInputBrightnessKey: ProcessingConfig.Fidelity.darkEdgeRecoveryBrightness,
+                    kCIInputContrastKey: ProcessingConfig.Fidelity.darkEdgeRecoveryContrast
                 ]
             )
             .cropped(to: extent)
@@ -1218,7 +1497,7 @@ struct CaptureWhiteBackgroundProcessor {
         darkEdgeBlend.backgroundImage = densityRecoveredImage
         darkEdgeBlend.maskImage = weightMask(
             darkBoundaryMask,
-            factor: 0.46 + CGFloat(normalizedWashoutRisk) * 0.24
+            factor: ProcessingConfig.Fidelity.darkEdgeRecoveryMaskWeightBase + CGFloat(normalizedWashoutRisk) * ProcessingConfig.Fidelity.darkEdgeRecoveryMaskWeightRiskScale
         )
         return darkEdgeBlend.outputImage?.cropped(to: extent) ?? densityRecoveredImage
     }
@@ -1255,7 +1534,7 @@ struct CaptureWhiteBackgroundProcessor {
         return darknessLoss
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: subjectMask])
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.75])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Fidelity.washoutMaskBlurRadius])
             .cropped(to: extent)
     }
 
@@ -1268,48 +1547,28 @@ struct CaptureWhiteBackgroundProcessor {
         thinEdgeRisk: Double,
         softEdgeRisk: Double
     ) -> WhiteBackgroundHardCaseSignal {
-        if darkEdgeWashoutRisk > 0.12 {
+        if darkEdgeWashoutRisk > ProcessingConfig.Quality.hardCaseDarkEdgeWashout {
             return .darkEdgeWashout
         }
-        if foregroundWashoutRisk > 0.11 {
+        if foregroundWashoutRisk > ProcessingConfig.Quality.hardCaseForegroundWashout {
             return .foregroundWashout
         }
-        if hardEdgeInstabilityRisk > 0.09 {
+        if hardEdgeInstabilityRisk > ProcessingConfig.Quality.hardCaseHardEdgeInstability {
             return .hardEdgeInstability
         }
-        if fringeRisk > 0.16, fringeRisk >= highlightCutRisk, fringeRisk >= thinEdgeRisk {
+        if fringeRisk > ProcessingConfig.Quality.hardCaseFringe, fringeRisk >= highlightCutRisk, fringeRisk >= thinEdgeRisk {
             return .fringeEdge
         }
-        if highlightCutRisk > 0.19, highlightCutRisk >= thinEdgeRisk {
+        if highlightCutRisk > ProcessingConfig.Quality.hardCaseHighlightCut, highlightCutRisk >= thinEdgeRisk {
             return .highlightCutEdge
         }
-        if thinEdgeRisk > 0.065 {
+        if thinEdgeRisk > ProcessingConfig.Quality.hardCaseThinEdge {
             return .thinDetailEdge
         }
-        if softEdgeRisk > 0.075 {
+        if softEdgeRisk > ProcessingConfig.Quality.hardCaseSoftEdge {
             return .softEdge
         }
         return .stable
     }
 
-    private nonisolated static func hardCaseHintText(for hardCaseSignal: WhiteBackgroundHardCaseSignal) -> String {
-        switch hardCaseSignal {
-        case .stable:
-            return "常见商品路径"
-        case .foregroundWashout:
-            return "主体有泛白风险，建议复核"
-        case .darkEdgeWashout:
-            return "深色边缘有发灰风险，建议复核"
-        case .hardEdgeInstability:
-            return "硬边连续性风险，建议复核"
-        case .fringeEdge:
-            return "边缘有溢色风险，建议复核"
-        case .highlightCutEdge:
-            return "反光边界风险，建议复核"
-        case .thinDetailEdge:
-            return "细边缘易丢失，建议复核"
-        case .softEdge:
-            return "软边缘/弱透明风险"
-        }
-    }
 }

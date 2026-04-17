@@ -1773,18 +1773,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = "暂无可确认结果"
             return false
         }
-        resetLatestOriginalSaveState()
-        resetLatestProcessedSaveState()
+        resetLatestResultWorkflowState()
         latestPreservedSourceResult = nil
         confirmedStillPhotoResult = latestStillPhotoResult
-        latestProcessingErrorText = nil
-        isProcessingLatestResult = false
-        latestProcessedResult = nil
-        latestAcceptedProcessedResult = nil
-        latestReadyForOutputProcessedResult = nil
-        isOutputtingLatestReadyResult = false
-        isLatestReadyResultOutputCompleted = false
-        latestReadyOutputFailureText = nil
         captureHintText = "已设为直接使用，可继续拍摄或生成白底图"
         refreshStatusSummary()
         return true
@@ -1795,17 +1786,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = "暂无可保留结果"
             return false
         }
-        resetLatestOriginalSaveState()
-        resetLatestProcessedSaveState()
+        resetLatestResultWorkflowState()
         confirmedStillPhotoResult = nil
-        latestProcessingErrorText = nil
-        isProcessingLatestResult = false
-        latestProcessedResult = nil
-        latestAcceptedProcessedResult = nil
-        latestReadyForOutputProcessedResult = nil
-        isOutputtingLatestReadyResult = false
-        isLatestReadyResultOutputCompleted = false
-        latestReadyOutputFailureText = nil
         latestPreservedSourceResult = latestStillPhotoResult
         captureHintText = "已保留为采集素材，可后续再决定用途"
         refreshStatusSummary()
@@ -1825,16 +1807,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
         let processingInput = confirmedStillPhotoResult ?? latestStillPhotoResult
 
-        resetLatestOriginalSaveState()
-        resetLatestProcessedSaveState()
+        resetLatestResultWorkflowState()
         isProcessingLatestResult = true
-        latestProcessingErrorText = nil
-        latestProcessedResult = nil
-        latestAcceptedProcessedResult = nil
-        latestReadyForOutputProcessedResult = nil
-        isOutputtingLatestReadyResult = false
-        isLatestReadyResultOutputCompleted = false
-        latestReadyOutputFailureText = nil
         captureHintText = "正在生成白底图..."
         refreshStatusSummary()
 
@@ -2310,6 +2284,23 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         isSavingLatestProcessed = false
         isLatestProcessedSaveCompleted = false
         latestProcessedSaveFailureText = nil
+    }
+
+    private func resetLatestProcessedPipelineState() {
+        isProcessingLatestResult = false
+        latestProcessingErrorText = nil
+        latestProcessedResult = nil
+        latestAcceptedProcessedResult = nil
+        latestReadyForOutputProcessedResult = nil
+        isOutputtingLatestReadyResult = false
+        isLatestReadyResultOutputCompleted = false
+        latestReadyOutputFailureText = nil
+    }
+
+    private func resetLatestResultWorkflowState() {
+        resetLatestOriginalSaveState()
+        resetLatestProcessedSaveState()
+        resetLatestProcessedPipelineState()
     }
 
     func prepareForReviewPresentation() {
