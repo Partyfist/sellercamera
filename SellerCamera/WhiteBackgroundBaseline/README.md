@@ -685,3 +685,13 @@
   - 归档前完整性检查清单；
   - 本地回退前检查清单。
 - R25 当前正式结论为：`ready_for_archive_branch_push_and_local_rollback_execution`（仅表示“可执行归档推送 + 本地回退”的准备状态，不代表任何效果或主链替换结论）。
+
+## 56) 归档分支实际推送 + 本地回退执行（R26，执行包）
+- 执行报告：`WhiteBackgroundBaseline/new_backbone_candidate_experiment_birefnet_r26_archive_push_and_mainline_rollback_execution.md`
+- 结构化记录：`WhiteBackgroundBaseline/manual_review.backbone_admission_v1.r26.birefnet.archive_push_and_mainline_rollback_execution.json`
+
+说明：
+- R26 是执行包，不是功能包：实际完成了归档分支推送、远端可恢复验证、本地回退与最小构建检查。
+- 第一版正式基线在 R26 被唯一确认并执行为：`origin/main@d6b013d6cf4821edb67c965f221c42fbd2203b2c`。
+- 归档分支 `archive/experiment-multimodel-r25-20260424` 已远端可见，关键文档与索引链可恢复。
+- R26 当前正式结论为：`archive_push_and_local_mainline_rollback_executed`（仅表示执行状态达成，不代表任何模型效果或主链替换结论）。

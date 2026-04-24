@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r26-archive-push-and-mainline-rollback-execution",
+  "reviewed_at": "2026-04-24T17:45:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_experimental_multimodel_bundle",
+    "track": "archive_execution_and_mainline_reset_v1",
+    "identity_boundary": [
+      "本轮是归档执行包，不是功能开发包。",
+      "本轮不做 admission 新实验与效果评估。",
+      "本轮只执行归档推送、远端验证、本地回退和最小构建。"
+    ]
+  },
+  "formal_baseline_target": {
+    "branch": "origin/main",
+    "commit": "d6b013d6cf4821edb67c965f221c42fbd2203b2c",
+    "message": "chore: initialize Seller Camera repository",
+    "certainty": "unique_and_confirmed"
+  },
+  "archive_execution": {
+    "archive_branch": "archive/experiment-multimodel-r25-20260424",
+    "snapshot_commit": "fcec2db80bb01e9c7ba878480c9a232771e74d28",
+    "snapshot_message": "chore: archive multimodel experiment snapshot through r25",
+    "minimal_completeness_patch": ".gitignore added SellerCamera/ModelAssets/BiRefNet/pytorch/*.pth"
+  },
+  "remote_push_and_recoverability": {
+    "push_result": "success",
+    "remote_branch_visible": true,
+    "remote_head_ref": "refs/heads/archive/experiment-multimodel-r25-20260424",
+    "recoverability_checks": [
+      "remote branch head can be resolved by ls-remote",
+      "R25 report file can be read from origin/archive branch",
+      "README index contains R25 section on remote branch",
+      "key code/doc paths are enumerated in remote commit tree"
+    ],
+    "non_exaggeration_boundary": [
+      "git-lfs is unavailable in current environment",
+      "large model binaries (.onnx/.mlpackage/.pth) are not fully mirrored to remote git history by design"
+    ]
+  },
+  "local_rollback_execution": {
+    "switched_to_main": true,
+    "hard_reset_to_baseline_commit": true,
+    "cleaned_local_experimental_residuals": [
+      "SellerCamera/ModelAssets"
+    ],
+    "final_local_head": "d6b013d6cf4821edb67c965f221c42fbd2203b2c"
+  },
+  "minimal_build_validation": {
+    "command": "xcodebuild -project SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build",
+    "result": "BUILD SUCCEEDED",
+    "boundary_note": "log contains DerivedData stale-file cleanup notes; no source compile failure detected"
+  },
+  "decision": {
+    "result": "archive_push_and_local_mainline_rollback_executed",
+    "reason": [
+      "archive branch has been pushed and remotely validated for key docs/code recoverability",
+      "local workspace has been reset to confirmed first-version baseline",
+      "baseline build passed minimal compilation gate"
+    ],
+    "boundary_note": "this decision is an execution-state conclusion only, not a model-quality or product-roadmap conclusion"
+  }
+}
+
