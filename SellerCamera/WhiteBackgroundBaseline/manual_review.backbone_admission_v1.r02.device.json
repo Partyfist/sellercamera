@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r02-device",
+  "reviewed_at": "2026-04-21T11:30:00+08:00",
+  "reviewer": "codex",
+  "records_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r02-vision-device.jsonl",
+    "attention_candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r02-attention-device.jsonl"
+  },
+  "checks_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r02-vision-device.txt",
+    "attention_candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r02-attention-device.txt"
+  },
+  "evidence_scope": {
+    "metadata_level": true,
+    "hard_gate_level": true,
+    "focus_and_stability_level": true,
+    "pixel_side_by_side_exported": false,
+    "note": "本轮为真机 admission_v1 二轮准入判断，重点确认硬门槛触达与稳定样本红线；细粒度像素级差异未在仓库内新增导出对照图。"
+  },
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 25,
+        "failed": 1
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 7,
+          "failed": 1
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    },
+    "attention_candidate": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 26,
+        "failed": 0
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 8,
+          "failed": 0
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    }
+  },
+  "hard_gate_findings": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "vision_result": "failed",
+      "attention_result": "ready",
+      "decision_impact": "hard_gate_hit",
+      "summary": "首轮真实失败样本在 attention 候选下转为可产出，满足 admission_v1 的首要硬门槛触达条件。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "vision_result": "ready",
+      "attention_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "跨域人像样本在本轮未见质量级别回退，保持可继续观察状态。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "vision_result": "ready",
+      "attention_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "细珠串复杂结构样本未触发失败，attention 路径至少未恶化硬门槛状态。"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "vision_result": "ready",
+      "attention_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "复杂自然背景样本保持可产出，未见红线级回退。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "vision_result": "ready",
+      "attention_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "同色前后景样本在本轮 quality level 层面未见差异化恶化。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "vision_result": "ready",
+      "attention_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "复杂室内背景样本保持 ready，候选路径未触发新增失败。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "vision_result": "ready",
+      "attention_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "多主体复杂场景维持 ready，未见 admission 红线触发。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "vision_result": "ready",
+      "attention_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "户外跨域样本在本轮未出现质量等级回退。"
+    }
+  ],
+  "focus_comparison_findings": [
+    {
+      "samples": [
+        "S001_glass_container_translucent",
+        "S003_ring_macro_dark_bg",
+        "S005_transparent_bowls_dark_bg",
+        "S008_white_tubes_near_white_bg",
+        "S010_food_tray_contact_edge",
+        "EV014_glass_teapot_transparent_stack",
+        "EV019_white_shoes_dark_indoor",
+        "EV025_white_shoes_reflective_platform",
+        "EV039_white_sneaker_yellow_line",
+        "EV048_wood_vase_texture_bg"
+      ],
+      "vision_result": "10/10 ready",
+      "attention_result": "10/10 ready",
+      "decision_impact": "no_regression_detected",
+      "summary": "重点对比层全部保持 ready。当前证据更偏向“候选路径在重点问题层未引入退化”，但仍需下一轮扩展样本确认可见收益强度。"
+    }
+  ],
+  "stability_witness_findings": [
+    {
+      "samples": [
+        "S002_bottle_reflection_window",
+        "S004_paper_cups_light_bg",
+        "S007_snacks_on_dark_plate",
+        "EV004_white_devices_on_light_bg",
+        "EV011_cupcake_on_plate_contact",
+        "EV026_pastry_plate_light_contact",
+        "EV034_appliance_set_warm_bg",
+        "EV046_cream_kettle_warm_bg"
+      ],
+      "vision_result": "8/8 ready",
+      "attention_result": "8/8 ready",
+      "decision_impact": "stability_guard_pass",
+      "summary": "稳定旁证层未出现 ready->review 或 failed 回退，当前未触发 admission 红线。"
+    }
+  ],
+  "admission_round2_judgement": {
+    "decision": "continue_within_admission_v1",
+    "recommended_next_stage": "admission_v1_round3_before_expansion",
+    "why": [
+      "EV006 硬门槛样本由 failed 转为 ready，硬门槛触达成立。",
+      "hard_gate / focus / stability 三层在 quality level 上未出现回退红线。",
+      "除 EV006 外，hard_gate 其余样本当前主要表现为“未回退”，尚缺“4/8 硬门槛样本主问题可复核改善”的充分证据。"
+    ],
+    "non_exaggeration_boundary": [
+      "本轮主要证据来自 admission_v1 26 样本与 quality-level 对照，不等于 expanded 全量收益已确认。",
+      "本轮未新增像素级导出对照资产，尚不足以支持“直接扩大范围”结论。"
+    ]
+  }
+}

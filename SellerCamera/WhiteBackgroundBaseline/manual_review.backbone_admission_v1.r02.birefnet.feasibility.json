@@ -1,0 +1,76 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r02-birefnet-feasibility-prep",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet",
+    "track": "admission_candidate_birefnet_v1"
+  },
+  "feasibility_gate_definition": {
+    "pass_requires_all": [
+      "模型资产在当前工程可引用（mlmodelc 存在于 app bundle 可搜索路径）",
+      "iOS 最小推理桥接可触发（VNCoreMLRequest 可执行）",
+      "输出可回到 SegmentationProvider mask 边界（CIImage mask）",
+      "Vision 默认路径保留且可回退",
+      "无需白底主链下游联动改造"
+    ],
+    "fail_if_any": [
+      "模型资产缺失",
+      "推理桥接无法触发",
+      "provider 边界不兼容",
+      "需要联动大改主链"
+    ]
+  },
+  "implementation_snapshot": {
+    "code_integration": {
+      "status": "implemented_minimal",
+      "details": [
+        "已新增 SegmentationProviderID.birefnet 与 provider 解析别名（birefnet/candidate_birefnet/vision-birefnet）",
+        "已新增 BiRefNet 最小推理桥接：runtime mlmodelc 加载 -> VNCoreMLRequest -> VNPixelBufferObservation -> normalized mask",
+        "已新增失败语义：segmentationModelUnavailable / segmentationInferenceFailed",
+        "Vision 默认 provider 未修改，仍为默认路径"
+      ]
+    },
+    "model_asset": {
+      "status": "missing",
+      "expected_format": "Core ML compiled model (.mlmodelc)",
+      "expected_primary_resource": "BiRefNetSegmentation.mlmodelc",
+      "fallback_resource_names": [
+        "BiRefNet.mlmodelc",
+        "birefnet.mlmodelc"
+      ],
+      "repo_scan_result": "当前仓库未发现任何 .mlmodel/.mlpackage/.mlmodelc/.onnx 资产"
+    }
+  },
+  "minimal_runtime_validation": {
+    "scope": "仅验证可行化，不跑 admission_v1 样本",
+    "checks": [
+      {
+        "item": "模型资产可发现性",
+        "status": "failed",
+        "evidence": "find 扫描模型扩展名计数为 0"
+      },
+      {
+        "item": "最小桥接代码可编译性",
+        "status": "passed",
+        "evidence": "CaptureWhiteBackgroundProcessor 已加入 CoreML/Vision 桥接代码，无新增主链改造"
+      },
+      {
+        "item": "SegmentationProvider 最小对接",
+        "status": "passed",
+        "evidence": "provider 枚举、路由、metadata、回退路径均在边界内落地"
+      },
+      {
+        "item": "可触发运行闭环",
+        "status": "failed",
+        "evidence": "缺模型资产导致 runtime 加载阶段即失败，无法形成完整推理闭环"
+      }
+    ]
+  },
+  "feasibility_conclusion": {
+    "result": "stop_current_candidate",
+    "is_minimal_runnable_candidate_ready": false,
+    "summary": "当前已完成代码层最小桥接与 provider 对接，但因模型资产未落地，BiRefNet 仍不具备进入 admission R01 的最小可运行资格。",
+    "next_step_guardrail": "只有在模型资产可引用且可触发一次最小推理闭环后，才允许进入 BiRefNet admission R01。"
+  }
+}

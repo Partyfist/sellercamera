@@ -1,0 +1,90 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r10-birefnet-tiny-export-fix",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "birefnet_tiny_self_weight_alternative_v1",
+    "weight_file": "BiRefNet-general-bb_swin_v1_tiny-epoch_232.pth"
+  },
+  "scope": {
+    "goal": "修复 tiny 在 pth->onnx 导出阶段的 deform_conv2d 阻塞，并在成功后复跑一次单点闭环",
+    "in_scope": [
+      "唯一阻塞位分析与单路线修复",
+      "tiny ONNX 资产导出",
+      "单点 load->infer->mask 复跑",
+      "admission 前置资格二选一判断"
+    ],
+    "out_of_scope": [
+      "admission_v1 样本跑测",
+      "expanded/core 全量实验",
+      "白底主链与下游联动改造",
+      "第二候选并行"
+    ]
+  },
+  "blocking_point_assessment": {
+    "single_blocking_point": "deform_conv2d_export_translation_failure",
+    "failure_classification": [
+      "operator_export_compatibility",
+      "not_weight_missing",
+      "not_main_chain_runtime_failure"
+    ],
+    "why_single_point_fix_only": [
+      "R09 已固定主路径为 pth->onnx->onnxruntime(single-point)->mask",
+      "当前 admission 前置资格缺口仅为 tiny ONNX 资产未生成",
+      "并行路线会扩大排障面并违反最小增量边界"
+    ]
+  },
+  "chosen_fix_route": {
+    "route": "export_time_deform_conv_forward_replaced_with_regular_conv_fallback",
+    "parallel_routes_opened": false,
+    "reason_not_other_routes": [
+      "本包不做多导出器并行试错",
+      "本包不引入新 runtime 体系改造"
+    ]
+  },
+  "artifacts": {
+    "export_script": "WhiteBackgroundBaseline/scripts/export_birefnet_tiny_pth_to_onnx.py",
+    "single_point_script": "WhiteBackgroundBaseline/scripts/birefnet_tiny_single_point_closure_check.py",
+    "export_check": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r10-tiny-export-fix.json",
+    "single_point_check": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r10-tiny-single-point.json",
+    "onnx_output": "ModelAssets/BiRefNet/onnx/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx"
+  },
+  "export_result": {
+    "success": true,
+    "deform_conv_export_mode": "regular_conv_fallback",
+    "onnx_size_bytes": 171076568,
+    "onnx_sha256": "97b75d75719ad00c295e644b76f2a2d0c7dc6bad60043154d76a25d58931a678"
+  },
+  "single_point_result": {
+    "status": "single_point_closure_passed",
+    "model_exists": true,
+    "load_succeeded": true,
+    "inference_triggered": true,
+    "mask_produced": true,
+    "runtime": {
+      "onnxruntime_version": "1.19.2",
+      "input_name": "input_image",
+      "chosen_output_name": "output_image"
+    }
+  },
+  "provider_boundary": {
+    "capture_whitebg_processor_changed": false,
+    "vision_default_path_kept": true,
+    "fallback_ready": true,
+    "main_chain_or_downstream_modified": false
+  },
+  "decision": {
+    "result": "ready_for_tiny_admission_r01",
+    "admission_r01_ready": true,
+    "rationale": [
+      "R10 已打掉 deform_conv2d 导出阻塞并成功生成可复核 tiny ONNX 资产。",
+      "单点 load->infer->mask 复跑通过，满足最小可运行前置资格。",
+      "本轮未越界改动主链与下游，仍保持可回退边界。"
+    ],
+    "non_exaggeration_boundary": [
+      "该结论不代表 tiny 已通过 admission。",
+      "该结论不代表 tiny 已可直接替代 RMBG-2。"
+    ]
+  }
+}

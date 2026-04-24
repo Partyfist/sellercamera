@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-core-v1",
+  "reviewed_at": "2026-04-20T12:10:00Z",
+  "reviewer": "codex",
+  "records_source": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260420-r21.jsonl",
+  "compare_baseline": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260419-r15.jsonl",
+  "samples": [
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "global_haze"
+      ],
+      "summary": "玻璃薄边整体保持稳定，边缘完整性未见回退；本轮后段收口对该样本改善有限，仍以稳定为主。",
+      "compare_to_r15": "no_material_change"
+    },
+    {
+      "sample_id": "S002_bottle_reflection_window",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "非目标样本观感维持稳定，未出现新增灰边或背景残留放大。",
+      "compare_to_r15": "no_material_change"
+    },
+    {
+      "sample_id": "S003_ring_macro_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "thin_structure_loss"
+      ],
+      "summary": "高反细边末端污染风险未放大，透明/高反区域总体维持稳定；本轮可见改善幅度有限。",
+      "compare_to_r15": "no_material_change"
+    },
+    {
+      "sample_id": "S004_paper_cups_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "white_background_impure",
+        "foreground_washout"
+      ],
+      "summary": "近白背景样本整体稳定，未出现新的主体发虚或白底脏化副作用。",
+      "compare_to_r15": "no_material_change"
+    },
+    {
+      "sample_id": "S005_transparent_bowls_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "thin_structure_loss"
+      ],
+      "summary": "透明边缘末端污染有轻度收口，边缘干净度较 R1.5 稍有提升，透明感保持未见明显硬化。",
+      "compare_to_r15": "slight_improvement_visible"
+    },
+    {
+      "sample_id": "S006_portrait_with_product",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "hard_case_fallback_acceptable",
+        "background_residual"
+      ],
+      "summary": "跨域难例继续维持 review，后段收口未引入额外劣化；本轮不以该样本作为主要提升目标。",
+      "compare_to_r15": "no_material_change"
+    },
+    {
+      "sample_id": "S007_snacks_on_dark_plate",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "非目标样本稳定，未观测到新增脏边、发毛或过白副作用。",
+      "compare_to_r15": "no_material_change"
+    },
+    {
+      "sample_id": "S008_white_tubes_near_white_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "white_background_impure"
+      ],
+      "summary": "近白主体核心区稳定性有轻度提升，主体发虚感较 R1.5 稍减；仍需下一包继续收口立体感保持。",
+      "compare_to_r15": "slight_improvement_visible"
+    },
+    {
+      "sample_id": "S009_multi_product_shelf_complex",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "background_residual",
+        "hard_case_fallback_unacceptable"
+      ],
+      "summary": "复杂多主体样本仍保持 ready，未出现新回退信号。",
+      "compare_to_r15": "no_material_change"
+    },
+    {
+      "sample_id": "S010_food_tray_contact_edge",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "贴地边缘灰浮有轻度收口，接触区发飘感较 R1.5 略减；改善可见但幅度仍属保守级。",
+      "compare_to_r15": "slight_improvement_visible"
+    }
+  ],
+  "target_samples": [
+    "S005_transparent_bowls_dark_bg",
+    "S008_white_tubes_near_white_bg",
+    "S010_food_tray_contact_edge",
+    "S001_glass_container_translucent",
+    "S003_ring_macro_dark_bg"
+  ],
+  "note": "R2.1 decontam/compose handoff phase-1 manual review. Core_v1 distribution remained ready/review=9/1 with no new unacceptable failure. Target gains are slight and localized."
+}

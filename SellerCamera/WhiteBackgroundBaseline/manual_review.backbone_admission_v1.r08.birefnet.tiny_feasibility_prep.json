@@ -1,0 +1,88 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r08-birefnet-tiny-feasibility-prep",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "weight_file": "BiRefNet-general-bb_swin_v1_tiny-epoch_232.pth",
+    "track": "birefnet_tiny_self_weight_alternative_v1"
+  },
+  "positioning": {
+    "role": "commercial_controllable_alternative_candidate",
+    "not_equal_to": [
+      "rmbg2_coreml_track_ready_to_replace",
+      "original_birefnet_route_fully_solved",
+      "admission_ready_candidate"
+    ]
+  },
+  "asset_status": {
+    "weight_landed": true,
+    "weight_path": "ModelAssets/BiRefNet/pytorch/BiRefNet-general-bb_swin_v1_tiny-epoch_232.pth",
+    "weight_size_bytes": 177791685,
+    "weight_sha256": "6a1e050c6ec2697e5ed268455df544782b023acf8643ab771250979094875ab1",
+    "checksum_match_expected": true,
+    "license_recorded_in_repo": false,
+    "license_follow_up_required": true
+  },
+  "engineering_entry_state": {
+    "segmentation_provider_boundary_ready": true,
+    "vision_default_path_kept": true,
+    "direct_pth_runtime_supported": false,
+    "onnx_to_coreml_script_exists": true,
+    "pth_to_onnx_export_entry_exists": false,
+    "python_modules": {
+      "torch": false,
+      "onnx": false,
+      "coremltools": false,
+      "onnxruntime": false
+    }
+  },
+  "route_decision": {
+    "primary_route": "pth_to_onnx_export_first",
+    "secondary_route": "onnx_runtime_minimal_single_point_closure",
+    "why_not_coreml_first": [
+      "当前输入是 PyTorch 权重（.pth），没有直接可加载的 CoreML 成品资产。",
+      "历史 R03/R04 已证明在缺少稳定中间产物时直接 CoreML 打通边际收益低。",
+      "先拿到可复核 ONNX 产物可降低下一包闭环不确定性。"
+    ],
+    "why_not_parallel_routes": [
+      "当前阶段要求单路线低风险增量，不并行开启多条桥接验证线。",
+      "并行路线会扩大依赖面和排障面，违背本包边界。"
+    ]
+  },
+  "provider_reservation": {
+    "code_change_required": false,
+    "reason": "现有 SegmentationProvider 已有候选路由、显式模型路径开关与失败回退语义。R08 目标是可行化判断，不需要硬接入新运行时。"
+  },
+  "next_package_minimum_conditions": {
+    "package_name": "birefnet_tiny_single_point_closure",
+    "must_have": [
+      "提供可执行的 pth -> onnx 导出入口（脚本与固定命令参数）",
+      "完成一次导出并落地可用 ONNX 产物（含 sha256）",
+      "在单点样本上完成 load -> infer -> mask（不跑 admission）",
+      "失败语义可回退到 Vision 路径",
+      "记录通过/失败层级（加载、推理、mask 回写）"
+    ],
+    "pass_to_admission_r01": [
+      "单点闭环通过且失败回退可用",
+      "候选路径仍限制在 SegmentationProvider 边界内",
+      "不引入主链与下游联动改造"
+    ],
+    "continue_stop_if": [
+      "无法形成稳定 pth -> onnx 导出入口",
+      "单点闭环连续失败且无新增可执行修正项"
+    ]
+  },
+  "decision": {
+    "result": "proceed_to_tiny_single_point_closure_package",
+    "rationale": [
+      "候选权重已真实落地并完成校验，候选身份从“概念方向”提升为“工程可准备对象”。",
+      "当前阻塞主要是工具链和导出入口缺失，属于可在下一包最小闭环验证中直接检验的工程问题。",
+      "继续该路线比继续 RMBG-2 许可受限轨道更符合长期商业可控目标。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论不表示 tiny 已可运行，更不表示已可进入 admission。",
+      "本结论只表示值得进入下一包单点闭环验证。"
+    ]
+  }
+}

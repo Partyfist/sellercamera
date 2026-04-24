@@ -1,0 +1,79 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r04-birefnet-coreml-asset-closure",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet",
+    "track": "admission_candidate_birefnet_v1"
+  },
+  "coreml_gate_definition": {
+    "pass_requires_all": [
+      "CoreML 成品资产在当前工程路径真实存在",
+      "SegmentationProvider BiRefNet 路由可发现并加载该资产",
+      "至少一次真实推理可被触发",
+      "推理输出可形成并回写 mask",
+      "Vision 默认路径保留且失败可回退"
+    ],
+    "fail_if_any": [
+      "只有 ONNX 资产，没有可加载 CoreML 成品资产",
+      "模型加载失败",
+      "推理未触发",
+      "mask 未产出",
+      "回退语义不清晰"
+    ]
+  },
+  "asset_status": {
+    "onnx_assets": [
+      {
+        "path": "ModelAssets/BiRefNet/onnx/BiRefNet_lite_model_fp16.onnx",
+        "size_bytes": 114538221,
+        "sha256": "d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402",
+        "landed": true
+      }
+    ],
+    "temporary_conversion_probe": {
+      "path": "ModelAssets/BiRefNet/onnx/BiRefNet-general-resolution_512x512-fp16-epoch_216.onnx",
+      "used_for_r04_conversion_check_only": true,
+      "retained_in_repo": false
+    },
+    "coreml_expected_path": "ModelAssets/BiRefNet/coreml/BiRefNetSegmentation.mlmodelc",
+    "coreml_landed": false
+  },
+  "conversion_attempts": {
+    "lite_check_file": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r04-conversion-lite.json",
+    "model512_check_file": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r04-conversion-512.json",
+    "shared_failures": [
+      {
+        "name": "coremltools_convert_source_onnx",
+        "result": "failed",
+        "reason": "coremltools 8.1 不支持 source=onnx"
+      },
+      {
+        "name": "onnx_coreml_legacy",
+        "result": "failed",
+        "reason": "依赖旧版 coremltools nnssa 模块，当前工具链不可用"
+      },
+      {
+        "name": "onnx2torch_to_coremltools",
+        "result": "failed",
+        "reason": "LayerNorm 归一化形状异常（normalized_shape = [0]）导致前向失败"
+      }
+    ]
+  },
+  "single_point_closure_validation": {
+    "check_file": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r04-single-point.json",
+    "status": "failed",
+    "failure_stage": "model_loading",
+    "failure_reason": "mlmodelc_not_found",
+    "load_model": "failed",
+    "inference_triggered": false,
+    "mask_output_produced": false,
+    "fallback_semantics": "ready (Vision default path preserved)"
+  },
+  "feasibility_conclusion": {
+    "result": "stop_current_candidate",
+    "is_minimal_runnable_candidate_ready": false,
+    "summary": "R04 已完成 CoreML 资产打通尝试与真实单点闭环验证；在当前仓库工具链下仍未形成可加载 CoreML 成品资产，闭环继续失败于模型加载层，因此仍不具备进入 BiRefNet admission R01 的资格。",
+    "next_step_guardrail": "仅当 BiRefNet CoreML 成品资产可真实加载并通过一次 load->infer->mask 单点闭环后，才允许开启 BiRefNet admission R01。"
+  }
+}

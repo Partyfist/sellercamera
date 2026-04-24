@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r22-tiny-temp-model-selector-runtime-entry",
+  "reviewed_at": "2026-04-23T20:45:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "本轮是临时实验模型切换入口包（真机主观对比用）。",
+      "本轮不是 admission 扩展，不是主链替换判断。",
+      "本轮不构成“已可替代 RMBG-2”结论。"
+    ]
+  },
+  "allowed_runtime_models": [
+    {
+      "display_name": "Vision 标准",
+      "provider_id": "vision",
+      "status_tag": "默认"
+    },
+    {
+      "display_name": "Vision Foreground Latest",
+      "provider_id": "vision_foreground_latest_revision",
+      "status_tag": "实验"
+    },
+    {
+      "display_name": "Vision Foreground Hybrid",
+      "provider_id": "vision_foreground_objectness_hybrid",
+      "status_tag": "实验"
+    },
+    {
+      "display_name": "RMBG-2 INT8",
+      "provider_id": "birefnet",
+      "status_tag": "候选"
+    },
+    {
+      "display_name": "BiRefNet Tiny ORT",
+      "provider_id": "birefnet_tiny_ort",
+      "status_tag": "候选"
+    }
+  ],
+  "runtime_entry": {
+    "ui_entry_location": "CaptureScreen -> CaptureTopStatusBar -> 更多 -> 实验模型（临时）",
+    "active_model_badge": "顶部状态栏次级信息：模型：<displayName/status>",
+    "reset_action": "恢复默认模型（vision）"
+  },
+  "runtime_effective_path": {
+    "session_state": "CaptureCameraRuntime.selectedTemporarySegmentationProviderID",
+    "still_metadata_keys": [
+      "baseline_segmentation_provider",
+      "experiment_segmentation_model_name",
+      "experiment_segmentation_model_id",
+      "experiment_segmentation_model_status"
+    ],
+    "provider_resolution": "CaptureWhiteBackgroundProcessor.resolveSegmentationProvider(from: stillMetadata)"
+  },
+  "traceability": {
+    "processed_metadata_keys": [
+      "segmentation_provider",
+      "experiment_segmentation_model_name",
+      "experiment_segmentation_model_id",
+      "experiment_segmentation_model_status"
+    ],
+    "goal": "确保真机主观对比回看时可区分模型来源。"
+  },
+  "visibility_gate": {
+    "debug_default_visible": true,
+    "non_debug_flag": "SELLERCAMERA_ENABLE_TEMP_MODEL_SELECTOR=1"
+  },
+  "decision": {
+    "result": "temporary_runtime_selector_ready",
+    "reason": [
+      "入口轻量、当前会话切换可立即生效。",
+      "默认模型可一键恢复。",
+      "结果 metadata 已具备最小可追踪能力。",
+      "入口具备实验可见门控，后续可低风险移除。"
+    ],
+    "boundary_note": "本结果仅用于开发/测试阶段真机主观比较，不代表正式产品功能承诺。"
+  }
+}

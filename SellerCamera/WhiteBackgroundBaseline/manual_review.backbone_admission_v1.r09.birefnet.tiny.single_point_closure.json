@@ -1,0 +1,83 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r09-birefnet-tiny-single-point-closure",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "birefnet_tiny_self_weight_alternative_v1",
+    "weight_file": "BiRefNet-general-bb_swin_v1_tiny-epoch_232.pth"
+  },
+  "scope": {
+    "goal": "验证 tiny 路线是否完成单点 load->infer->mask 闭环并具备 admission R01 前置资格",
+    "in_scope": [
+      "补齐 pth->onnx 最小导出入口",
+      "选择单一路径做 tiny 单点闭环验证",
+      "在不改主链前提下给出 admission 前置资格二选一结论"
+    ],
+    "out_of_scope": [
+      "admission_v1 样本跑测",
+      "expanded/core 全量复跑",
+      "白底主流程改造",
+      "refinement/去污染/合成联动改造",
+      "第二候选并行接入"
+    ]
+  },
+  "pass_criteria": {
+    "weight_landed": true,
+    "pth_to_onnx_entry_exists": true,
+    "onnx_generated": false,
+    "single_point_load_succeeded": false,
+    "single_point_inference_triggered": false,
+    "single_point_mask_produced": false,
+    "fallback_ready": true
+  },
+  "path_decision": {
+    "main_path": "pth_to_onnx_to_onnxruntime_single_point",
+    "parallel_routes_opened": false,
+    "reason_not_parallel": [
+      "当前包只允许最小单路线闭环验证",
+      "并行路线会扩大排障面并破坏低风险增量边界"
+    ]
+  },
+  "artifacts": {
+    "weight_path": "ModelAssets/BiRefNet/pytorch/BiRefNet-general-bb_swin_v1_tiny-epoch_232.pth",
+    "export_script": "WhiteBackgroundBaseline/scripts/export_birefnet_tiny_pth_to_onnx.py",
+    "single_point_script": "WhiteBackgroundBaseline/scripts/birefnet_tiny_single_point_closure_check.py",
+    "export_check": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r09-tiny-export.json",
+    "single_point_check": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r09-tiny-single-point.json",
+    "expected_onnx_path": "ModelAssets/BiRefNet/onnx/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx"
+  },
+  "export_result": {
+    "success": false,
+    "error_stage": "export",
+    "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'int' (Occurred when translating deform_conv2d).",
+    "onnx_generated": false
+  },
+  "single_point_result": {
+    "status": "model_missing",
+    "error_stage": "asset",
+    "error": "tiny_onnx_asset_not_found",
+    "load_succeeded": false,
+    "inference_triggered": false,
+    "mask_produced": false
+  },
+  "provider_boundary": {
+    "code_change_required": false,
+    "reason": "当前阻塞仍在 ONNX 导出层；资产未打通前不新增无效 provider 运行时改造",
+    "vision_default_path_kept": true,
+    "fallback_ready": true
+  },
+  "decision": {
+    "result": "continue_stop_current_candidate",
+    "admission_r01_ready": false,
+    "rationale": [
+      "tiny ONNX 中间资产未落地，单点闭环无法进入真实推理阶段。",
+      "在当前状态下进入 admission R01 不符合最小可运行前置资格要求。",
+      "继续推进应先收敛在导出失败层级修复，不应扩散到样本实验。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论不表示 tiny 路线永久不可行。",
+      "本结论仅表示 R09 边界内单点闭环未通过，暂不具备 admission 资格。"
+    ]
+  }
+}

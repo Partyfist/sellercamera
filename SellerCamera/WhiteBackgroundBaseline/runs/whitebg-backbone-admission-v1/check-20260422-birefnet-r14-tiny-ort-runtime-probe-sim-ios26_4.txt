@@ -1,0 +1,16 @@
+[Suite] birefnet_tiny_runtime_probe_v1
+[Records] 1
+[Samples in manifest] 1
+[Samples covered] 1
+
+[Quality Distribution]
+- ready: 1
+
+[Hard Case Distribution]
+- stable: 1
+
+[Environment Snapshots]
+- model=arm64, iOS=26.4.1, visionRevision=n/a
+
+[Per Sample Latest]
+- S001_glass_container_translucent: quality=ready, hard_case=stable, processed_id=67CA898F-068E-4A7F-A341-150D90E7D79D

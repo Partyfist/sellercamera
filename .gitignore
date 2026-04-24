@@ -28,6 +28,12 @@ DerivedData/
 *.log
 tmp/
 
+# Local model assets (candidate feasibility binaries)
+SellerCamera/ModelAssets/BiRefNet/onnx/*.onnx
+SellerCamera/ModelAssets/BiRefNet/coreml/*
+!SellerCamera/ModelAssets/BiRefNet/coreml/.gitkeep
+SellerCamera/ModelAssets/BiRefNet/pytorch/*.pth
+
 # Local Codex metadata
 .codex/
 .agents/

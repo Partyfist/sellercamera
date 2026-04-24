@@ -1,0 +1,25 @@
+{
+  "stage": "birefnet_tiny_single_point_closure_check",
+  "model_path": "/Users/sungning/Projects/SellerCamera/SellerCamera/ModelAssets/BiRefNet/onnx/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+  "image_path": "/Users/sungning/Projects/SellerCamera/SellerCamera/WhiteBackgroundBaseline/samples/expanded_v1/pexels-roo-1110882060-30130003.jpg",
+  "mask_output_path": "/private/tmp/sellercamera_birefnet_tiny_r10_runtime/mask.png",
+  "input_size": "1024x1024",
+  "requested_output_feature": "output_3",
+  "model_exists": true,
+  "image_exists": true,
+  "load_succeeded": true,
+  "inference_triggered": true,
+  "mask_produced": true,
+  "fallback_ready": true,
+  "status": "single_point_closure_passed",
+  "error_stage": null,
+  "error": null,
+  "runtime": {
+    "onnxruntime_version": "1.19.2",
+    "input_name": "input_image",
+    "output_names": [
+      "output_image"
+    ],
+    "chosen_output_name": "output_image"
+  }
+}

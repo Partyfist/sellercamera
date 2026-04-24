@@ -12,6 +12,9 @@ struct SellerCameraApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .task {
+                    WhiteBackgroundBaselineAutorun.triggerIfNeeded()
+                }
         }
     }
 }

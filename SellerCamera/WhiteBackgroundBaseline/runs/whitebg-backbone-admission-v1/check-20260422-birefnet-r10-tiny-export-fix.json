@@ -1,0 +1,36 @@
+{
+  "stage": "birefnet_tiny_pth_to_onnx_export",
+  "upstream_root": "/private/tmp/BiRefNet_upstream",
+  "weights_path": "/Users/sungning/Projects/SellerCamera/SellerCamera/ModelAssets/BiRefNet/pytorch/BiRefNet-general-bb_swin_v1_tiny-epoch_232.pth",
+  "out_onnx": "/Users/sungning/Projects/SellerCamera/SellerCamera/ModelAssets/BiRefNet/onnx/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+  "input_size": "1024x1024",
+  "deform_conv_export_mode": "regular_conv_fallback",
+  "prechecks": {
+    "upstream_exists": true,
+    "weights_exists": true,
+    "weights_size_bytes": 177791685,
+    "weights_sha256": "6a1e050c6ec2697e5ed268455df544782b023acf8643ab771250979094875ab1"
+  },
+  "dependency": {
+    "torch": {
+      "available": true,
+      "info": "2.8.0"
+    },
+    "torchvision": {
+      "available": true,
+      "info": "0.23.0"
+    },
+    "onnx": {
+      "available": true,
+      "info": "1.19.1"
+    }
+  },
+  "success": true,
+  "error_stage": null,
+  "error": null,
+  "onnx_size_bytes": 171076568,
+  "onnx_sha256": "97b75d75719ad00c295e644b76f2a2d0c7dc6bad60043154d76a25d58931a678",
+  "notes": [
+    "deform_conv2d_export_replaced_with_regular_conv_fallback"
+  ]
+}

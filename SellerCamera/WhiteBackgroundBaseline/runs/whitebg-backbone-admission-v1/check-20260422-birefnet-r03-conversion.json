@@ -1,0 +1,29 @@
+{
+  "stage": "birefnet_asset_conversion_attempt",
+  "onnx_path": "ModelAssets/BiRefNet/onnx/BiRefNet_lite_model_fp16.onnx",
+  "out_mlpackage": "ModelAssets/BiRefNet/coreml/BiRefNetSegmentation.mlpackage",
+  "onnx_exists": true,
+  "onnx_size_bytes": 114538221,
+  "conversion_success": false,
+  "converter": null,
+  "error": "ModuleNotFoundError: No module named 'coremltools.converters.nnssa'",
+  "notes": [
+    "coremltools_version=8.1",
+    "coremltools_convert_failed",
+    "onnx_coreml_convert_failed"
+  ],
+  "attempts": [
+    {
+      "name": "coremltools_convert",
+      "success": false,
+      "error": "ValueError: Unrecognized value of argument \"source\": onnx. It must be one of [\"auto\", \"tensorflow\", \"pytorch\", \"milinternal\"]."
+    },
+    {
+      "name": "onnx_coreml_convert",
+      "success": false,
+      "error": "ModuleNotFoundError: No module named 'coremltools.converters.nnssa'"
+    }
+  ],
+  "out_exists": false,
+  "out_size_bytes": 0
+}

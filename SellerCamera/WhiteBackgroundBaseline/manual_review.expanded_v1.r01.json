@@ -1,0 +1,575 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-expanded-v1",
+  "reviewed_at": "2026-04-20T10:40:00Z",
+  "reviewer": "codex",
+  "records_source": "WhiteBackgroundBaseline/runs/whitebg-vision-expanded-v1/baseline-20260420-expanded-v1.jsonl",
+  "compare_baseline": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260420-r23.jsonl",
+  "samples": [
+    {
+      "sample_id": "EV001_switch_panel_near_white",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "white_background_impure",
+        "foreground_washout"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV002_hot_air_balloon_soft_sky",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV003_pastel_cake_ribbon_detail",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV004_white_devices_on_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "white_background_impure"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV005_hot_air_balloon_blue_sky",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "thin_structure_loss"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_contamination"
+      ],
+      "summary": "该样本在 expanded_v1 autorun 中未写入记录（48/49），当前结论仅能判定执行链路存在单样本不稳定，需在下一轮先补齐该样本再做质量归类。",
+      "compare_to_core_v1": "missing_record_needs_rerun"
+    },
+    {
+      "sample_id": "EV007_white_bg_calculator_simple",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "white_background_impure",
+        "foreground_washout"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV008_reflective_gold_balloon",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "global_haze"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV009_charger_on_yellow_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV010_pen_and_wallet_flatlay",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "small_text_loss",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV011_cupcake_on_plate_contact",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV012_wiring_box_complex_thin",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "hard_case_fallback_acceptable",
+        "background_residual"
+      ],
+      "summary": "跨域人像样本虽有记录但不属于当前商品白底主任务稳区，建议保留 review 观察位，不作为当前链路稳定性正向样本。",
+      "compare_to_core_v1": "review_for_domain_boundary"
+    },
+    {
+      "sample_id": "EV014_glass_teapot_transparent_stack",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "foreground_washout"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV015_black_kettle_gradient_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "global_haze"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV016_color_pens_split_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV017_painted_kettle_clay_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV018_trousers_shoes_contact_floor",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV019_white_shoes_dark_indoor",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "contact_edge_abnormal"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV020_gold_jewelry_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "foreground_washout"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "hard_case_fallback_acceptable",
+        "thin_structure_loss"
+      ],
+      "summary": "人体+细珠串复合结构仍属跨域难例，暂列 review 以避免高估当前链路在非目标域的稳定性。",
+      "compare_to_core_v1": "review_for_domain_boundary"
+    },
+    {
+      "sample_id": "EV022_flower_vase_transparent_stems",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_contamination"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV023_calculator_money_flatlay",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "small_text_loss",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV024_white_shoe_dark_bg_single",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV025_white_shoes_reflective_platform",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV026_pastry_plate_light_contact",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "white_background_impure"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV027_powerbank_cable_on_leather",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "background_residual",
+        "thin_structure_loss"
+      ],
+      "summary": "复杂自然背景样本在大样本验证中用于放大背景分离风险，暂列 review 继续观察。",
+      "compare_to_core_v1": "review_for_complex_background"
+    },
+    {
+      "sample_id": "EV029_board_module_yellow_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_contamination"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV030_color_markers_yellow_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV031_red_shoes_pink_floor",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV032_purple_flowers_simple_wall",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "background_residual",
+        "contact_edge_abnormal"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "background_residual",
+        "edge_contamination"
+      ],
+      "summary": "前后景同色系样本容易放大边界残留风险，暂列 review 作为主干上限疑似观察点。",
+      "compare_to_core_v1": "review_for_similar_tone_boundary"
+    },
+    {
+      "sample_id": "EV034_appliance_set_warm_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "background_residual",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV035_multicolor_pens_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "white_background_impure"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV036_pattern_vase_cloth",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV037_red_cake_slice_wood",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "background_residual",
+        "edge_gray_fringe"
+      ],
+      "summary": "深色主体叠加复杂背景，边缘污染与残留风险较高，先保守列 review。",
+      "compare_to_core_v1": "review_for_complex_background"
+    },
+    {
+      "sample_id": "EV039_white_sneaker_yellow_line",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV040_chocolate_roll_dark_cloth",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV041_servo_motor_parts",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_contamination"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "background_residual",
+        "contact_edge_abnormal"
+      ],
+      "summary": "多主体复杂场景超出 core_v1 复杂度，先列 review 观察后续更大样本趋势。",
+      "compare_to_core_v1": "review_for_multi_subject_complexity"
+    },
+    {
+      "sample_id": "EV043_white_shoe_night_road",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "result": "review",
+      "severity": "high",
+      "problem_tags": [
+        "hard_case_fallback_acceptable",
+        "background_residual"
+      ],
+      "summary": "户外全身人物复杂背景属于跨域高难例，不纳入当前商品白底稳区，列为高风险 review。",
+      "compare_to_core_v1": "review_for_domain_boundary"
+    },
+    {
+      "sample_id": "EV045_purple_flower_cake_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "contact_edge_abnormal"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV046_cream_kettle_warm_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "global_haze"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV047_cream_roll_light_docs",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV048_wood_vase_texture_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "background_residual"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    },
+    {
+      "sample_id": "EV049_denim_cloth_closeup",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_gray_fringe"
+      ],
+      "summary": "已完成记录并通过当前链路处理；在 expanded_v1 首轮验证中未见新增不可接受失败，维持可继续观察状态。",
+      "compare_to_core_v1": "baseline_expanded_first_pass"
+    }
+  ],
+  "focus_samples": [
+    "EV006_beaded_string_on_texture",
+    "EV013_full_body_person_gray_bg",
+    "EV021_hand_with_beads",
+    "EV028_flower_vase_garden_bg",
+    "EV033_blue_vase_blue_curtain",
+    "EV038_dark_shoes_shelf_plants",
+    "EV042_cakes_in_booth_scene",
+    "EV044_person_outdoor_complex"
+  ],
+  "closure_judgement": {
+    "phase_signal": "expanded_validation_round1",
+    "coverage": {
+      "expected": 49,
+      "recorded": 48,
+      "missing": [
+        "EV006_beaded_string_on_texture"
+      ]
+    },
+    "distribution": {
+      "ready": 41,
+      "review": 8
+    },
+    "platform_hypothesis": "core_platform_holds_for_product-centric_samples_but_needs_followup_on_cross-domain_and_missing_record_case"
+  },
+  "note": "expanded_v1 首轮验证采用现有 Vision 主链。结果显示商品主域样本总体稳定，但存在 1 个缺失记录样本和若干跨域/复杂背景 review 样本，需要后续补跑与更大样本复核。"
+}

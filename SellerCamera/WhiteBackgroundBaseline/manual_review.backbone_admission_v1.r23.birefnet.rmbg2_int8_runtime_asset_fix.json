@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r23-rmbg2-int8-runtime-asset-fix",
+  "reviewed_at": "2026-04-23T18:08:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_rmbg2_int8_coreml_track",
+    "track": "runtime_probe_birefnet_coreml_asset_fix_v1",
+    "identity_boundary": [
+      "本轮只做 RMBG-2 INT8 真机资产可用性修复。",
+      "本轮不是 admission 包，不做效果优劣判断。",
+      "本轮不构成主链替换或商业可替代结论。"
+    ]
+  },
+  "runtime_identity": {
+    "ui_display_name": "RMBG-2 INT8",
+    "provider_id": "birefnet",
+    "provider_entry": "CaptureWhiteBackgroundProcessor.biRefNetProvider",
+    "model_load_entry": "CaptureWhiteBackgroundProcessor.loadBiRefNetCoreMLModel"
+  },
+  "root_cause": {
+    "symptom": "真机执行白底处理报 segmentationModelUnavailable",
+    "direct_reason": "工程仅有 RMBG-2-native.mlpackage.zip，runtime 只消费 mlpackage/mlmodelc/mlmodel，无法直接消费 zip。",
+    "impact": "birefnet provider 在 bundle 中找不到可加载 CoreML 成品资产。"
+  },
+  "fix_scope": {
+    "minimal_change": "将 RMBG-2-native.mlpackage.zip 解包为 RMBG-2-native.mlpackage，复用现有查找规则，不改 provider 主逻辑。",
+    "asset_paths": [
+      "ModelAssets/BiRefNet/coreml/RMBG-2-native.mlpackage.zip",
+      "ModelAssets/BiRefNet/coreml/RMBG-2-native.mlpackage"
+    ]
+  },
+  "verification": {
+    "simulator_build": {
+      "command": "xcodebuild -project ../SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO",
+      "result": "BUILD SUCCEEDED",
+      "evidence": "CoreMLModelCompile ... RMBG-2-native.mlpackage -> SellerCamera.app/RMBG-2-native.mlmodelc"
+    },
+    "iphoneos_build": {
+      "command": "xcodebuild -project ../SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO",
+      "result": "BUILD SUCCEEDED",
+      "evidence": "CoreMLModelCompile ... RMBG-2-native.mlpackage -> Debug-iphoneos/SellerCamera.app/RMBG-2-native.mlmodelc"
+    },
+    "bundle_probe": {
+      "compiled_model_exists": true,
+      "compiled_model_path": "DerivedData/.../Build/Products/Debug-iphoneos/SellerCamera.app/RMBG-2-native.mlmodelc",
+      "weights_present": true
+    }
+  },
+  "consistency": {
+    "ui_runtime_metadata_consistent": true,
+    "metadata_keys": [
+      "baseline_segmentation_provider",
+      "experiment_segmentation_model_name",
+      "experiment_segmentation_model_id",
+      "experiment_segmentation_model_status",
+      "segmentation_provider"
+    ]
+  },
+  "decision": {
+    "result": "rmbg2_int8_runtime_asset_available_for_device_probe",
+    "reason": [
+      "RMBG-2 CoreML 资产已转为 runtime 可消费形态。",
+      "iOS 设备目标构建已生成并打包 RMBG-2-native.mlmodelc。",
+      "UI/provider/metadata 标识链路保持一致。"
+    ],
+    "boundary_note": "该结论仅表示真机资产可用性已修通，不代表模型效果结论。"
+  }
+}
+

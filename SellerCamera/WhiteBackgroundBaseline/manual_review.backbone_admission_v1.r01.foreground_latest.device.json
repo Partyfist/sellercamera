@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r01-foreground-latest-device",
+  "reviewed_at": "2026-04-21T18:58:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "vision_foreground_latest_revision",
+    "request": "VNGenerateForegroundInstanceMaskRequest",
+    "track": "admission_candidate_foreground_latest_revision_v1"
+  },
+  "records_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-foreground-latest-vision-device.jsonl",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-foreground-latest-candidate-device.jsonl"
+  },
+  "checks_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-foreground-latest-vision-device.txt",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-foreground-latest-candidate-device.txt"
+  },
+  "evidence_scope": {
+    "metadata_level": true,
+    "hard_gate_level": true,
+    "focus_and_stability_level": true,
+    "pixel_side_by_side_exported": false,
+    "note": "本轮为新候选首轮最小准入实验，目标是确认该候选是否在 hard_gate 上形成首触达且不破坏稳定样本。"
+  },
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 25,
+        "failed": 1
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 7,
+          "failed": 1
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    },
+    "candidate": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 25,
+        "failed": 1
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 7,
+          "failed": 1
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    }
+  },
+  "hard_gate_findings": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "no_hard_gate_progress",
+      "summary": "EV006 未发生 failed->ready 转换，核心硬门槛仍未触达。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_only",
+      "summary": "跨域样本维持可产出，但无主问题级增益证据。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_only",
+      "summary": "细结构样本保持 ready，无明确改善。"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_only",
+      "summary": "复杂背景剥离未出现可复核增益。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_only",
+      "summary": "同色前后景分离仍无明确提升。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_only",
+      "summary": "复杂纹理背景与深色主体边缘质量未见新增证据。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_only",
+      "summary": "多主体复杂场景保持可产出，但无可复核改善。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_only",
+      "summary": "户外跨域样本未见主问题级优势。"
+    }
+  ],
+  "focus_comparison_findings": [
+    {
+      "samples": [
+        "S001_glass_container_translucent",
+        "S003_ring_macro_dark_bg",
+        "S005_transparent_bowls_dark_bg",
+        "S008_white_tubes_near_white_bg",
+        "S010_food_tray_contact_edge",
+        "EV014_glass_teapot_transparent_stack",
+        "EV019_white_shoes_dark_indoor",
+        "EV025_white_shoes_reflective_platform",
+        "EV039_white_sneaker_yellow_line",
+        "EV048_wood_vase_texture_bg"
+      ],
+      "vision_result": "10/10 ready",
+      "candidate_result": "10/10 ready",
+      "decision_impact": "no_regression_detected",
+      "summary": "重点对比层维持 parity，未观察到跨层级增益信号。"
+    }
+  ],
+  "stability_witness_findings": [
+    {
+      "samples": [
+        "S002_bottle_reflection_window",
+        "S004_paper_cups_light_bg",
+        "S007_snacks_on_dark_plate",
+        "EV004_white_devices_on_light_bg",
+        "EV011_cupcake_on_plate_contact",
+        "EV026_pastry_plate_light_contact",
+        "EV034_appliance_set_warm_bg",
+        "EV046_cream_kettle_warm_bg"
+      ],
+      "vision_result": "8/8 ready",
+      "candidate_result": "8/8 ready",
+      "decision_impact": "stability_guard_pass",
+      "summary": "稳定旁证层未触发 ready->review 或 failed，但仅证明不回退，不证明有新增价值。"
+    }
+  ],
+  "admission_round1_judgement": {
+    "decision": "stop_current_candidate",
+    "recommended_next_stage": "next_candidate_entry_review",
+    "why": [
+      "核心硬门槛 EV006 仍 failed，候选未触达最关键阻塞位。",
+      "hard_gate/focus/stability 三层全部与 Vision 同分布，当前仅表现为 parity。",
+      "在 admission_v1 首轮最小实验内未形成继续投入所需的增量价值证据。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅基于 admission_v1 首轮最小实验，不外推到 expanded 全量样本。",
+      "本结论是“暂停当前候选”而非否定 pinned-latest revision 在其他任务中的潜在价值。"
+    ]
+  }
+}

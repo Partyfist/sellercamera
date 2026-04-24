@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r20-tiny-admission-round2-hard-gate-key-blocker-review",
+  "reviewed_at": "2026-04-23T17:40:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "本轮对象是 BiRefNet-general-bb_swin_v1_tiny-epoch_232。",
+      "本轮是 admission 第二轮 hard_gate 关键阻塞位复核，不是 expanded 或第二轮全量评估。",
+      "本轮结论仅用于判断是否继续停留在 admission 体系，不外推为主链替换或可替代 RMBG-2 结论。"
+    ]
+  },
+  "scope": {
+    "goal": "仅复核 R19 hard_gate 仍为 review 的关键阻塞样本，做问题级证据重判。",
+    "base_reviews": [
+      "WhiteBackgroundBaseline/new_backbone_candidate_experiment_birefnet_r19_tiny_admission_r01_reopen_effective_after_signal.md",
+      "WhiteBackgroundBaseline/manual_review.backbone_admission_v1.r19.birefnet.tiny.admission_r01_reopen_effective_after_signal.json"
+    ],
+    "records_source": {
+      "vision_r19_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-admission-v1-r01-reopen-birefnet-tiny-vision-sim-ios26_4-r5.jsonl",
+      "candidate_r19_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4-r5.jsonl"
+    },
+    "checks_source": {
+      "vision_r19_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-admission-v1-r01-reopen-birefnet-tiny-vision-sim-ios26_4-r5.txt",
+      "candidate_r19_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4-r5.txt"
+    }
+  },
+  "focus_samples": {
+    "selected": [
+      "EV006_beaded_string_on_texture",
+      "EV021_hand_with_beads",
+      "EV028_flower_vase_garden_bg",
+      "EV033_blue_vase_blue_curtain",
+      "EV044_person_outdoor_complex"
+    ],
+    "why_selected": "它们是 R19 hard_gate 中仍停在 review 的全部阻塞样本，决定 tiny 是否仍具继续复核价值。"
+  },
+  "problem_level_review": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "single_primary_problem": "细珠串连续细结构与纹理背景交界处的细边完整性是否足够稳定。",
+      "evidence": {
+        "candidate_r19": {
+          "quality_level": "review",
+          "hard_case_signal": "thinDetailEdge",
+          "coverage_ratio": "0.0895",
+          "signal_confidence": "0.9881",
+          "provider": "birefnet_tiny_ort",
+          "quality_metadata_mode": "tiny_ort_runtime_signal_v1"
+        },
+        "vision_r19": {
+          "quality_level": "failed",
+          "hard_case_signal": "unknown"
+        },
+        "interpretation": "候选已从不可消费态进入稳定可输出态，但该样本主问题仍未升档到 ready。"
+      },
+      "judgement": "changed_but_insufficient"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "single_primary_problem": "手部与珠串邻接区域的前景保真（洗薄/边缘丢失）是否被实质抑制。",
+      "evidence": {
+        "candidate_r19": {
+          "quality_level": "review",
+          "hard_case_signal": "foregroundWashout",
+          "coverage_ratio": "0.4954",
+          "signal_confidence": "0.9918",
+          "provider": "birefnet_tiny_ort",
+          "quality_metadata_mode": "tiny_ort_runtime_signal_v1"
+        },
+        "vision_r19": {
+          "quality_level": "failed",
+          "hard_case_signal": "unknown"
+        },
+        "interpretation": "复合细结构样本上可运行与可输出已成立，但前景洗薄风险仍未被证明已清空。"
+      },
+      "judgement": "changed_but_insufficient"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "single_primary_problem": "自然复杂纹理背景下花枝外轮廓分离稳定性。",
+      "evidence": {
+        "candidate_r19": {
+          "quality_level": "review",
+          "hard_case_signal": "thinDetailEdge",
+          "coverage_ratio": "0.1189",
+          "signal_confidence": "0.9943",
+          "provider": "birefnet_tiny_ort",
+          "quality_metadata_mode": "tiny_ort_runtime_signal_v1"
+        },
+        "vision_r19": {
+          "quality_level": "failed",
+          "hard_case_signal": "unknown"
+        },
+        "interpretation": "复杂背景样本上仍有细边阻塞，当前可判定有变化但证据不足以升档。"
+      },
+      "judgement": "changed_but_insufficient"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "single_primary_problem": "同色前后景（蓝瓶/蓝幕）交界分离能力是否形成可确认改善。",
+      "evidence": {
+        "candidate_r19": {
+          "quality_level": "review",
+          "hard_case_signal": "softEdge",
+          "coverage_ratio": "0.2343",
+          "signal_confidence": "0.9768",
+          "provider": "birefnet_tiny_ort",
+          "quality_metadata_mode": "tiny_ort_runtime_signal_v1"
+        },
+        "vision_r19": {
+          "quality_level": "failed",
+          "hard_case_signal": "unknown"
+        },
+        "interpretation": "同色分离主问题仍缺可确认改善证据，当前不能从 review 升档。"
+      },
+      "judgement": "not_proven"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "single_primary_problem": "人物外轮廓与户外枝叶跨域交界的分离稳定性。",
+      "evidence": {
+        "candidate_r19": {
+          "quality_level": "review",
+          "hard_case_signal": "thinDetailEdge",
+          "coverage_ratio": "0.0930",
+          "signal_confidence": "0.9935",
+          "provider": "birefnet_tiny_ort",
+          "quality_metadata_mode": "tiny_ort_runtime_signal_v1"
+        },
+        "vision_r19": {
+          "quality_level": "failed",
+          "hard_case_signal": "unknown"
+        },
+        "interpretation": "跨域复杂边界主问题仍未形成可确认改善证据。"
+      },
+      "judgement": "not_proven"
+    }
+  ],
+  "tier_summary_r20_hard_gate_focus_set": {
+    "clear_improved": [],
+    "changed_but_insufficient": [
+      "EV006_beaded_string_on_texture",
+      "EV021_hand_with_beads",
+      "EV028_flower_vase_garden_bg"
+    ],
+    "not_proven": [
+      "EV033_blue_vase_blue_curtain",
+      "EV044_person_outdoor_complex"
+    ],
+    "summary": "5 个阻塞样本中 3 个有变化但不足、2 个尚未证明改善。"
+  },
+  "gate_decision_r20": {
+    "three_way_decision": "继续停留在 admission 体系并进入下一步复核",
+    "decision_code": "continue_in_admission_after_round2_hard_gate_review",
+    "reason": [
+      "本轮 5 个阻塞样本并非全量停滞，存在 3/5 的问题级变化信号。",
+      "未出现 failed 红线，当前风险集中在 EV033/EV044 两个 not_proven 样本。",
+      "继续在 admission 内做下一步最小终局复核的收益高于当前直接停止。"
+    ],
+    "boundary_note": "本结论仅表示继续留在 admission 体系复核，不代表 tiny 已通过 admission，不代表已可替代 RMBG-2。"
+  },
+  "next_step_recommendation": {
+    "recommended_next_stage": "tiny_admission_round3_hard_gate_terminal_review",
+    "do": [
+      "仅聚焦 EV033/EV044 两个 not_proven 样本并保留 EV006 门槛锚点。",
+      "输出终局三选一：继续停留 admission / 暂停当前候选 /（若证据跃迁）进入下一范围。"
+    ],
+    "do_not": [
+      "不扩到 expanded 子集实验。",
+      "不做主链改造与下游联动。"
+    ]
+  }
+}

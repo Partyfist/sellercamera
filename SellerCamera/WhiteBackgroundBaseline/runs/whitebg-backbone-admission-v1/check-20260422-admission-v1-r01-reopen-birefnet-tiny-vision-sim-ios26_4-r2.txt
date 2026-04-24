@@ -1,0 +1,41 @@
+[Suite] whitebg-backbone-admission-v1
+[Records] 26
+[Samples in manifest] 26
+[Samples covered] 26
+
+[Quality Distribution]
+- failed: 26
+
+[Hard Case Distribution]
+- unknown: 26
+
+[Environment Snapshots]
+- model=arm64, iOS=26.4.1, visionRevision=unknown
+
+[Per Sample Latest]
+- EV004_white_devices_on_light_bg: quality=failed, hard_case=unknown, processed_id=failed-EV004_white_devices_on_light_bg
+- EV006_beaded_string_on_texture: quality=failed, hard_case=unknown, processed_id=failed-EV006_beaded_string_on_texture
+- EV011_cupcake_on_plate_contact: quality=failed, hard_case=unknown, processed_id=failed-EV011_cupcake_on_plate_contact
+- EV013_full_body_person_gray_bg: quality=failed, hard_case=unknown, processed_id=failed-EV013_full_body_person_gray_bg
+- EV014_glass_teapot_transparent_stack: quality=failed, hard_case=unknown, processed_id=failed-EV014_glass_teapot_transparent_stack
+- EV019_white_shoes_dark_indoor: quality=failed, hard_case=unknown, processed_id=failed-EV019_white_shoes_dark_indoor
+- EV021_hand_with_beads: quality=failed, hard_case=unknown, processed_id=failed-EV021_hand_with_beads
+- EV025_white_shoes_reflective_platform: quality=failed, hard_case=unknown, processed_id=failed-EV025_white_shoes_reflective_platform
+- EV026_pastry_plate_light_contact: quality=failed, hard_case=unknown, processed_id=failed-EV026_pastry_plate_light_contact
+- EV028_flower_vase_garden_bg: quality=failed, hard_case=unknown, processed_id=failed-EV028_flower_vase_garden_bg
+- EV033_blue_vase_blue_curtain: quality=failed, hard_case=unknown, processed_id=failed-EV033_blue_vase_blue_curtain
+- EV034_appliance_set_warm_bg: quality=failed, hard_case=unknown, processed_id=failed-EV034_appliance_set_warm_bg
+- EV038_dark_shoes_shelf_plants: quality=failed, hard_case=unknown, processed_id=failed-EV038_dark_shoes_shelf_plants
+- EV039_white_sneaker_yellow_line: quality=failed, hard_case=unknown, processed_id=failed-EV039_white_sneaker_yellow_line
+- EV042_cakes_in_booth_scene: quality=failed, hard_case=unknown, processed_id=failed-EV042_cakes_in_booth_scene
+- EV044_person_outdoor_complex: quality=failed, hard_case=unknown, processed_id=failed-EV044_person_outdoor_complex
+- EV046_cream_kettle_warm_bg: quality=failed, hard_case=unknown, processed_id=failed-EV046_cream_kettle_warm_bg
+- EV048_wood_vase_texture_bg: quality=failed, hard_case=unknown, processed_id=failed-EV048_wood_vase_texture_bg
+- S001_glass_container_translucent: quality=failed, hard_case=unknown, processed_id=failed-S001_glass_container_translucent
+- S002_bottle_reflection_window: quality=failed, hard_case=unknown, processed_id=failed-S002_bottle_reflection_window
+- S003_ring_macro_dark_bg: quality=failed, hard_case=unknown, processed_id=failed-S003_ring_macro_dark_bg
+- S004_paper_cups_light_bg: quality=failed, hard_case=unknown, processed_id=failed-S004_paper_cups_light_bg
+- S005_transparent_bowls_dark_bg: quality=failed, hard_case=unknown, processed_id=failed-S005_transparent_bowls_dark_bg
+- S007_snacks_on_dark_plate: quality=failed, hard_case=unknown, processed_id=failed-S007_snacks_on_dark_plate
+- S008_white_tubes_near_white_bg: quality=failed, hard_case=unknown, processed_id=failed-S008_white_tubes_near_white_bg
+- S010_food_tray_contact_edge: quality=failed, hard_case=unknown, processed_id=failed-S010_food_tray_contact_edge

@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r03-objectness-hard-gate-evidence-tightening",
+  "reviewed_at": "2026-04-21T23:55:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "vision_objectness_saliency",
+    "request": "VNGenerateObjectnessBasedSaliencyImageRequest",
+    "track": "admission_candidate_objectness_saliency_v1"
+  },
+  "scope": {
+    "goal": "仅在 admission_v1 内强化 objectness 的 hard_gate 关键阻塞位证据，不扩样本、不改代码边界。",
+    "based_on": [
+      "WhiteBackgroundBaseline/manual_review.backbone_admission_v1.r02.objectness.hard_gate.json",
+      "WhiteBackgroundBaseline/new_backbone_candidate_experiment_objectness_r02.md"
+    ],
+    "records_source": {
+      "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-objectness-vision-device.jsonl",
+      "objectness_candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-objectness-candidate-device.jsonl"
+    },
+    "checks_source": {
+      "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-objectness-vision-device.txt",
+      "objectness_candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-objectness-candidate-device.txt"
+    },
+    "evidence_scope": {
+      "metadata_level": true,
+      "hard_gate_problem_level": true,
+      "pixel_side_by_side_exported": false,
+      "note": "本轮不新增运行轮次，仅强化关键阻塞位问题级证据表达。"
+    }
+  },
+  "focus_samples": {
+    "primary_focus": [
+      {
+        "sample_id": "EV033_blue_vase_blue_curtain",
+        "blocking_type": "同色前后景分离",
+        "why_selected": "同色分离是当前升级门槛的核心阻塞位，且 r02 仍为 changed_but_insufficient。"
+      },
+      {
+        "sample_id": "EV038_dark_shoes_shelf_plants",
+        "blocking_type": "复杂背景纹理残留",
+        "why_selected": "复杂纹理背景与深色主体交界是 hard_gate 主短板之一。"
+      },
+      {
+        "sample_id": "EV042_cakes_in_booth_scene",
+        "blocking_type": "多主体聚焦与接触边一致性",
+        "why_selected": "多主体场景是升级范围前必须确认的高风险位。"
+      },
+      {
+        "sample_id": "EV044_person_outdoor_complex",
+        "blocking_type": "跨域主体边界稳定性",
+        "why_selected": "跨域复杂背景的人物边界稳定性在 r02 仍为 not_proven。"
+      }
+    ],
+    "not_primary_this_round": [
+      {
+        "sample_id": "EV006_beaded_string_on_texture",
+        "reason": "已 clear_improved，非本轮阻塞位。"
+      },
+      {
+        "sample_id": "EV013_full_body_person_gray_bg",
+        "reason": "与 EV044 同属跨域边界问题，本轮优先保留阻塞强度更高的 EV044。"
+      },
+      {
+        "sample_id": "EV021_hand_with_beads",
+        "reason": "细结构问题已在 r02 归为 changed_but_insufficient，本轮优先同色/复杂背景/多主体阻塞位。"
+      },
+      {
+        "sample_id": "EV028_flower_vase_garden_bg",
+        "reason": "与 EV038 同属复杂背景残留问题，本轮保留更典型阻塞样本 EV038。"
+      }
+    ]
+  },
+  "problem_level_review": [
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "single_primary_problem": "花瓶肩线与蓝幕同色交界是否形成可复核分离收益。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3843"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.4431",
+        "coverage_delta_vs_vision": "+0.0588"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "存在几何变化，但主问题（同色交界分离）仍缺明确可复核改善证据。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "single_primary_problem": "深色鞋体外缘在复杂货架背景纹理中的残留是否明显减少。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.4510"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.5059",
+        "coverage_delta_vs_vision": "+0.0549"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "当前仍是“未回退+有变化”，不足以证明复杂纹理残留主问题已明确改善。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "single_primary_problem": "多主体场景中主主体聚焦是否更一致，接触边是否更稳定。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3216"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.4941",
+        "coverage_delta_vs_vision": "+0.1725"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "变化幅度较大，但当前证据仍不足以把“多主体聚焦主问题”升级为明确改善。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "single_primary_problem": "人物外轮廓与树枝背景交界稳定性是否明显增强。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3216"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3176",
+        "coverage_delta_vs_vision": "-0.0040"
+      },
+      "judgement": "not_proven",
+      "reason": "几乎无有效变化信号，当前仍不能证明跨域边界主问题受益。"
+    }
+  ],
+  "tier_update": {
+    "sample_tier_changes_vs_r02": [],
+    "changed_but_insufficient_still": [
+      "EV033_blue_vase_blue_curtain",
+      "EV038_dark_shoes_shelf_plants",
+      "EV042_cakes_in_booth_scene"
+    ],
+    "not_proven_still": [
+      "EV044_person_outdoor_complex"
+    ],
+    "summary": "本轮关键阻塞样本未出现档位升级。"
+  },
+  "gate_decision_r03_objectness": {
+    "hard_gate_threshold_met": false,
+    "three_way_decision": "继续停留在 admission_v1",
+    "reason": [
+      "关键阻塞样本（EV033/EV038/EV042/EV044）未出现 clear_improved 档位跃迁。",
+      "hard_gate 明确改善仍主要集中在 EV006 单点，仍不足以支持升级范围。",
+      "稳定层未触发红线，不支持停止候选；证据强度也不足以扩大范围。"
+    ],
+    "closest_gap_to_upgrade": "至少还需在 2 个以上关键阻塞样本主问题上形成 clear_improved，才接近升级门槛。",
+    "boundary_note": "本结论仅在 admission_v1 样本边界内成立，不外推到 expanded_v1。"
+  }
+}

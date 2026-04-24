@@ -1,0 +1,321 @@
+import CoreImage
+import CoreML
+import CoreVideo
+import Foundation
+import ImageIO
+import UniformTypeIdentifiers
+
+struct ClosureReport: Codable {
+    let stage: String
+    let modelPath: String
+    let resolvedModelPath: String?
+    let imagePath: String
+    let maskOutputPath: String
+    let outputFeatureName: String
+    let modelExists: Bool
+    let imageExists: Bool
+    let loadSucceeded: Bool
+    let inferenceTriggered: Bool
+    let maskProduced: Bool
+    let fallbackReady: Bool
+    let status: String
+    let error: String?
+}
+
+func parseArgs() -> [String: String] {
+    var map: [String: String] = [:]
+    let args = CommandLine.arguments
+    var idx = 1
+    while idx + 1 < args.count {
+        let key = args[idx]
+        if key.hasPrefix("--") {
+            map[String(key.dropFirst(2))] = args[idx + 1]
+            idx += 2
+        } else {
+            idx += 1
+        }
+    }
+    return map
+}
+
+func writeReport(_ report: ClosureReport, to reportPath: URL?) {
+    guard let reportPath else {
+        return
+    }
+    do {
+        let data = try JSONEncoder().encode(report)
+        try data.write(to: reportPath)
+    } catch {
+        fputs("failed to write report: \(error)\n", stderr)
+    }
+}
+
+func saveMaskPNG(_ image: CIImage, to outputURL: URL) throws {
+    let context = CIContext(options: nil)
+    guard let cgImage = context.createCGImage(image, from: image.extent) else {
+        throw NSError(domain: "birefnet.singlepoint", code: 2, userInfo: [NSLocalizedDescriptionKey: "createCGImage_failed"])
+    }
+    guard let destination = CGImageDestinationCreateWithURL(outputURL as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+        throw NSError(domain: "birefnet.singlepoint", code: 3, userInfo: [NSLocalizedDescriptionKey: "cgImageDestination_failed"])
+    }
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    if !CGImageDestinationFinalize(destination) {
+        throw NSError(domain: "birefnet.singlepoint", code: 4, userInfo: [NSLocalizedDescriptionKey: "cgImageDestination_finalize_failed"])
+    }
+}
+
+func loadableModelURL(from rawURL: URL) throws -> URL {
+    let resolvedURL = rawURL.resolvingSymlinksInPath()
+    switch resolvedURL.pathExtension.lowercased() {
+    case "mlmodelc":
+        return resolvedURL
+    case "mlpackage", "mlmodel":
+        return try MLModel.compileModel(at: resolvedURL)
+    default:
+        throw NSError(domain: "birefnet.singlepoint", code: 6, userInfo: [NSLocalizedDescriptionKey: "unsupported_model_path_extension:\(resolvedURL.pathExtension)"])
+    }
+}
+
+func resizedRGBAData(from imageURL: URL, width: Int, height: Int) throws -> [UInt8] {
+    guard
+        let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
+        let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+    else {
+        throw NSError(domain: "birefnet.singlepoint", code: 7, userInfo: [NSLocalizedDescriptionKey: "source_image_invalid"])
+    }
+
+    let ciContext = CIContext(options: nil)
+    let ciImage = CIImage(cgImage: cgImage)
+    let sourceExtent = ciImage.extent
+    let scaleX = CGFloat(width) / sourceExtent.width
+    let scaleY = CGFloat(height) / sourceExtent.height
+    let resized = ciImage
+        .transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+        .cropped(to: CGRect(x: 0, y: 0, width: width, height: height))
+
+    var rgba = [UInt8](repeating: 0, count: width * height * 4)
+    ciContext.render(
+        resized,
+        toBitmap: &rgba,
+        rowBytes: width * 4,
+        bounds: CGRect(x: 0, y: 0, width: width, height: height),
+        format: .RGBA8,
+        colorSpace: CGColorSpaceCreateDeviceRGB()
+    )
+    return rgba
+}
+
+func makeModelInputArray(rgba: [UInt8], width: Int, height: Int) throws -> MLMultiArray {
+    let inputArray = try MLMultiArray(shape: [1, 3, NSNumber(value: height), NSNumber(value: width)], dataType: .float32)
+    let strideC = Int(truncating: inputArray.strides[1])
+    let strideH = Int(truncating: inputArray.strides[2])
+    let strideW = Int(truncating: inputArray.strides[3])
+
+    let means: [Double] = [0.485, 0.456, 0.406]
+    let stds: [Double] = [0.229, 0.224, 0.225]
+
+    for y in 0..<height {
+        for x in 0..<width {
+            let rgbaIndex = ((y * width) + x) * 4
+            for channel in 0..<3 {
+                let pixel = Double(rgba[rgbaIndex + channel]) / 255.0
+                let normalized = (pixel - means[channel]) / stds[channel]
+                let linearIndex = channel * strideC + y * strideH + x * strideW
+                inputArray[linearIndex] = NSNumber(value: normalized)
+            }
+        }
+    }
+    return inputArray
+}
+
+func maskCIImage(from multiArray: MLMultiArray) throws -> CIImage {
+    let dimensions = multiArray.shape.map { Int(truncating: $0) }
+    let strides = multiArray.strides.map { Int(truncating: $0) }
+    guard dimensions.count >= 2 else {
+        throw NSError(domain: "birefnet.singlepoint", code: 8, userInfo: [NSLocalizedDescriptionKey: "output_shape_invalid"])
+    }
+    let heightIndex = dimensions.count - 2
+    let widthIndex = dimensions.count - 1
+    let height = dimensions[heightIndex]
+    let width = dimensions[widthIndex]
+    guard height > 0, width > 0 else {
+        throw NSError(domain: "birefnet.singlepoint", code: 9, userInfo: [NSLocalizedDescriptionKey: "output_hw_invalid"])
+    }
+    let strideHeight = strides[heightIndex]
+    let strideWidth = strides[widthIndex]
+
+    var maskBytes = [UInt8](repeating: 0, count: width * height)
+    for y in 0..<height {
+        for x in 0..<width {
+            let linearIndex = y * strideHeight + x * strideWidth
+            let raw = multiArray[linearIndex].doubleValue
+            let activated = 1.0 / (1.0 + exp(-raw))
+            let clamped = max(0.0, min(1.0, activated))
+            maskBytes[(y * width) + x] = UInt8(clamped * 255.0)
+        }
+    }
+
+    var pixelBuffer: CVPixelBuffer?
+    let attributes: [String: Any] = [
+        kCVPixelBufferCGImageCompatibilityKey as String: true,
+        kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+    ]
+    guard CVPixelBufferCreate(
+        kCFAllocatorDefault,
+        width,
+        height,
+        kCVPixelFormatType_OneComponent8,
+        attributes as CFDictionary,
+        &pixelBuffer
+    ) == kCVReturnSuccess, let pixelBuffer else {
+        throw NSError(domain: "birefnet.singlepoint", code: 10, userInfo: [NSLocalizedDescriptionKey: "pixelbuffer_create_failed"])
+    }
+    CVPixelBufferLockBaseAddress(pixelBuffer, [])
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+    guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+        throw NSError(domain: "birefnet.singlepoint", code: 11, userInfo: [NSLocalizedDescriptionKey: "pixelbuffer_baseaddress_failed"])
+    }
+    let destinationBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+    for row in 0..<height {
+        let destination = baseAddress.advanced(by: row * destinationBytesPerRow)
+        maskBytes.withUnsafeBytes { rawBuffer in
+            let source = rawBuffer.baseAddress!.advanced(by: row * width)
+            memcpy(destination, source, width)
+        }
+        if destinationBytesPerRow > width {
+            memset(destination.advanced(by: width), 0, destinationBytesPerRow - width)
+        }
+    }
+    return CIImage(cvPixelBuffer: pixelBuffer)
+}
+
+let args = parseArgs()
+let modelPath = args["model"] ?? ""
+let imagePath = args["image"] ?? ""
+let maskPath = args["mask-output"] ?? "/tmp/birefnet-single-point-mask.png"
+let outputFeatureName = args["output-feature"] ?? "output_3"
+let reportPath = args["report"].flatMap { URL(fileURLWithPath: $0) }
+
+let modelURL = URL(fileURLWithPath: modelPath)
+let imageURL = URL(fileURLWithPath: imagePath)
+let maskURL = URL(fileURLWithPath: maskPath)
+let modelExists = FileManager.default.fileExists(atPath: modelURL.path)
+let imageExists = FileManager.default.fileExists(atPath: imageURL.path)
+
+guard modelExists else {
+    let report = ClosureReport(
+        stage: "birefnet_single_point_closure_check",
+        modelPath: modelPath,
+        resolvedModelPath: nil,
+        imagePath: imagePath,
+        maskOutputPath: maskPath,
+        outputFeatureName: outputFeatureName,
+        modelExists: false,
+        imageExists: imageExists,
+        loadSucceeded: false,
+        inferenceTriggered: false,
+        maskProduced: false,
+        fallbackReady: true,
+        status: "model_missing",
+        error: "coreml_model_asset_not_found"
+    )
+    writeReport(report, to: reportPath)
+    print(String(data: try JSONEncoder().encode(report), encoding: .utf8) ?? "{}")
+    exit(2)
+}
+
+guard imageExists else {
+    let report = ClosureReport(
+        stage: "birefnet_single_point_closure_check",
+        modelPath: modelPath,
+        resolvedModelPath: nil,
+        imagePath: imagePath,
+        maskOutputPath: maskPath,
+        outputFeatureName: outputFeatureName,
+        modelExists: modelExists,
+        imageExists: false,
+        loadSucceeded: false,
+        inferenceTriggered: false,
+        maskProduced: false,
+        fallbackReady: true,
+        status: "image_missing_or_invalid",
+        error: "source_image_unavailable"
+    )
+    writeReport(report, to: reportPath)
+    print(String(data: try JSONEncoder().encode(report), encoding: .utf8) ?? "{}")
+    exit(3)
+}
+
+do {
+    let loadableURL = try loadableModelURL(from: modelURL)
+    let config = MLModelConfiguration()
+    config.computeUnits = .all
+    let model = try MLModel(contentsOf: loadableURL, configuration: config)
+
+    let inputName = model.modelDescription.inputDescriptionsByName["input"] != nil
+        ? "input"
+        : (model.modelDescription.inputDescriptionsByName.keys.first ?? "input")
+    let rgba = try resizedRGBAData(from: imageURL, width: 1024, height: 1024)
+    let inputArray = try makeModelInputArray(rgba: rgba, width: 1024, height: 1024)
+    let inputProvider = try MLDictionaryFeatureProvider(dictionary: [
+        inputName: MLFeatureValue(multiArray: inputArray)
+    ])
+    let prediction = try model.prediction(from: inputProvider)
+
+    let outputMultiArray =
+        prediction.featureValue(for: outputFeatureName)?.multiArrayValue
+        ?? prediction.featureNames
+            .compactMap { prediction.featureValue(for: $0)?.multiArrayValue }
+            .first
+    guard let outputMultiArray else {
+        throw NSError(domain: "birefnet.singlepoint", code: 12, userInfo: [NSLocalizedDescriptionKey: "model_output_missing"])
+    }
+
+    let maskImage = try maskCIImage(from: outputMultiArray)
+    try FileManager.default.createDirectory(
+        at: maskURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true,
+        attributes: nil
+    )
+    try saveMaskPNG(maskImage, to: maskURL)
+
+    let report = ClosureReport(
+        stage: "birefnet_single_point_closure_check",
+        modelPath: modelPath,
+        resolvedModelPath: loadableURL.path,
+        imagePath: imagePath,
+        maskOutputPath: maskPath,
+        outputFeatureName: outputFeatureName,
+        modelExists: true,
+        imageExists: true,
+        loadSucceeded: true,
+        inferenceTriggered: true,
+        maskProduced: true,
+        fallbackReady: true,
+        status: "single_point_closure_passed",
+        error: nil
+    )
+    writeReport(report, to: reportPath)
+    print(String(data: try JSONEncoder().encode(report), encoding: .utf8) ?? "{}")
+    exit(0)
+} catch {
+    let report = ClosureReport(
+        stage: "birefnet_single_point_closure_check",
+        modelPath: modelPath,
+        resolvedModelPath: nil,
+        imagePath: imagePath,
+        maskOutputPath: maskPath,
+        outputFeatureName: outputFeatureName,
+        modelExists: true,
+        imageExists: true,
+        loadSucceeded: false,
+        inferenceTriggered: false,
+        maskProduced: false,
+        fallbackReady: true,
+        status: "single_point_closure_failed",
+        error: String(describing: error)
+    )
+    writeReport(report, to: reportPath)
+    print(String(data: try JSONEncoder().encode(report), encoding: .utf8) ?? "{}")
+    exit(4)
+}

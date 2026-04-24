@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r13-birefnet-tiny-ort-provider-feasibility",
+  "reviewed_at": "2026-04-22T18:00:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "当前对象是 BiRefNet tiny 自有权重轨道（BiRefNet-general-bb_swin_v1_tiny-epoch_232），不是原版 BiRefNet 全链路打通结论。",
+      "本轮是 ORT provider 最小可行化包（非 admission 包），不做样本级效果判断。",
+      "本轮只判断 tiny ONNX 在正式 provider/runtime 路径是否可被消费，不外推到主链替换结论。"
+    ]
+  },
+  "problem_layer_lock": {
+    "locked_problem": "runtime_contract_coreml_only_vs_tiny_onnx",
+    "explicit_statement": "正式 runtime 的 candidate_birefnet 当前为 CoreML-only 合同，tiny ONNX 资产无法直接消费。",
+    "why_not_quality_problem": [
+      "R10 单点 ONNXRuntime 已通过，说明模型与推理能力本身可运行。",
+      "R11 stop 主因是 segmentationModelUnavailable，而非样本质量回退。"
+    ],
+    "why_not_reopen_admission_now": [
+      "在 provider 合同未打通时重开 admission 只会重复无效入口失败。",
+      "当前应先打通 runtime contract，而非继续样本级实验。"
+    ]
+  },
+  "selected_main_route": {
+    "name": "tiny_ort_provider_minimal_branch",
+    "why_selected": [
+      "只在 SegmentationProvider 边界内新增 tiny ORT 路由，最小增量命中当前阻塞层。",
+      "保持 candidate_birefnet CoreML 路径不变，避免影响既有链路。",
+      "可在非 admission 验证中直接判断是否具备重开 admission 资格。"
+    ],
+    "why_not_others_now": [
+      "本轮不做 admission 第二轮。",
+      "本轮不做 expanded 子集。",
+      "本轮不做 provider 通用平台化重构。"
+    ]
+  },
+  "minimal_changes": {
+    "code_changes": [
+      {
+        "file": "CaptureWhiteBackgroundProcessor.swift",
+        "change": "新增 birefnet_tiny_ort provider ID、tiny ORT 模型路径环境键、tiny ONNX 资产发现函数、tiny ORT provider 路由与依赖不可用错误语义。"
+      }
+    ],
+    "new_scripts": [
+      "WhiteBackgroundBaseline/scripts/birefnet_tiny_ort_provider_runtime_check.py"
+    ]
+  },
+  "verification": {
+    "runtime_probe": {
+      "report": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r13-tiny-ort-runtime-provider.json",
+      "provider_selected": true,
+      "asset_discovery_ok": true,
+      "load_succeeded": true,
+      "inference_triggered": true,
+      "mask_produced": true,
+      "ort_objc_module_available": false,
+      "status": "runtime_dependency_unavailable",
+      "contract_opened": false,
+      "error_stage": "runtime_dependency",
+      "error": "onnxruntime_objc_module_not_available_in_formal_runtime"
+    }
+  },
+  "judgement": {
+    "decision": "continue_stop_do_not_reopen_tiny_admission_r01",
+    "why": [
+      "虽然 ORT 推理探针可完成 load/infer/mask，但正式 runtime 所需 iOS ORT 依赖未打通。",
+      "当前 provider 级合同仍未真正打开，重开 admission 将重复无效入口。",
+      "本轮边界内应继续停在可行化层，等待依赖层最小打通后再评估重开 admission。"
+    ],
+    "next_package_recommendation": "tiny_ort_ios_dependency_closure_package",
+    "not_allowed_next_now": [
+      "reopen_tiny_admission_r01",
+      "admission_round2",
+      "expanded_subset_experiments"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅针对 tiny ORT provider 在当前工程边界下的可行化状态。",
+      "本结论不等于 tiny 路线永久不可行。",
+      "本结论不构成主链替换或商业效果判断。"
+    ]
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r01-birefnet-tiny-admission",
+  "reviewed_at": "2026-04-22T17:06:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_onnx_v1",
+    "identity_boundary": [
+      "本轮候选是 BiRefNet tiny 自有权重轨道（BiRefNet-general-bb_swin_v1_tiny-epoch_232），不等同于原版 BiRefNet 全链路已打通。",
+      "本轮仅做 admission_v1 首轮最小准入实验，不外推到 expanded 子集或主链替换。",
+      "本轮结论不等同于 tiny 已可替代 RMBG-2，仅在当前 provider 合同与 admission R01 边界内成立。"
+    ]
+  },
+  "records_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260422-admission-v1-r01-birefnet-tiny-vision-sim-ios26_4.jsonl",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260422-admission-v1-r01-birefnet-tiny-candidate-sim-ios26_4.jsonl"
+  },
+  "checks_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-admission-v1-r01-birefnet-tiny-vision-sim-ios26_4.txt",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-admission-v1-r01-birefnet-tiny-candidate-sim-ios26_4.txt"
+  },
+  "environment_notes": [
+    "iOS 26.4.1 simulator 下 Vision 与 tiny candidate 均复现全量 failed。",
+    "candidate 失败主因稳定为 CaptureWhiteBackgroundProcessorError code=3（分割模型资产不可用），当前结论仅在本轮 admission_v1 首轮边界内成立。"
+  ],
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "failed": 26
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "failed": 8
+        },
+        "focus_comparison": {
+          "failed": 10
+        },
+        "stability_witness": {
+          "failed": 8
+        }
+      },
+      "dominant_failure": {
+        "domain": "com.apple.Vision",
+        "code": "9",
+        "description": "Could not create inference context",
+        "count": 26
+      }
+    },
+    "candidate": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "failed": 26
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "failed": 8
+        },
+        "focus_comparison": {
+          "failed": 10
+        },
+        "stability_witness": {
+          "failed": 8
+        }
+      },
+      "dominant_failure": {
+        "domain": "SellerCamera.CaptureWhiteBackgroundProcessorError",
+        "code": "3",
+        "description": "分割模型资产不可用",
+        "count": 26
+      }
+    }
+  },
+  "hard_gate_findings": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "no_hard_gate_hit",
+      "summary": "EV006 在 tiny admission R01 中未形成正向命中，仍为 failed。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "同色前后景关键阻塞位未产出可比较正向结果，candidate 在处理阶段直接失败。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "复杂纹理背景关键阻塞位未产出可比较结果，candidate 在处理阶段直接失败。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "多主体聚焦关键阻塞位未产出可比较结果，candidate 在处理阶段直接失败。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "跨域人物/商品边界关键阻塞位未产出可比较结果，candidate 在处理阶段直接失败。"
+    }
+  ],
+  "focus_comparison_findings": [
+    {
+      "vision_result": "10/10 failed",
+      "candidate_result": "10/10 failed",
+      "decision_impact": "no_positive_signal",
+      "summary": "focus_comparison 未出现任何可支持继续第二轮的正向信号。"
+    }
+  ],
+  "stability_witness_findings": [
+    {
+      "vision_result": "8/8 failed",
+      "candidate_result": "8/8 failed",
+      "decision_impact": "safety_not_established",
+      "summary": "stability_witness 无法建立 ready 样本安全旁证；当前不具备继续 admission 的稳定性依据。"
+    }
+  ],
+  "admission_round1_judgement": {
+    "decision": "stop_current_candidate",
+    "recommended_next_stage": "tiny_runtime_contract_reassessment_non_admission",
+    "why": [
+      "candidate 在 admission_v1 首轮 26/26 全量 failed，hard_gate/focus/stability 三层均无可用正向证据。",
+      "candidate 失败原因稳定指向分割模型资产不可用（CaptureWhiteBackgroundProcessorError code=3），当前 provider 合同下 tiny 路线未形成可用准入输入。",
+      "继续进入 admission 第二轮属于低收益重复投入，不符合当前准入纪律。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅针对 tiny 路线在现有 SegmentationProvider 合同下的 admission R01 首轮实验边界。",
+      "本结论不等同于原版 BiRefNet 全链路永久否定，也不等同于 tiny 路线永久不可行。",
+      "本结论不构成主链替换或商业可用判断。"
+    ]
+  }
+}

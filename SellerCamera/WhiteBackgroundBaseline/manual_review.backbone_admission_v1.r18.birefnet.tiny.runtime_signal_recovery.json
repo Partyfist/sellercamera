@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r18-birefnet-tiny-runtime-signal-recovery",
+  "reviewed_at": "2026-04-23T11:12:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "本轮对象仍是 BiRefNet tiny 自有权重轨道，不等同于原版 BiRefNet 全链路打通。",
+      "本轮是 runtime 质量信号恢复（非 admission 包），不做样本效果优劣判断。",
+      "本轮结论只回答是否恢复重开 tiny admission R01 的信号资格，不外推为已可替代 RMBG-2。"
+    ]
+  },
+  "problem_layer_lock": {
+    "locked_problem": "runtime_quality_signal_recoverability",
+    "explicit_statement": "R17 stop 的主因是 26/26 全 review，证据分层丧失判别力。",
+    "why_not_effect_problem": [
+      "R14/R16 已恢复 provider 入口与 26/26 覆盖。",
+      "R17 的无效性来自 quality metadata 一刀切，而非样本效果红线。",
+      "在 signal 未恢复前继续 admission 第二轮只会重复低判别力证据。"
+    ]
+  },
+  "root_cause_analysis": {
+    "signal_collapse_observation_r17": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "review": 26
+      },
+      "hard_case_distribution": {
+        "stable": 26
+      },
+      "quality_metadata_mode_distribution": {
+        "tiny_ort_runtime_fallback": 26
+      }
+    },
+    "collapsed_layer": [
+      "shouldUseTinyORTCoverageMetadataFallback 在 simulator + tiny ORT 路径持续命中。",
+      "makeTinyORTCoverageFallbackMetadata 固定输出 quality_level=review / hard_case_signal=stable。",
+      "风险分数被固定为 0，导致 ready/review/failed 分层被压扁。"
+    ],
+    "conclusion": "当前阻塞不是入口和覆盖，而是 runtime quality metadata fallback 一刀切导致 signal 判别力丧失。"
+  },
+  "selected_main_route": {
+    "name": "tiny_ort_logits_signal_based_metadata_recovery",
+    "why_selected": [
+      "直接命中当前唯一阻塞（signal 丧失）。",
+      "保持 SegmentationProvider 边界内局部修复，不改白底主流程和下游。",
+      "可在非 admission probe 中直接验证分层是否恢复。"
+    ],
+    "why_not_others_now": [
+      "本轮不做质量系统大修。",
+      "本轮不做模型效果优化。",
+      "本轮不重开 admission。"
+    ]
+  },
+  "implementation": {
+    "file": "CaptureWhiteBackgroundProcessor.swift",
+    "changes": [
+      "新增 TinyORTSignalSummary 与 summarizeTinyORTSignals(logitsData:width:height:) 轻量信号统计。",
+      "runBiRefNetTinyORTInference 从仅返回 mask 改为返回 mask + signal metadata。",
+      "新增 makeTinyORTRuntimeSignalMetadata(segmentationMetadata:)，替换一刀切 fallback 分层。",
+      "质量元数据模式升级为 quality_metadata_mode=tiny_ort_runtime_signal_v1。"
+    ],
+    "boundary_statement": [
+      "未改白底主流程顺序。",
+      "未改 refinement / 去污染 / 合成链路策略。",
+      "Vision 默认路径与失败回退语义保持。"
+    ]
+  },
+  "verification": {
+    "probe_log_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/runlog-20260423-birefnet-r18-tiny-runtime-signal-probe-sim-ios26_4-r2.log",
+    "records_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-birefnet-r18-tiny-runtime-signal-probe-sim-ios26_4-r2.jsonl",
+    "check_text_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-birefnet-r18-tiny-runtime-signal-probe-sim-ios26_4-r2.txt",
+    "check_json_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-birefnet-r18-tiny-runtime-signal-probe-sim-ios26_4-r2.json",
+    "coverage": "26/26",
+    "quality_distribution": {
+      "ready": 19,
+      "review": 7
+    },
+    "hard_case_distribution": {
+      "stable": 19,
+      "thinDetailEdge": 4,
+      "softEdge": 2,
+      "foregroundWashout": 1
+    },
+    "provider_distribution": {
+      "birefnet_tiny_ort": 26
+    },
+    "quality_metadata_mode_distribution": {
+      "tiny_ort_runtime_signal_v1": 26
+    },
+    "coverage_complete": true,
+    "single_bucket_signal_collapsed": false
+  },
+  "signal_recovery_pass_criteria": {
+    "required": [
+      "正式 runtime 非 admission probe 覆盖 26/26。",
+      "provider 持续命中 birefnet_tiny_ort。",
+      "quality_metadata_mode 稳定为 tiny_ort_runtime_signal_v1。",
+      "quality_level 不得单桶塌缩，需恢复可复核多层分布。",
+      "hard_case_signal 不得一刀切 stable。"
+    ],
+    "not_required": [
+      "本轮不强制出现 failed（failed 由样本真实质量驱动，不应为满足分层而人为制造）。"
+    ],
+    "fail_conditions": [
+      "再次出现 26/26 review（或任一单桶塌缩）。",
+      "覆盖回落到 <26/26。",
+      "provider 或 metadata_mode 分布不稳定。"
+    ]
+  },
+  "judgement": {
+    "decision": "reopen_tiny_admission_r01",
+    "why": [
+      "当前 stop 根因（signal 分层不足）已通过正式 runtime probe 修复并复验。",
+      "本轮证据建立在 app 正式 provider 路径，不是独立脚本外推。",
+      "覆盖完整且分层恢复，已具备重开 tiny admission R01 的最小资格。"
+    ],
+    "next_package_recommendation": "tiny_admission_r01_reopen_after_r18_signal_recovery",
+    "not_allowed_next_now": [
+      "admission_round2",
+      "expanded_subset_experiments",
+      "quality_system_platform_refactor"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅表示重开 admission R01 的入口与信号资格恢复。",
+      "不代表 tiny 已通过 admission。",
+      "不代表 tiny 已可替代 RMBG-2。"
+    ]
+  }
+}

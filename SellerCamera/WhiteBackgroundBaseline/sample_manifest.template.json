@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-baseline-core-v1",
+  "samples": [
+    {
+      "sample_id": "S001_light_plain_bg",
+      "source_file_name": "S001_light_plain_bg.jpg",
+      "tags": [
+        "white_background_impure"
+      ],
+      "note": "浅色主体 + 简单背景，验证基础白底纯净度"
+    },
+    {
+      "sample_id": "S002_dark_product",
+      "source_file_name": "S002_dark_product.jpg",
+      "tags": [
+        "edge_gray_fringe",
+        "foreground_washout"
+      ],
+      "note": "深色主体，验证灰边与主体发白风险"
+    },
+    {
+      "sample_id": "S003_metal_reflection",
+      "source_file_name": "S003_metal_reflection.jpg",
+      "tags": [
+        "edge_contamination",
+        "foreground_washout",
+        "global_haze"
+      ],
+      "note": "金属高反光，验证边缘污染与质感保真"
+    },
+    {
+      "sample_id": "S004_transparent",
+      "source_file_name": "S004_transparent.png",
+      "tags": [
+        "global_haze",
+        "white_background_impure"
+      ],
+      "note": "透明/半透明主体，验证软边与背景纯净"
+    },
+    {
+      "sample_id": "S005_text_logo_fine",
+      "source_file_name": "S005_text_logo_fine.jpg",
+      "tags": [
+        "small_text_loss",
+        "thin_structure_loss"
+      ],
+      "note": "小字/Logo/细边结构保留测试"
+    },
+    {
+      "sample_id": "S006_contact_edge",
+      "source_file_name": "S006_contact_edge.jpg",
+      "tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "note": "主体贴地边缘，验证接触面自然度"
+    },
+    {
+      "sample_id": "S007_complex_bg",
+      "source_file_name": "S007_complex_bg.jpg",
+      "tags": [
+        "background_residual",
+        "hard_case_fallback_unacceptable"
+      ],
+      "note": "复杂背景难例，验证背景残留风险"
+    }
+  ]
+}

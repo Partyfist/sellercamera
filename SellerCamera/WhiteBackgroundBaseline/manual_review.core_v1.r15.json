@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-core-v1",
+  "reviewed_at": "2026-04-19T14:18:00Z",
+  "reviewer": "codex",
+  "records_source": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260419-r15.jsonl",
+  "compare_baseline": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260419-r14.jsonl",
+  "samples": [
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "global_haze"
+      ],
+      "summary": "玻璃容器薄边连续性有轻微改善，边缘完整度略优于 R1.4；整体仍有轻雾风险，需后续继续收口。",
+      "compare_to_r14": "slight_improvement_visible"
+    },
+    {
+      "sample_id": "S002_bottle_reflection_window",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "非目标样本整体稳定，未见新增副作用，观感与 R1.4 基本持平。",
+      "compare_to_r14": "no_material_change"
+    },
+    {
+      "sample_id": "S003_ring_macro_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "thin_structure_loss"
+      ],
+      "summary": "高反细闪边缘断裂感有所缓解，薄边保真略有提升；仍属于后续 refinement 优先观察位。",
+      "compare_to_r14": "slight_improvement_visible"
+    },
+    {
+      "sample_id": "S004_paper_cups_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "white_background_impure",
+        "foreground_washout"
+      ],
+      "summary": "非目标样本整体保持稳定，未出现新的发白/发虚副作用。",
+      "compare_to_r14": "no_material_change"
+    },
+    {
+      "sample_id": "S005_transparent_bowls_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_contamination"
+      ],
+      "summary": "透明碗细边完整度与接触边缘自然度有轻度提升，边缘污染风险未放大；改善可见但幅度有限。",
+      "compare_to_r14": "slight_improvement_visible"
+    },
+    {
+      "sample_id": "S006_portrait_with_product",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "hard_case_fallback_acceptable",
+        "background_residual"
+      ],
+      "summary": "跨域难例维持 review，未出现进一步劣化；本轮不以该样本作为提升主目标。",
+      "compare_to_r14": "no_material_change"
+    },
+    {
+      "sample_id": "S007_snacks_on_dark_plate",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "非目标样本保持稳定，未观测到新增脏边或发毛副作用。",
+      "compare_to_r14": "no_material_change"
+    },
+    {
+      "sample_id": "S008_white_tubes_near_white_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "white_background_impure"
+      ],
+      "summary": "近白主体核心区立体感有轻微提升，主体发虚感略减；仍需下一包继续强化核心能量保持。",
+      "compare_to_r14": "slight_improvement_visible"
+    },
+    {
+      "sample_id": "S009_multi_product_shelf_complex",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "background_residual",
+        "hard_case_fallback_unacceptable"
+      ],
+      "summary": "复杂货架样本维持 ready，未见新增回退信号。",
+      "compare_to_r14": "no_material_change"
+    },
+    {
+      "sample_id": "S010_food_tray_contact_edge",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "托盘贴地边缘灰浮感有轻微缓解，接触面自然度略优于 R1.4；仍建议第 5 包继续专项收口。",
+      "compare_to_r14": "slight_improvement_visible"
+    }
+  ],
+  "target_samples": [
+    "S001_glass_container_translucent",
+    "S003_ring_macro_dark_bg",
+    "S005_transparent_bowls_dark_bg",
+    "S008_white_tubes_near_white_bg",
+    "S010_food_tray_contact_edge"
+  ],
+  "note": "R1.5 refinement phase-2 micro-tuning review. Core_v1 distribution unchanged (ready/review=9/1), no new unacceptable failure observed. Target-sample gains are visible but limited."
+}

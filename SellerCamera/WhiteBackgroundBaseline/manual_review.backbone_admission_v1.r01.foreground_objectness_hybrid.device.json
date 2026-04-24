@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r01-foreground-objectness-hybrid-device",
+  "reviewed_at": "2026-04-21T20:20:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "vision_foreground_objectness_hybrid",
+    "request": "VNGenerateForegroundInstanceMaskRequest+VNGenerateObjectnessBasedSaliencyImageRequest",
+    "track": "admission_candidate_foreground_objectness_hybrid_v1"
+  },
+  "records_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-foreground-objectness-hybrid-vision-device.jsonl",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-foreground-objectness-hybrid-candidate-device.jsonl"
+  },
+  "checks_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-foreground-objectness-hybrid-vision-device.txt",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-foreground-objectness-hybrid-candidate-device.txt"
+  },
+  "evidence_scope": {
+    "metadata_level": true,
+    "hard_gate_level": true,
+    "focus_and_stability_level": true,
+    "pixel_side_by_side_exported": false,
+    "note": "本轮为新候选首轮最小准入实验，目标是确认 hard_gate 首触达与稳定层是否触发红线；尚未进入像素级导出对照阶段。"
+  },
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 25,
+        "failed": 1
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 7,
+          "failed": 1
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    },
+    "candidate": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 26,
+        "failed": 0
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 8,
+          "failed": 0
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    }
+  },
+  "hard_gate_findings": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "vision_result": "failed",
+      "candidate_result": "ready",
+      "decision_impact": "hard_gate_hit",
+      "summary": "EV006 从 Vision 失败转为候选可产出，硬门槛触达成立。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "跨域样本保持 ready，首轮未见质量级回退。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "细结构样本保持可产出，首轮无新增失败。"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "复杂背景样本保持 ready，待后续主问题级复核。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "同色前后景样本未出现质量级回退，仍需后续证据强化。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "复杂纹理与深色边缘样本保持 ready，首轮无红线。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "多主体样本保持可产出，未触发回退。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "vision_result": "ready",
+      "candidate_result": "ready",
+      "decision_impact": "parity_pass",
+      "summary": "跨域户外样本保持 ready，首轮无失败新增。"
+    }
+  ],
+  "focus_comparison_findings": [
+    {
+      "samples": [
+        "S001_glass_container_translucent",
+        "S003_ring_macro_dark_bg",
+        "S005_transparent_bowls_dark_bg",
+        "S008_white_tubes_near_white_bg",
+        "S010_food_tray_contact_edge",
+        "EV014_glass_teapot_transparent_stack",
+        "EV019_white_shoes_dark_indoor",
+        "EV025_white_shoes_reflective_platform",
+        "EV039_white_sneaker_yellow_line",
+        "EV048_wood_vase_texture_bg"
+      ],
+      "vision_result": "10/10 ready",
+      "candidate_result": "10/10 ready",
+      "decision_impact": "no_regression_detected",
+      "summary": "重点对比层未出现质量级回退，仍需下一轮确认主问题改善强度。"
+    }
+  ],
+  "stability_witness_findings": [
+    {
+      "samples": [
+        "S002_bottle_reflection_window",
+        "S004_paper_cups_light_bg",
+        "S007_snacks_on_dark_plate",
+        "EV004_white_devices_on_light_bg",
+        "EV011_cupcake_on_plate_contact",
+        "EV026_pastry_plate_light_contact",
+        "EV034_appliance_set_warm_bg",
+        "EV046_cream_kettle_warm_bg"
+      ],
+      "vision_result": "8/8 ready",
+      "candidate_result": "8/8 ready",
+      "decision_impact": "stability_guard_pass",
+      "summary": "稳定旁证层未出现 ready->review 或 failed，当前未见回退红线。"
+    }
+  ],
+  "admission_round1_judgement": {
+    "decision": "continue_within_admission_v1",
+    "recommended_next_stage": "admission_v1_round2_foreground_objectness_hybrid_hard_gate_review",
+    "why": [
+      "EV006 从 failed 转为 ready，候选在硬门槛上形成明确首触达。",
+      "hard_gate/focus/stability 三层均未触发稳定样本回退红线。",
+      "除 EV006 外其余 hard_gate 样本仍以 parity 为主，需进入下一轮主问题级复核再判断是否可升级范围。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅基于 admission_v1 首轮最小实验，不外推到 expanded 全量样本。",
+      "本轮未做像素级并排导出，不得据此直接判定可升级到更大范围受控实验。"
+    ]
+  }
+}

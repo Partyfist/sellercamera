@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-core-v1",
+  "samples": [
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "source_file_name": "pexels-vindli-15791148.jpg",
+      "tags": [
+        "thin_structure_loss",
+        "global_haze"
+      ],
+      "note": "玻璃/半透明容器，观察透明边缘与主体密度保持。"
+    },
+    {
+      "sample_id": "S002_bottle_reflection_window",
+      "source_file_name": "pexels-walter-medina-foto-2154680637-34418075.jpg",
+      "tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "note": "瓶体+玻璃杯+反射背景，验证边缘灰带与背景残留风险。"
+    },
+    {
+      "sample_id": "S003_ring_macro_dark_bg",
+      "source_file_name": "pexels-kunal-lakhotia-781256899-32988524.jpg",
+      "tags": [
+        "edge_contamination",
+        "thin_structure_loss"
+      ],
+      "note": "首饰微距高反光样本，观察高反边缘污染与细节丢失。"
+    },
+    {
+      "sample_id": "S004_paper_cups_light_bg",
+      "source_file_name": "pexels-cup-of-couple-8015705.jpg",
+      "tags": [
+        "white_background_impure",
+        "foreground_washout"
+      ],
+      "note": "浅色纸杯+浅背景，验证白色主体发白/洗淡问题。"
+    },
+    {
+      "sample_id": "S005_transparent_bowls_dark_bg",
+      "source_file_name": "pexels-change-c-c-974768353-32149255.jpg",
+      "tags": [
+        "thin_structure_loss",
+        "edge_contamination"
+      ],
+      "note": "透明碗与白色托盘叠加，验证细边保留与暗背景污染。"
+    },
+    {
+      "sample_id": "S006_portrait_with_product",
+      "source_file_name": "pexels-adrienne-andersen-1174503-2661256.jpg",
+      "tags": [
+        "hard_case_fallback_acceptable",
+        "background_residual"
+      ],
+      "note": "人像+产品混合场景，作为跨域难例，允许回退但需可诊断。"
+    },
+    {
+      "sample_id": "S007_snacks_on_dark_plate",
+      "source_file_name": "pexels-bertellifotografia-31393442.jpg",
+      "tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "note": "深色盘体+深背景，验证主体分离与暗背景残留。"
+    },
+    {
+      "sample_id": "S008_white_tubes_near_white_bg",
+      "source_file_name": "pexels-cup-of-couple-8015469.jpg",
+      "tags": [
+        "foreground_washout",
+        "white_background_impure"
+      ],
+      "note": "白色管体接近白背景，验证核心区锚定与主体能量保持。"
+    },
+    {
+      "sample_id": "S009_multi_product_shelf_complex",
+      "source_file_name": "pexels-nazmiazmir-24989104.jpg",
+      "tags": [
+        "background_residual",
+        "hard_case_fallback_unacceptable"
+      ],
+      "note": "多商品复杂货架场景，作为主干上限难例。"
+    },
+    {
+      "sample_id": "S010_food_tray_contact_edge",
+      "source_file_name": "pexels-marceloverfe-18784857.jpg",
+      "tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "note": "食物托盘接触面样本，验证贴地边缘自然度与灰边控制。"
+    }
+  ]
+}

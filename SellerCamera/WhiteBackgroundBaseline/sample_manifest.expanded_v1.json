@@ -1,0 +1,300 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-expanded-v1",
+  "samples": [
+    {
+      "sample_id": "EV001_switch_panel_near_white",
+      "source_file_name": "pexels-keeganjchecks-10117712.jpg",
+      "tags": ["white_background_impure", "foreground_washout"],
+      "note": "近白墙面小主体，验证浅背景下主体边缘可分离性。"
+    },
+    {
+      "sample_id": "EV002_hot_air_balloon_soft_sky",
+      "source_file_name": "pexels-chloe-bams-1351702133-26497924.jpg",
+      "tags": ["thin_structure_loss", "background_residual"],
+      "note": "远景气球与柔和天空，验证小主体与渐变背景分离。"
+    },
+    {
+      "sample_id": "EV003_pastel_cake_ribbon_detail",
+      "source_file_name": "pexels-thanh-truc-ho-1074355465-36003101.jpg",
+      "tags": ["thin_structure_loss", "edge_gray_fringe"],
+      "note": "蝴蝶结薄边细节样本，验证细结构边缘保真。"
+    },
+    {
+      "sample_id": "EV004_white_devices_on_light_bg",
+      "source_file_name": "pexels-jakubzerdzicki-16888144.jpg",
+      "tags": ["foreground_washout", "white_background_impure"],
+      "note": "白色电子产品在浅背景，验证近白主体核心保持。"
+    },
+    {
+      "sample_id": "EV005_hot_air_balloon_blue_sky",
+      "source_file_name": "pexels-tkirkgoz-29032722.jpg",
+      "tags": ["edge_gray_fringe", "thin_structure_loss"],
+      "note": "中远景气球样本，验证主体与纯色背景边缘纯净。"
+    },
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "source_file_name": "pexels-roo-1110882060-30130003.jpg",
+      "tags": ["thin_structure_loss", "edge_contamination"],
+      "note": "细绳串珠贴纹理背景，验证细边与复杂底纹分离。"
+    },
+    {
+      "sample_id": "EV007_white_bg_calculator_simple",
+      "source_file_name": "pexels-tara-winstead-7111494.jpg",
+      "tags": ["white_background_impure", "foreground_washout"],
+      "note": "单主体平铺近白背景，验证基础白底纯净。"
+    },
+    {
+      "sample_id": "EV008_reflective_gold_balloon",
+      "source_file_name": "pexels-karola-g-5725982.jpg",
+      "tags": ["edge_contamination", "global_haze"],
+      "note": "高反光金属球，验证反光边污染与雾感控制。"
+    },
+    {
+      "sample_id": "EV009_charger_on_yellow_bg",
+      "source_file_name": "pexels-markus-winkler-1430818-4097201.jpg",
+      "tags": ["edge_gray_fringe", "background_residual"],
+      "note": "高对比边缘样本，验证简单背景下边缘灰带。"
+    },
+    {
+      "sample_id": "EV010_pen_and_wallet_flatlay",
+      "source_file_name": "pexels-moein-moradi-37402248-11584529.jpg",
+      "tags": ["small_text_loss", "background_residual"],
+      "note": "多物体平铺+文字边缘，验证复杂纹理与细节保留。"
+    },
+    {
+      "sample_id": "EV011_cupcake_on_plate_contact",
+      "source_file_name": "pexels-cansu-hangul-464804780-27525462.jpg",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "食品接触边缘样本，验证底边自然度。"
+    },
+    {
+      "sample_id": "EV012_wiring_box_complex_thin",
+      "source_file_name": "pexels-kseniachernaya-5767595.jpg",
+      "tags": ["thin_structure_loss", "background_residual"],
+      "note": "高密细线结构，验证细边断裂风险。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "source_file_name": "pexels-lvu-image-1599405908-28570309.jpg",
+      "tags": ["hard_case_fallback_acceptable", "background_residual"],
+      "note": "人物全身样本，作为跨域难例稳定性验证。"
+    },
+    {
+      "sample_id": "EV014_glass_teapot_transparent_stack",
+      "source_file_name": "pexels-mohammadabbasi-30319694.jpg",
+      "tags": ["thin_structure_loss", "foreground_washout"],
+      "note": "透明玻璃壶叠层，验证透明边与液体区域保真。"
+    },
+    {
+      "sample_id": "EV015_black_kettle_gradient_bg",
+      "source_file_name": "pexels-mohammadabbasi-30946793.jpg",
+      "tags": ["edge_gray_fringe", "global_haze"],
+      "note": "深色主体+渐变背景，验证边缘灰浮与整体雾感。"
+    },
+    {
+      "sample_id": "EV016_color_pens_split_bg",
+      "source_file_name": "pexels-content-prod-co-5594322.jpg",
+      "tags": ["thin_structure_loss", "edge_gray_fringe"],
+      "note": "细长物体+高饱和背景，验证细边与背景分离。"
+    },
+    {
+      "sample_id": "EV017_painted_kettle_clay_bg",
+      "source_file_name": "pexels-shamrin-rahman-639076737-36055487.jpg",
+      "tags": ["edge_contamination", "background_residual"],
+      "note": "图案壶+纹理背景，验证复杂边缘污染风险。"
+    },
+    {
+      "sample_id": "EV018_trousers_shoes_contact_floor",
+      "source_file_name": "pexels-ron-lach-10341113.jpg",
+      "tags": ["contact_edge_abnormal", "background_residual"],
+      "note": "服饰下摆与鞋接地样本，验证接地边缘自然。"
+    },
+    {
+      "sample_id": "EV019_white_shoes_dark_indoor",
+      "source_file_name": "pexels-gonzalo-acuna-166058093-18110858.jpg",
+      "tags": ["foreground_washout", "contact_edge_abnormal"],
+      "note": "白鞋深色环境，验证近白主体与底边平衡。"
+    },
+    {
+      "sample_id": "EV020_gold_jewelry_light_bg",
+      "source_file_name": "pexels-lauraoliveira-34444129.jpg",
+      "tags": ["thin_structure_loss", "foreground_washout"],
+      "note": "首饰细链条样本，验证薄边与高亮细节保留。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "source_file_name": "pexels-cup-of-couple-6633930.jpg",
+      "tags": ["hard_case_fallback_acceptable", "thin_structure_loss"],
+      "note": "手部+珠串跨域样本，验证细结构与人体边界。"
+    },
+    {
+      "sample_id": "EV022_flower_vase_transparent_stems",
+      "source_file_name": "pexels-inga-sv-9360504.jpg",
+      "tags": ["thin_structure_loss", "edge_contamination"],
+      "note": "玻璃花瓶+细茎，验证透明容器与细线结构。"
+    },
+    {
+      "sample_id": "EV023_calculator_money_flatlay",
+      "source_file_name": "pexels-olia-danilevich-5466794.jpg",
+      "tags": ["small_text_loss", "edge_gray_fringe"],
+      "note": "平铺文案与硬边物体，验证细字与直线边缘保真。"
+    },
+    {
+      "sample_id": "EV024_white_shoe_dark_bg_single",
+      "source_file_name": "pexels-hamza01nsr-12628401.jpg",
+      "tags": ["foreground_washout", "edge_gray_fringe"],
+      "note": "白鞋深色背景，验证主体亮区与边缘纯净度。"
+    },
+    {
+      "sample_id": "EV025_white_shoes_reflective_platform",
+      "source_file_name": "pexels-jibarofoto-13536939.jpg",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "反射台面白鞋，验证底边灰浮和接地自然。"
+    },
+    {
+      "sample_id": "EV026_pastry_plate_light_contact",
+      "source_file_name": "pexels-catscoming-5501154.jpg",
+      "tags": ["contact_edge_abnormal", "white_background_impure"],
+      "note": "浅色盘面与糕点，验证浅接触边缘。"
+    },
+    {
+      "sample_id": "EV027_powerbank_cable_on_leather",
+      "source_file_name": "pexels-moises-ribeiro-121009898-11031423.jpg",
+      "tags": ["thin_structure_loss", "edge_gray_fringe"],
+      "note": "细线缆+纹理底面，验证细边保留与污染抑制。"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "source_file_name": "pexels-nguy-n-ti-n-th-nh-2150376175-33765870.jpg",
+      "tags": ["background_residual", "thin_structure_loss"],
+      "note": "室外复杂背景+花茎，验证背景剥离难例。"
+    },
+    {
+      "sample_id": "EV029_board_module_yellow_bg",
+      "source_file_name": "pexels-tanhatamannasyed-35673127.jpg",
+      "tags": ["thin_structure_loss", "edge_contamination"],
+      "note": "电路板细元件样本，验证高频细节边缘完整性。"
+    },
+    {
+      "sample_id": "EV030_color_markers_yellow_bg",
+      "source_file_name": "pexels-shkrabaanthony-6187600.jpg",
+      "tags": ["thin_structure_loss", "edge_gray_fringe"],
+      "note": "多支细长笔样本，验证细边统一收口。"
+    },
+    {
+      "sample_id": "EV031_red_shoes_pink_floor",
+      "source_file_name": "pexels-rizkysabriansyah-9921259.jpg",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "鞋底接地样本，验证底边自然度与灰边控制。"
+    },
+    {
+      "sample_id": "EV032_purple_flowers_simple_wall",
+      "source_file_name": "pexels-toon-machiels-1654113-19540126.jpg",
+      "tags": ["background_residual", "contact_edge_abnormal"],
+      "note": "花瓶投影和接触面样本，验证底边收口。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "source_file_name": "pexels-g-m-s-c-ng-duyen-1570923256-35603953.jpg",
+      "tags": ["background_residual", "edge_contamination"],
+      "note": "主体与背景色接近，验证前后景分离稳定性。"
+    },
+    {
+      "sample_id": "EV034_appliance_set_warm_bg",
+      "source_file_name": "pexels-mohammadabbasi-30946801.jpg",
+      "tags": ["background_residual", "edge_gray_fringe"],
+      "note": "多器械组合样本，验证多主体边缘一致性。"
+    },
+    {
+      "sample_id": "EV035_multicolor_pens_light_bg",
+      "source_file_name": "pexels-tara-winstead-7123021.jpg",
+      "tags": ["thin_structure_loss", "white_background_impure"],
+      "note": "浅背景彩笔细边样本，验证细边与白底纯净平衡。"
+    },
+    {
+      "sample_id": "EV036_pattern_vase_cloth",
+      "source_file_name": "pexels-tahir-34010221.jpg",
+      "tags": ["edge_contamination", "background_residual"],
+      "note": "主体与织物背景混杂，验证边缘污染控制。"
+    },
+    {
+      "sample_id": "EV037_red_cake_slice_wood",
+      "source_file_name": "pexels-rodrigo-ortega-2044210904-30131920.jpg",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "食品接触边缘样本，验证贴地自然度。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "source_file_name": "pexels-ravinepz-7187252.jpg",
+      "tags": ["background_residual", "edge_gray_fringe"],
+      "note": "深色鞋+复杂环境，验证主体边缘分离难度。"
+    },
+    {
+      "sample_id": "EV039_white_sneaker_yellow_line",
+      "source_file_name": "pexels-samfi17-6833597.jpg",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "白鞋高反边+强色背景，验证边缘灰浮控制。"
+    },
+    {
+      "sample_id": "EV040_chocolate_roll_dark_cloth",
+      "source_file_name": "pexels-matvalina-17791955.jpg",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "深色甜点与织物背景，验证底边与背景剥离。"
+    },
+    {
+      "sample_id": "EV041_servo_motor_parts",
+      "source_file_name": "pexels-tanhatamannasyed-35652333.jpg",
+      "tags": ["thin_structure_loss", "edge_contamination"],
+      "note": "器件+细连接线，验证细薄结构与污染平衡。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "source_file_name": "pexels-yesehoon-31899738.jpg",
+      "tags": ["background_residual", "contact_edge_abnormal"],
+      "note": "多甜点复杂场景，验证多主体接触边缘。"
+    },
+    {
+      "sample_id": "EV043_white_shoe_night_road",
+      "source_file_name": "pexels-introspectivedsgn-10924124.jpg",
+      "tags": ["foreground_washout", "edge_gray_fringe"],
+      "note": "夜景白鞋样本，验证亮主体边缘稳态。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "source_file_name": "pexels-khezez-23947088.jpg",
+      "tags": ["hard_case_fallback_acceptable", "background_residual"],
+      "note": "户外人物复杂背景难例，验证跨域稳定性。"
+    },
+    {
+      "sample_id": "EV045_purple_flower_cake_light_bg",
+      "source_file_name": "pexels-foodphotography-18533750.jpg",
+      "tags": ["foreground_washout", "contact_edge_abnormal"],
+      "note": "浅色蛋糕+装饰细边，验证近白主体与底边。"
+    },
+    {
+      "sample_id": "EV046_cream_kettle_warm_bg",
+      "source_file_name": "pexels-mohammadabbasi-30946797.jpg",
+      "tags": ["edge_gray_fringe", "global_haze"],
+      "note": "浅色壶体暖色背景，验证边缘纯净和雾感。"
+    },
+    {
+      "sample_id": "EV047_cream_roll_light_docs",
+      "source_file_name": "pexels-matvalina-29483259.jpg",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "浅底甜点样本，验证接触边界与边缘收口。"
+    },
+    {
+      "sample_id": "EV048_wood_vase_texture_bg",
+      "source_file_name": "pexels-leon-kohle-3158283-12148041.jpg",
+      "tags": ["edge_contamination", "background_residual"],
+      "note": "木纹主体与纹理背景，验证复杂纹理分离。"
+    },
+    {
+      "sample_id": "EV049_denim_cloth_closeup",
+      "source_file_name": "pexels-johndetochka-10133282.jpg",
+      "tags": ["thin_structure_loss", "edge_gray_fringe"],
+      "note": "牛仔织物细纹边样本，验证高频纹理保真。"
+    }
+  ]
+}

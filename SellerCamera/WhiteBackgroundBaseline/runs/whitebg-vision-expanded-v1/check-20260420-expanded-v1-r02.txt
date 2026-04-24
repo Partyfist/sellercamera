@@ -1,0 +1,67 @@
+[Suite] whitebg-vision-expanded-v1
+[Records] 49
+[Samples in manifest] 49
+[Samples covered] 49
+
+[Quality Distribution]
+- ready: 48
+- failed: 1
+
+[Hard Case Distribution]
+- stable: 48
+- unknown: 1
+
+[Environment Snapshots]
+- model=iPhone15,3, iOS=18.7.7, visionRevision=1
+- model=iPhone15,3, iOS=18.7.7, visionRevision=unknown
+
+[Per Sample Latest]
+- EV001_switch_panel_near_white: quality=ready, hard_case=stable, processed_id=D303A49D-53EE-47B9-9AB3-B739789F9ABD
+- EV002_hot_air_balloon_soft_sky: quality=ready, hard_case=stable, processed_id=24B9BF37-AF1B-45A3-BEE3-A8D829A18717
+- EV003_pastel_cake_ribbon_detail: quality=ready, hard_case=stable, processed_id=F3279442-E86B-4459-AE6E-A0DC5CDA68BF
+- EV004_white_devices_on_light_bg: quality=ready, hard_case=stable, processed_id=23E3957E-007D-4C4D-8E77-1BC683CB58D1
+- EV005_hot_air_balloon_blue_sky: quality=ready, hard_case=stable, processed_id=C9994AAD-F5B8-4AB5-89FB-03D05D230287
+- EV006_beaded_string_on_texture: quality=failed, hard_case=unknown, processed_id=failed-EV006_beaded_string_on_texture
+- EV007_white_bg_calculator_simple: quality=ready, hard_case=stable, processed_id=E7944A55-903D-4F44-B191-69822EBA24F0
+- EV008_reflective_gold_balloon: quality=ready, hard_case=stable, processed_id=80D96BB5-DB84-41AA-8E6C-5E1C4DF4E7A8
+- EV009_charger_on_yellow_bg: quality=ready, hard_case=stable, processed_id=58B181A2-5307-4D43-9531-DA8D0DE71C53
+- EV010_pen_and_wallet_flatlay: quality=ready, hard_case=stable, processed_id=AD07762C-17D6-41F2-A0C4-DA1E5C8CBD46
+- EV011_cupcake_on_plate_contact: quality=ready, hard_case=stable, processed_id=1C4BCB3C-1D32-45E7-A151-F73B089E0D0B
+- EV012_wiring_box_complex_thin: quality=ready, hard_case=stable, processed_id=C9B90323-F575-46B0-9C80-5358F35E04A3
+- EV013_full_body_person_gray_bg: quality=ready, hard_case=stable, processed_id=786AC651-5376-4B8E-9753-5E3E463AF909
+- EV014_glass_teapot_transparent_stack: quality=ready, hard_case=stable, processed_id=2E3B2B0A-7825-480D-AD40-E9D3F958E13D
+- EV015_black_kettle_gradient_bg: quality=ready, hard_case=stable, processed_id=086DEF6A-F457-4534-875C-138814F12635
+- EV016_color_pens_split_bg: quality=ready, hard_case=stable, processed_id=D608540B-D772-4A53-A032-0F6A43431677
+- EV017_painted_kettle_clay_bg: quality=ready, hard_case=stable, processed_id=C6702CB2-AEE7-4DA1-9FD2-547E0E9A077B
+- EV018_trousers_shoes_contact_floor: quality=ready, hard_case=stable, processed_id=6BA5D1B5-04DA-47E2-BEF0-7302A4CC164F
+- EV019_white_shoes_dark_indoor: quality=ready, hard_case=stable, processed_id=B463695D-8AD6-4BE1-B1B9-90DA976713DD
+- EV020_gold_jewelry_light_bg: quality=ready, hard_case=stable, processed_id=8680F4FF-4B8F-4B39-A6CB-185B1EECC072
+- EV021_hand_with_beads: quality=ready, hard_case=stable, processed_id=8141CAC5-48C8-483D-BD02-ED22DF810CA9
+- EV022_flower_vase_transparent_stems: quality=ready, hard_case=stable, processed_id=846874BB-8336-4D5D-BE1F-76050D7344A0
+- EV023_calculator_money_flatlay: quality=ready, hard_case=stable, processed_id=DA810620-060D-4FA0-A3E3-C160D410227F
+- EV024_white_shoe_dark_bg_single: quality=ready, hard_case=stable, processed_id=DF08023E-6D09-4A46-BC26-584477AEA2B7
+- EV025_white_shoes_reflective_platform: quality=ready, hard_case=stable, processed_id=BD11A8E1-9762-48D0-B4D8-E1278965333A
+- EV026_pastry_plate_light_contact: quality=ready, hard_case=stable, processed_id=FFD2D455-F689-4A17-8F99-4B6929E1CE5A
+- EV027_powerbank_cable_on_leather: quality=ready, hard_case=stable, processed_id=2A091728-245B-453A-A74E-8B3FF0681BEC
+- EV028_flower_vase_garden_bg: quality=ready, hard_case=stable, processed_id=766DB0BD-E85F-4617-A2E8-929EE26B06CC
+- EV029_board_module_yellow_bg: quality=ready, hard_case=stable, processed_id=2F113617-1829-48CD-B981-9CEB13C16E8B
+- EV030_color_markers_yellow_bg: quality=ready, hard_case=stable, processed_id=6513C57E-4DDB-4DE0-ADFD-06B87F223D4B
+- EV031_red_shoes_pink_floor: quality=ready, hard_case=stable, processed_id=E5D284EA-8810-4774-BAD5-E7136D93A0CC
+- EV032_purple_flowers_simple_wall: quality=ready, hard_case=stable, processed_id=A29AC47C-C159-400F-9995-2BADFC5B2DEF
+- EV033_blue_vase_blue_curtain: quality=ready, hard_case=stable, processed_id=A8A93787-6462-4A6E-8713-621194AF00F6
+- EV034_appliance_set_warm_bg: quality=ready, hard_case=stable, processed_id=57786DA6-5B9E-451F-B727-4169D2F6F888
+- EV035_multicolor_pens_light_bg: quality=ready, hard_case=stable, processed_id=895E9872-14E7-48F2-B93F-3871C53BDC70
+- EV036_pattern_vase_cloth: quality=ready, hard_case=stable, processed_id=2ADA21E7-FF3B-49DB-8A02-8E72A48FC73D
+- EV037_red_cake_slice_wood: quality=ready, hard_case=stable, processed_id=35FF1633-0679-40AE-8AC5-47E6702D05CC
+- EV038_dark_shoes_shelf_plants: quality=ready, hard_case=stable, processed_id=E53BAAF4-B6FE-4419-AA2C-3FA79CED0551
+- EV039_white_sneaker_yellow_line: quality=ready, hard_case=stable, processed_id=475CB8BB-A1CF-443B-834E-CF95604474D1
+- EV040_chocolate_roll_dark_cloth: quality=ready, hard_case=stable, processed_id=E1C6E54B-AB28-4F66-8918-15C0574BC74C
+- EV041_servo_motor_parts: quality=ready, hard_case=stable, processed_id=4FFB5277-8204-490A-B4C3-DE952F12CA6B
+- EV042_cakes_in_booth_scene: quality=ready, hard_case=stable, processed_id=29D13FC1-501C-46FD-991E-A7060D3E552E
+- EV043_white_shoe_night_road: quality=ready, hard_case=stable, processed_id=A4679ED6-4C32-4C5D-8DC0-72C78688E7CB
+- EV044_person_outdoor_complex: quality=ready, hard_case=stable, processed_id=63D3BA3E-3A8F-4165-B553-A0F5F4901212
+- EV045_purple_flower_cake_light_bg: quality=ready, hard_case=stable, processed_id=741752A7-ADFF-41F0-8F52-5D05CA7CBA9C
+- EV046_cream_kettle_warm_bg: quality=ready, hard_case=stable, processed_id=F4A9635F-EC11-4C3C-9119-251BE69FBB84
+- EV047_cream_roll_light_docs: quality=ready, hard_case=stable, processed_id=CC76E799-B1E3-4212-B700-BE50072A23F0
+- EV048_wood_vase_texture_bg: quality=ready, hard_case=stable, processed_id=B9A94F4C-30E4-4899-AF5C-90597B79572A
+- EV049_denim_cloth_closeup: quality=ready, hard_case=stable, processed_id=98AE1CF9-F704-40CC-9256-096136039C8A

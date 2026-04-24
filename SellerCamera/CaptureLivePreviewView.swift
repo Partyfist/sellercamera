@@ -8,6 +8,7 @@
 import AVFoundation
 import Combine
 import CoreMotion
+import CryptoKit
 import ImageIO
 import SwiftUI
 import UIKit
@@ -332,6 +333,57 @@ enum CaptureBurstOption: Int, CaseIterable {
     }
 }
 
+struct CaptureTemporarySegmentationModelOption: Identifiable, Hashable {
+    enum StatusTag: String {
+        case `default` = "默认"
+        case experimental = "实验"
+        case candidate = "候选"
+    }
+
+    let providerID: String
+    let displayName: String
+    let statusTag: StatusTag
+    var id: String { providerID }
+
+    var menuDisplayText: String {
+        "\(displayName)（\(statusTag.rawValue)）"
+    }
+
+    static let defaultProviderID = "vision"
+
+    static let supportedOptions: [CaptureTemporarySegmentationModelOption] = [
+        CaptureTemporarySegmentationModelOption(
+            providerID: "vision",
+            displayName: "Vision 标准",
+            statusTag: .default
+        ),
+        CaptureTemporarySegmentationModelOption(
+            providerID: "vision_foreground_latest_revision",
+            displayName: "Vision Foreground Latest",
+            statusTag: .experimental
+        ),
+        CaptureTemporarySegmentationModelOption(
+            providerID: "vision_foreground_objectness_hybrid",
+            displayName: "Vision Foreground Hybrid",
+            statusTag: .experimental
+        ),
+        CaptureTemporarySegmentationModelOption(
+            providerID: "birefnet",
+            displayName: "RMBG-2 INT8",
+            statusTag: .candidate
+        ),
+        CaptureTemporarySegmentationModelOption(
+            providerID: "birefnet_tiny_ort",
+            displayName: "BiRefNet Tiny ORT",
+            statusTag: .candidate
+        )
+    ]
+
+    static func resolve(for providerID: String) -> CaptureTemporarySegmentationModelOption {
+        supportedOptions.first { $0.providerID == providerID } ?? supportedOptions[0]
+    }
+}
+
 struct CaptureLensProfile: Identifiable, Equatable {
     enum Kind: String {
         case front
@@ -538,8 +590,37 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var isFocusExposureLocked = false
     @Published var isExposureLocked = false
     @Published var isSwitchingCamera = false
+    @Published private(set) var selectedTemporarySegmentationProviderID = CaptureTemporarySegmentationModelOption.defaultProviderID
 
     let session = AVCaptureSession()
+
+    // Temporary experiment entry: debug/internal subjective comparison only.
+    // Keep this concentrated for low-risk future removal.
+    private static let temporaryModelSelectorVisibilityFlag = "SELLERCAMERA_ENABLE_TEMP_MODEL_SELECTOR"
+
+    var isTemporaryModelSelectorEnabled: Bool {
+#if DEBUG
+        return true
+#else
+        return ProcessInfo.processInfo.environment[Self.temporaryModelSelectorVisibilityFlag] == "1"
+#endif
+    }
+
+    var temporarySegmentationModelOptions: [CaptureTemporarySegmentationModelOption] {
+        CaptureTemporarySegmentationModelOption.supportedOptions
+    }
+
+    var selectedTemporarySegmentationModelOption: CaptureTemporarySegmentationModelOption {
+        CaptureTemporarySegmentationModelOption.resolve(for: selectedTemporarySegmentationProviderID)
+    }
+
+    var selectedTemporarySegmentationModelDisplayText: String {
+        selectedTemporarySegmentationModelOption.menuDisplayText
+    }
+
+    var isTemporarySegmentationModelDefaultSelected: Bool {
+        selectedTemporarySegmentationProviderID == CaptureTemporarySegmentationModelOption.defaultProviderID
+    }
 
     private let sessionQueue = DispatchQueue(label: "seller.camera.session.queue")
     private var currentVideoInput: AVCaptureDeviceInput?
@@ -617,7 +698,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     @MainActor
-    func importSinglePhotoFromLibraryData(_ imageData: Data) async -> Bool {
+    func importSinglePhotoFromLibraryData(_ imageData: Data, baselineSampleID: String? = nil) async -> Bool {
         captureHintText = "正在导入图片..."
         refreshStatusSummary()
 
@@ -642,6 +723,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 "capture_source": CaptureStillPhotoSource.photoLibrary.rawValue
             ]
             metadata["importedByteCount"] = "\(imageData.count)"
+            if let baselineSampleID, !baselineSampleID.isEmpty {
+                metadata["baseline_sample_id"] = baselineSampleID
+            } else {
+                metadata["baseline_sample_id"] = generatedBaselineSampleID(from: normalizedData)
+            }
 
             let importedResult = CaptureStillPhotoResult(
                 source: .photoLibrary,
@@ -698,6 +784,21 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         captureHintText = selectedBurstOption == .single
             ? "拍摄模式：单拍"
             : "拍摄模式：\(selectedBurstOption.displayText)"
+    }
+
+    func selectTemporarySegmentationModel(providerID: String) {
+        guard isTemporaryModelSelectorEnabled else { return }
+        let option = CaptureTemporarySegmentationModelOption.resolve(for: providerID)
+        selectedTemporarySegmentationProviderID = option.providerID
+        captureHintText = "实验模型：\(option.displayName)"
+    }
+
+    func resetTemporarySegmentationModelToDefault() {
+        guard isTemporaryModelSelectorEnabled else { return }
+        let defaultProviderID = CaptureTemporarySegmentationModelOption.defaultProviderID
+        let defaultOption = CaptureTemporarySegmentationModelOption.resolve(for: defaultProviderID)
+        selectedTemporarySegmentationProviderID = defaultProviderID
+        captureHintText = "已恢复默认模型：\(defaultOption.displayName)"
     }
 
     func cycleExposureBias() {
@@ -1805,7 +1906,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         if confirmedStillPhotoResult?.id != latestStillPhotoResult.id {
             confirmedStillPhotoResult = latestStillPhotoResult
         }
-        let processingInput = confirmedStillPhotoResult ?? latestStillPhotoResult
+        let processingInputBase = confirmedStillPhotoResult ?? latestStillPhotoResult
+        let processingInput = applyTemporarySegmentationModelMetadata(to: processingInputBase)
+        confirmedStillPhotoResult = processingInput
 
         resetLatestResultWorkflowState()
         isProcessingLatestResult = true
@@ -1818,8 +1921,16 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 let processed = try await CaptureWhiteBackgroundProcessor.process(confirmedStillPhoto: processingInput)
                 await MainActor.run {
                     self.isProcessingLatestResult = false
-                    self.latestProcessedResult = processed
-                    self.captureHintText = processed.qualityHintDisplayText
+                    let enrichedProcessed = self.enrichedProcessedResultForBaseline(
+                        processed,
+                        sourceStillPhoto: processingInput
+                    )
+                    self.latestProcessedResult = enrichedProcessed
+                    WhiteBackgroundBaselineRecorder.recordIfEnabled(
+                        sourceStillPhoto: processingInput,
+                        processedResult: enrichedProcessed
+                    )
+                    self.captureHintText = enrichedProcessed.qualityHintDisplayText
                     self.refreshStatusSummary()
                 }
             } catch {
@@ -2131,7 +2242,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     private func handleCaptureSuccess(_ result: CaptureStillPhotoResult, shotIndex: Int, totalCount: Int) {
-        let outputAdjustedResult = applySelectedOutputPresetsIfNeeded(to: result)
+        let routedResult = applyTemporarySegmentationModelMetadata(to: result)
+        let outputAdjustedResult = applySelectedOutputPresetsIfNeeded(to: routedResult)
         latestStillPhotoResult = outputAdjustedResult
         latestPreservedSourceResult = nil
         resetLatestOriginalSaveState()
@@ -2144,6 +2256,28 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
         refreshStatusSummary()
         showQuickPreview(for: outputAdjustedResult)
+    }
+
+    private func applyTemporarySegmentationModelMetadata(
+        to result: CaptureStillPhotoResult
+    ) -> CaptureStillPhotoResult {
+        guard isTemporaryModelSelectorEnabled else {
+            return result
+        }
+        let modelOption = selectedTemporarySegmentationModelOption
+        var mergedMetadata = result.metadata
+        mergedMetadata["baseline_segmentation_provider"] = modelOption.providerID
+        mergedMetadata["experiment_segmentation_model_name"] = modelOption.displayName
+        mergedMetadata["experiment_segmentation_model_id"] = modelOption.providerID
+        mergedMetadata["experiment_segmentation_model_status"] = modelOption.statusTag.rawValue
+        return CaptureStillPhotoResult(
+            id: result.id,
+            source: result.source,
+            capturedAt: result.capturedAt,
+            imageData: result.imageData,
+            pixelSize: result.pixelSize,
+            metadata: mergedMetadata
+        )
     }
 
     private func applySelectedOutputPresetsIfNeeded(
@@ -2248,6 +2382,45 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             )
         }
         return renderedImage.cgImage
+    }
+
+    private func enrichedProcessedResultForBaseline(
+        _ result: CaptureProcessedPhotoResult,
+        sourceStillPhoto: CaptureStillPhotoResult
+    ) -> CaptureProcessedPhotoResult {
+        var mergedMetadata = result.metadata
+        let environmentSnapshot = WhiteBackgroundBaselineRecorder.currentEnvironmentSnapshot
+        mergedMetadata["baseline_runtime_ios_version"] = environmentSnapshot.systemVersion
+        mergedMetadata["baseline_runtime_device_model"] = environmentSnapshot.deviceModel
+        mergedMetadata["baseline_runtime_device_name"] = environmentSnapshot.deviceName
+        mergedMetadata["baseline_runtime_app_version"] = environmentSnapshot.appVersion
+        mergedMetadata["baseline_source_still_photo_id"] = sourceStillPhoto.id.uuidString
+        if let baselineSampleID = sourceStillPhoto.metadata["baseline_sample_id"], !baselineSampleID.isEmpty {
+            mergedMetadata["baseline_sample_id"] = baselineSampleID
+        }
+        if let modelName = sourceStillPhoto.metadata["experiment_segmentation_model_name"], !modelName.isEmpty {
+            mergedMetadata["experiment_segmentation_model_name"] = modelName
+        }
+        if let modelID = sourceStillPhoto.metadata["experiment_segmentation_model_id"], !modelID.isEmpty {
+            mergedMetadata["experiment_segmentation_model_id"] = modelID
+        }
+        if let modelStatus = sourceStillPhoto.metadata["experiment_segmentation_model_status"], !modelStatus.isEmpty {
+            mergedMetadata["experiment_segmentation_model_status"] = modelStatus
+        }
+        return CaptureProcessedPhotoResult(
+            id: result.id,
+            sourceStillPhotoID: result.sourceStillPhotoID,
+            processedAt: result.processedAt,
+            imageData: result.imageData,
+            pixelSize: result.pixelSize,
+            metadata: mergedMetadata
+        )
+    }
+
+    private func generatedBaselineSampleID(from imageData: Data) -> String {
+        let digest = SHA256.hash(data: imageData)
+        let prefix = digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+        return "import-\(prefix)"
     }
 
     private func showQuickPreview(for result: CaptureStillPhotoResult) {
@@ -3720,6 +3893,7 @@ struct CaptureLivePreviewView: View {
             }
             .onAppear {
                 cameraRuntime.startRunningSessionIfNeeded()
+                WhiteBackgroundBaselineAutorun.triggerIfNeeded()
                 if proxy.size.width > 0 {
                     cameraRuntime.captureHintText = "轻触画面可对焦与测光"
                 }

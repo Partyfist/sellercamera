@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r03-hard-gate-review",
+  "reviewed_at": "2026-04-21T14:20:00+08:00",
+  "reviewer": "codex",
+  "scope": {
+    "goal": "仅补 hard_gate 主问题证据，不扩样本、不改代码边界。",
+    "compare_pairs": {
+      "vision": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r02-vision-device.jsonl",
+      "attention": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r02-attention-device.jsonl"
+    },
+    "admission_manifest": "WhiteBackgroundBaseline/sample_manifest.backbone_admission_v1.json"
+  },
+  "hard_gate_problem_review": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "primary_problems": [
+        "subject_mask_unavailable",
+        "thin_structure_loss"
+      ],
+      "vision_r02": {
+        "quality_level": "failed",
+        "hard_case_signal": "unknown"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "clear_improved",
+      "evidence_level": "sufficient_for_gate",
+      "summary": "从 pipeline fail 到可产出 ready，主问题被实质触达，是本轮最明确硬门槛收益。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "primary_problems": [
+        "cross_domain_subject_boundary",
+        "background_residual"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "changed_but_insufficient",
+      "evidence_level": "insufficient",
+      "summary": "当前仅能确认未回退，尚无可复核证据表明主问题已被明确改善。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "primary_problems": [
+        "thin_structure_loss",
+        "cross_domain_complexity"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "changed_but_insufficient",
+      "evidence_level": "insufficient",
+      "summary": "细珠串复合结构在质量等级层面无回退，但主问题改善证据不足。"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "primary_problems": [
+        "background_residual",
+        "complex_natural_background"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_level": "insufficient",
+      "summary": "复杂背景样本当前只证明可产出，不足以证明主问题被候选主干有效收敛。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "primary_problems": [
+        "same_color_foreground_background_separation",
+        "edge_contamination"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_level": "insufficient",
+      "summary": "同色分离是主干边界敏感问题，当前缺少明确改善证据。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "primary_problems": [
+        "background_residual",
+        "edge_gray_fringe"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_level": "insufficient",
+      "summary": "深色主体+复杂背景样本当前仍停留在“未恶化”证据层。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "primary_problems": [
+        "multi_subject_focus",
+        "contact_edge_abnormal"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "changed_but_insufficient",
+      "evidence_level": "insufficient",
+      "summary": "多主体复杂场景未触发回退，但主问题改善证据尚不足。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "primary_problems": [
+        "cross_domain_subject_background_separation",
+        "background_residual"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_level": "insufficient",
+      "summary": "户外跨域复杂样本当前仅确认不退化，尚未证明主问题改善。"
+    }
+  ],
+  "tier_summary": {
+    "clear_improved": [
+      "EV006_beaded_string_on_texture"
+    ],
+    "changed_but_insufficient": [
+      "EV013_full_body_person_gray_bg",
+      "EV021_hand_with_beads",
+      "EV042_cakes_in_booth_scene"
+    ],
+    "not_proven": [
+      "EV028_flower_vase_garden_bg",
+      "EV033_blue_vase_blue_curtain",
+      "EV038_dark_shoes_shelf_plants",
+      "EV044_person_outdoor_complex"
+    ]
+  },
+  "admission_gate_decision": {
+    "hard_gate_threshold_met": false,
+    "reason": "已明确改善样本仅 EV006（1/8），未达到“hard_gate 主问题改善证据足够支持升级范围”的门槛。",
+    "next_action": "stay_on_admission_v1",
+    "three_way_decision": "继续停留在 admission_v1",
+    "non_exaggeration_boundary": [
+      "本轮结论基于 admission_v1 r02 记录与问题级人工复核，不代表 expanded 范围可直接放大。",
+      "本轮不构成主链切换依据。"
+    ]
+  }
+}

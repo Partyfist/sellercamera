@@ -1,0 +1,173 @@
+import CoreML
+import Foundation
+
+struct RuntimeContractReport: Codable {
+    let stage: String
+    let providerHint: String
+    let resolvedProvider: String
+    let modelPath: String
+    let modelExists: Bool
+    let modelExtension: String
+    let expectedModelExtensions: [String]
+    let singlePointEngine: String
+    let runtimeEngine: String
+    let loadAttempted: Bool
+    let loadSucceeded: Bool
+    let status: String
+    let errorStage: String?
+    let error: String?
+    let contractOpened: Bool
+}
+
+func parseArgs() -> [String: String] {
+    var result: [String: String] = [:]
+    var index = 1
+    let args = CommandLine.arguments
+    while index + 1 < args.count {
+        let key = args[index]
+        if key.hasPrefix("--") {
+            result[String(key.dropFirst(2))] = args[index + 1]
+            index += 2
+        } else {
+            index += 1
+        }
+    }
+    return result
+}
+
+func resolveProvider(_ raw: String) -> String {
+    let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    switch normalized {
+    case "birefnet", "candidate_birefnet", "vision-birefnet":
+        return "birefnet_coreml_provider"
+    default:
+        return "non_birefnet_provider"
+    }
+}
+
+func writeReport(_ report: RuntimeContractReport, to reportURL: URL) {
+    do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(report)
+        try data.write(to: reportURL)
+    } catch {
+        fputs("failed_to_write_report:\(error)\n", stderr)
+    }
+}
+
+func loadableCoreMLURL(from modelURL: URL) throws -> URL {
+    let resolved = modelURL.resolvingSymlinksInPath()
+    let ext = resolved.pathExtension.lowercased()
+    if ext == "mlmodelc" {
+        return resolved
+    }
+    if ext == "mlpackage" || ext == "mlmodel" {
+        return try MLModel.compileModel(at: resolved)
+    }
+    throw NSError(
+        domain: "birefnet.tiny.runtime.contract",
+        code: 1001,
+        userInfo: [NSLocalizedDescriptionKey: "unsupported_model_extension:\(ext)"]
+    )
+}
+
+let args = parseArgs()
+let providerHint = args["provider"] ?? "candidate_birefnet"
+let resolvedProvider = resolveProvider(providerHint)
+let modelPath = args["model"] ?? ""
+let reportPath = args["report"] ?? ""
+let modelURL = URL(fileURLWithPath: modelPath)
+let reportURL = URL(fileURLWithPath: reportPath)
+let expectedExtensions = ["mlmodelc", "mlpackage", "mlmodel"]
+let extensionName = modelURL.pathExtension.lowercased()
+let modelExists = FileManager.default.fileExists(atPath: modelURL.path)
+
+func finish(
+    loadAttempted: Bool,
+    loadSucceeded: Bool,
+    status: String,
+    errorStage: String?,
+    error: String?,
+    contractOpened: Bool
+) -> Never {
+    let report = RuntimeContractReport(
+        stage: "birefnet_tiny_runtime_contract_check",
+        providerHint: providerHint,
+        resolvedProvider: resolvedProvider,
+        modelPath: modelURL.path,
+        modelExists: modelExists,
+        modelExtension: extensionName,
+        expectedModelExtensions: expectedExtensions,
+        singlePointEngine: "onnxruntime",
+        runtimeEngine: "coreml_vncoremlrequest",
+        loadAttempted: loadAttempted,
+        loadSucceeded: loadSucceeded,
+        status: status,
+        errorStage: errorStage,
+        error: error,
+        contractOpened: contractOpened
+    )
+    writeReport(report, to: reportURL)
+    let encoder = JSONEncoder()
+    if let data = try? encoder.encode(report), let text = String(data: data, encoding: .utf8) {
+        print(text)
+    }
+    exit(contractOpened ? 0 : 5)
+}
+
+if resolvedProvider != "birefnet_coreml_provider" {
+    finish(
+        loadAttempted: false,
+        loadSucceeded: false,
+        status: "unexpected_provider",
+        errorStage: "provider",
+        error: "provider_not_mapped_to_birefnet_coreml_contract",
+        contractOpened: false
+    )
+}
+
+if !modelExists {
+    finish(
+        loadAttempted: false,
+        loadSucceeded: false,
+        status: "model_missing",
+        errorStage: "asset",
+        error: "runtime_model_path_not_found",
+        contractOpened: false
+    )
+}
+
+if !expectedExtensions.contains(extensionName) {
+    finish(
+        loadAttempted: false,
+        loadSucceeded: false,
+        status: "runtime_contract_mismatch",
+        errorStage: "contract",
+        error: "runtime_expects_coreml_asset_but_got_\(extensionName)",
+        contractOpened: false
+    )
+}
+
+do {
+    let loadableURL = try loadableCoreMLURL(from: modelURL)
+    let configuration = MLModelConfiguration()
+    _ = try MLModel(contentsOf: loadableURL, configuration: configuration)
+    finish(
+        loadAttempted: true,
+        loadSucceeded: true,
+        status: "runtime_contract_opened",
+        errorStage: nil,
+        error: nil,
+        contractOpened: true
+    )
+} catch {
+    finish(
+        loadAttempted: true,
+        loadSucceeded: false,
+        status: "runtime_model_load_failed",
+        errorStage: "load",
+        error: "\(type(of: error)): \(error.localizedDescription)",
+        contractOpened: false
+    )
+}

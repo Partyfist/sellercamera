@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r25-experiment-archive-branch-and-mainline-rollback-prep",
+  "reviewed_at": "2026-04-24T18:20:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_experimental_multimodel_bundle",
+    "track": "experiment_archive_freeze_prep_v1",
+    "identity_boundary": [
+      "本轮对象是当前本地多模型实验版本，不是正式产品主线。",
+      "本轮只做归档分支整理与回退准备，不做 admission 与功能开发。",
+      "本轮不执行远端推送与本地回退动作。"
+    ]
+  },
+  "archive_branch_plan": {
+    "recommended_branch_name": "archive/experiment-multimodel-r25-20260424",
+    "positioning": "实验冻结归档分支（R08-R25 证据链保留）",
+    "naming_rationale": [
+      "archive 前缀可明确与正式主线分离。",
+      "experiment-multimodel 直接表达内容属性。",
+      "r25-20260424 让冻结时间点与链路终点可追溯。"
+    ]
+  },
+  "archive_boundary": {
+    "must_preserve": [
+      "WhiteBackgroundBaseline R01-R25 文档/JSON/runs/check 证据链",
+      "临时实验模型切换入口与候选模型实验路由代码",
+      "tiny/RMBG-2/Vision 变体实验链路与 metadata 追踪字段"
+    ],
+    "must_not_be_misread_as_mainline": [
+      "临时实验入口不是正式用户设置系统",
+      "暂停/停止候选结论不是产品能力结论",
+      "实验可运行不等于正式主线承诺"
+    ]
+  },
+  "pre_archive_integrity_checklist": [
+    "关键实验代码在位且可检出（CaptureScreen/CaptureWhiteBackgroundProcessor/BiRefNetTinyORTBridge.*）",
+    "WhiteBackgroundBaseline README 已索引到 R25",
+    "R08-R25 结构化 JSON 记录完整",
+    "模型资源状态和实验入口可见性边界已在文档写明",
+    "不存在会导致误读的未收口描述"
+  ],
+  "pre_rollback_checklist": [
+    "归档分支已推送到远端并可见",
+    "远端归档分支可直接打开 R25 说明文档与 README 索引",
+    "模型大文件/LFS 对象可恢复",
+    "本地不存在仅本地未归档的重要实验改动",
+    "第一版正式基线引用点（branch/tag/commit）已固定"
+  ],
+  "post_rollback_mainline_definition": {
+    "mainline_definition": "第一版正式基线（保留正式拍摄与稳定输出主链）",
+    "experimental_status": "实验模型能力冻结在 archive 分支，不进入正式主线",
+    "anti_contamination_rules": [
+      "实验改动默认进入 archive/* 或 exp/* 分支",
+      "正式主线 PR 明确声明是否引入实验资产",
+      "仅允许按单点理由从归档分支择点回摘"
+    ]
+  },
+  "decision": {
+    "result": "ready_for_archive_branch_push_and_local_rollback_execution",
+    "reason": [
+      "实验版本身份与边界已明确定义。",
+      "归档分支命名与定位可长期区分正式主线。",
+      "归档前与回退前检查清单已可执行。"
+    ],
+    "boundary_note": "该结论仅表示“可执行归档推送与回退动作准备完成”，不代表任何模型效果或主链替换结论。"
+  }
+}
+

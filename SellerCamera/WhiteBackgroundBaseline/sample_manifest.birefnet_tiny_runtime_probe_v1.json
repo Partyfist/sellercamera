@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "suite_name": "birefnet_tiny_runtime_probe_v1",
+  "samples": [
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "source_file_name": "pexels-vindli-15791148.jpg",
+      "tags": [
+        "thin_structure_loss",
+        "global_haze"
+      ],
+      "note": "R14 非 admission provider 入口复验单样本，仅验证 tiny ORT 正式 runtime 消费链路。"
+    }
+  ]
+}

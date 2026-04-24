@@ -96,7 +96,14 @@ struct CaptureScreen: View {
                     onTapImport: {
                         guard !isImportingPhoto else { return }
                         isImportPickerPresented = true
-                    }
+                    },
+                    isTemporaryModelSelectorEnabled: cameraRuntime.isTemporaryModelSelectorEnabled,
+                    temporaryModelDisplayText: cameraRuntime.selectedTemporarySegmentationModelDisplayText,
+                    temporaryModelOptions: cameraRuntime.temporarySegmentationModelOptions,
+                    selectedTemporaryModelProviderID: cameraRuntime.selectedTemporarySegmentationProviderID,
+                    isTemporaryModelDefaultSelected: cameraRuntime.isTemporarySegmentationModelDefaultSelected,
+                    onSelectTemporaryModel: cameraRuntime.selectTemporarySegmentationModel,
+                    onResetTemporaryModelToDefault: cameraRuntime.resetTemporarySegmentationModelToDefault
                 )
                 .padding(.horizontal, 14)
                 .padding(.top, 6)
@@ -255,7 +262,11 @@ struct CaptureScreen: View {
                 cameraRuntime.notifyImportFailure("未读取到可用图片，请重试")
                 return
             }
-            _ = await cameraRuntime.importSinglePhotoFromLibraryData(imageData)
+            let sampleIdentifier = item.itemIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+            _ = await cameraRuntime.importSinglePhotoFromLibraryData(
+                imageData,
+                baselineSampleID: sampleIdentifier
+            )
         } catch {
             cameraRuntime.notifyImportFailure("读取相册图片失败，请重试")
         }
@@ -410,6 +421,13 @@ private struct CaptureTopStatusBar: View {
     let onCycleBurstOption: () -> Void
     let isImportingPhoto: Bool
     let onTapImport: () -> Void
+    let isTemporaryModelSelectorEnabled: Bool
+    let temporaryModelDisplayText: String
+    let temporaryModelOptions: [CaptureTemporarySegmentationModelOption]
+    let selectedTemporaryModelProviderID: String
+    let isTemporaryModelDefaultSelected: Bool
+    let onSelectTemporaryModel: (String) -> Void
+    let onResetTemporaryModelToDefault: () -> Void
 
     var body: some View {
         VStack(spacing: 4) {
@@ -514,6 +532,27 @@ private struct CaptureTopStatusBar: View {
                         }
                     }
 
+                    if isTemporaryModelSelectorEnabled {
+                        Section("实验模型（临时）") {
+                            ForEach(temporaryModelOptions) { model in
+                                Button {
+                                    onSelectTemporaryModel(model.providerID)
+                                } label: {
+                                    if model.providerID == selectedTemporaryModelProviderID {
+                                        Label(model.menuDisplayText, systemImage: "checkmark")
+                                    } else {
+                                        Text(model.menuDisplayText)
+                                    }
+                                }
+                            }
+
+                            Button("恢复默认模型") {
+                                onResetTemporaryModelToDefault()
+                            }
+                            .disabled(isTemporaryModelDefaultSelected)
+                        }
+                    }
+
                     Divider()
 
                     Button {
@@ -532,12 +571,22 @@ private struct CaptureTopStatusBar: View {
                 .buttonStyle(.plain)
             }
 
-            Text(memoryStatusText)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.56))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 8) {
+                Text(memoryStatusText)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.56))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if isTemporaryModelSelectorEnabled {
+                    Text("模型：\(temporaryModelDisplayText)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.74))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+            }
         }
     }
 

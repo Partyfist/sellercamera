@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r16-birefnet-tiny-runtime-coverage-stability",
+  "generated_at": "2026-04-23T09:56:02+08:00",
+  "records": 26,
+  "samples_in_manifest": 26,
+  "samples_covered": 26,
+  "missing_samples": [],
+  "quality_distribution": {
+    "review": 26
+  },
+  "hard_case_distribution": {
+    "stable": 26
+  },
+  "provider_distribution": {
+    "birefnet_tiny_ort": 26
+  },
+  "coverage_complete": true,
+  "run_records": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-birefnet-r16-tiny-runtime-coverage-sim-ios26_4.jsonl",
+  "check_text": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-birefnet-r16-tiny-runtime-coverage-sim-ios26_4.txt"
+}

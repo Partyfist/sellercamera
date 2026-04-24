@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-core-v1",
+  "reviewed_at": "2026-04-20T09:10:00Z",
+  "reviewer": "codex",
+  "records_source": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260420-r23.jsonl",
+  "compare_baseline": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260420-r22.jsonl",
+  "samples": [
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "global_haze"
+      ],
+      "summary": "玻璃薄边保持稳定，未见新增灰边/脏边副作用；本轮与 R2.2 基本一致，未观察到实质新收益。",
+      "compare_to_r22": "no_material_change"
+    },
+    {
+      "sample_id": "S002_bottle_reflection_window",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "非目标样本稳定，未见新增边缘污染或主体冲淡。",
+      "compare_to_r22": "no_material_change"
+    },
+    {
+      "sample_id": "S003_ring_macro_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "thin_structure_loss"
+      ],
+      "summary": "高反细边末端保持稳定，透明/高反区域未见新增断裂或硬化；本轮与 R2.2 观感基本持平。",
+      "compare_to_r22": "no_material_change"
+    },
+    {
+      "sample_id": "S004_paper_cups_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "white_background_impure",
+        "foreground_washout"
+      ],
+      "summary": "近白背景样本维持稳定，未引入新的发白或白底脏化。",
+      "compare_to_r22": "no_material_change"
+    },
+    {
+      "sample_id": "S005_transparent_bowls_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "thin_structure_loss"
+      ],
+      "summary": "透明末端清理与透明感平衡保持在 R2.2 水平，未见进一步可确认提升，也未出现透明末端实化副作用。",
+      "compare_to_r22": "no_material_change_platform_signaled"
+    },
+    {
+      "sample_id": "S006_portrait_with_product",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "hard_case_fallback_acceptable",
+        "background_residual"
+      ],
+      "summary": "跨域难例继续维持 review，整体稳定无新增劣化。",
+      "compare_to_r22": "no_material_change"
+    },
+    {
+      "sample_id": "S007_snacks_on_dark_plate",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "非目标样本保持稳态，未观测到新增副作用。",
+      "compare_to_r22": "no_material_change"
+    },
+    {
+      "sample_id": "S008_white_tubes_near_white_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "white_background_impure"
+      ],
+      "summary": "near-white 主体稳定性维持在 R2.2 水平，主体‘更立’效果保持但未出现可确认新增增益；未见硬边或块感副作用。",
+      "compare_to_r22": "no_material_change_platform_signaled"
+    },
+    {
+      "sample_id": "S009_multi_product_shelf_complex",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "background_residual",
+        "hard_case_fallback_unacceptable"
+      ],
+      "summary": "复杂多主体样本保持 ready，未见新增回退。",
+      "compare_to_r22": "no_material_change"
+    },
+    {
+      "sample_id": "S010_food_tray_contact_edge",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "底边接地自然度保持在 R2.2 水平，灰浮收口维持稳定但未见新一轮明确提升；未出现假阴影或底边脏化。",
+      "compare_to_r22": "no_material_change_platform_signaled"
+    }
+  ],
+  "target_samples": [
+    "S010_food_tray_contact_edge",
+    "S008_white_tubes_near_white_bg",
+    "S005_transparent_bowls_dark_bg",
+    "S001_glass_container_translucent",
+    "S003_ring_macro_dark_bg"
+  ],
+  "closure_judgement": {
+    "phase_signal": "plateau_near_term",
+    "target_samples_status": {
+      "S010_food_tray_contact_edge": "stage_accept_ready_but_still_not_ideal",
+      "S008_white_tubes_near_white_bg": "stage_accept_ready_but_still_not_ideal",
+      "S005_transparent_bowls_dark_bg": "stage_accept_ready_but_still_not_ideal"
+    }
+  },
+  "note": "R2.3 closure assessment run. Core_v1 distribution remains ready/review=9/1 with no new unacceptable failure. Compared with R2.2, target gains are maintained but no additional clear uplift observed, indicating a near-term plateau in the current decontam/compose tuning scope."
+}

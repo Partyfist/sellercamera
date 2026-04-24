@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r04-hard-gate-focus-review",
+  "reviewed_at": "2026-04-21T20:35:00+08:00",
+  "reviewer": "codex",
+  "scope": {
+    "goal": "仅在 admission_v1 内强化 hard_gate 主问题证据，不扩样本、不改代码边界。",
+    "base_review": "WhiteBackgroundBaseline/manual_review.backbone_admission_v1.r03.hard_gate.json",
+    "compare_pairs": {
+      "vision_r02": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r02-vision-device.jsonl",
+      "attention_r02": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r02-attention-device.jsonl"
+    }
+  },
+  "focus_plan": {
+    "primary_focus_samples": [
+      "EV028_flower_vase_garden_bg",
+      "EV033_blue_vase_blue_curtain",
+      "EV038_dark_shoes_shelf_plants",
+      "EV042_cakes_in_booth_scene",
+      "EV044_person_outdoor_complex"
+    ],
+    "reference_samples": [
+      "EV013_full_body_person_gray_bg",
+      "EV021_hand_with_beads",
+      "EV006_beaded_string_on_texture"
+    ],
+    "why": "本轮优先处理 r03 中证据不足且更接近升级门槛阻塞的复杂背景/跨域样本；EV006 仅作已明确改善的锚点参考。"
+  },
+  "hard_gate_problem_focus_review": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "focus_role": "reference_anchor",
+      "primary_problems": [
+        "subject_mask_unavailable",
+        "thin_structure_loss_on_beads"
+      ],
+      "vision_r02": {
+        "quality_level": "failed",
+        "hard_case_signal": "unknown",
+        "key_observation": "processing 阶段失败，无法形成可产出主体。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "由 failed 转为 ready，硬门槛被明确触达。"
+      },
+      "problem_level_judgement": "clear_improved",
+      "evidence_strength": "high"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "focus_role": "reference_secondary",
+      "primary_problems": [
+        "person_trouser_edge_vs_gray_background",
+        "ankle_shoe_transition_residual"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "质量等级可用，但主问题改善证据主要停留在“未恶化”。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "与 Vision 同级可产出，仍缺可复核的主问题改善证据。"
+      },
+      "problem_level_judgement": "changed_but_insufficient",
+      "evidence_strength": "low"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "focus_role": "reference_secondary",
+      "primary_problems": [
+        "bead_string_thin_structure_preservation",
+        "hand_sleeve_cross_domain_boundary"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "细结构与跨域边界风险仍在，当前记录不足以证明已收敛。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "未触发回退，但缺少可复核的细结构主问题改善证据。"
+      },
+      "problem_level_judgement": "changed_but_insufficient",
+      "evidence_strength": "low"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "focus_role": "primary_focus",
+      "primary_problems": [
+        "stem_leaf_outer_contour_vs_garden_texture",
+        "natural_background_residual_on_vase_edges"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "复杂自然背景下主体边缘仍是主干敏感点。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "当前证据不足以证明边缘纹理残留主问题已被明显改善。"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_strength": "low"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "focus_role": "primary_focus",
+      "primary_problems": [
+        "same_color_boundary_separation_at_vase_shoulder",
+        "curtain_texture_bleed_into_subject_edge"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "同色前后景分离问题仍是升级门槛核心阻塞。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "未出现回退，但没有足够证据证明同色分离主问题被明确触达。"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_strength": "low"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "focus_role": "primary_focus",
+      "primary_problems": [
+        "dark_shoe_outline_vs_shelf_plant_clutter",
+        "heel_lace_perimeter_gray_fringe"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "复杂室内纹理与深色主体交界仍容易出现污染证据不足问题。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "目前只能确认未恶化，尚不能确认主问题收敛。"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_strength": "low"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "focus_role": "primary_focus",
+      "primary_problems": [
+        "multi_subject_focus_consistency",
+        "plate_contact_edge_contamination"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "多主体聚焦与接触边缘问题具备潜在改善空间。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "存在局部变化信号，但证据仍不足以判定主问题明确改善。"
+      },
+      "problem_level_judgement": "changed_but_insufficient",
+      "evidence_strength": "low_to_medium"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "focus_role": "primary_focus",
+      "primary_problems": [
+        "person_boundary_vs_tree_branch_background",
+        "cross_domain_background_residual"
+      ],
+      "vision_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "跨域户外复杂背景仍是 hard_gate 的主阻塞之一。"
+      },
+      "attention_r02": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "key_observation": "无回退信号，但主问题改善证据仍不足。"
+      },
+      "problem_level_judgement": "not_proven",
+      "evidence_strength": "low"
+    }
+  ],
+  "tier_summary_r04": {
+    "clear_improved": [
+      "EV006_beaded_string_on_texture"
+    ],
+    "changed_but_insufficient": [
+      "EV013_full_body_person_gray_bg",
+      "EV021_hand_with_beads",
+      "EV042_cakes_in_booth_scene"
+    ],
+    "not_proven": [
+      "EV028_flower_vase_garden_bg",
+      "EV033_blue_vase_blue_curtain",
+      "EV038_dark_shoes_shelf_plants",
+      "EV044_person_outdoor_complex"
+    ],
+    "delta_vs_r03": {
+      "changed_samples": [],
+      "summary": "本轮强化复核未产生样本档位变化；主要价值是把证据不足样本的主问题定义压细到可判断层。"
+    }
+  },
+  "gate_decision_r04": {
+    "hard_gate_threshold_met": false,
+    "threshold_target_reference": "至少 4/8 hard_gate 样本主问题达到“已明确改善”才考虑升级范围。",
+    "current_state": "1/8 clear_improved, 3/8 changed_but_insufficient, 4/8 not_proven",
+    "three_way_decision": "继续停留在 admission_v1",
+    "reason": [
+      "EV006 明确改善成立，但单点硬触达不足以支撑整体升级。",
+      "主攻样本中同色分离、复杂背景残留、跨域边界三类主问题仍以证据不足为主。",
+      "当前证据不支持“扩大范围”，也不支持“停止候选主干”。"
+    ],
+    "next_action": "继续在 admission_v1 内做受控对照补证据，不扩样本机制。"
+  }
+}

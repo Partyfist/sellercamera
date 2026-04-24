@@ -1,0 +1,73 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r06-birefnet-rmbg2-coreml-int8-single-point",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet_rmbg2_coreml_int8_track",
+    "track": "admission_candidate_birefnet_rmbg2_coreml_v1"
+  },
+  "scope": {
+    "goal": "落地现成 CoreML 候选资产并验证单点 load->infer->mask 闭环",
+    "in_scope": [
+      "RMBG-2 CoreML 资产本地落地与查找规则确认",
+      "BiRefNet provider 最小加载兼容（mlmodelc/mlpackage）",
+      "单点闭环验证（不进入 admission）",
+      "许可边界记录（CC BY-NC 4.0）"
+    ],
+    "out_of_scope": [
+      "admission_v1 样本跑测",
+      "效果优劣评估",
+      "白底主链下游联动改造",
+      "第二候选并行接入"
+    ]
+  },
+  "pass_criteria": {
+    "asset_landed": true,
+    "asset_discoverable": true,
+    "model_load_success": true,
+    "inference_triggered": true,
+    "output_3_to_provider_boundary": true,
+    "fallback_path_ready": true
+  },
+  "asset_landing": {
+    "source_repo": "https://huggingface.co/sihai0506/rmbg2.0-coreml",
+    "landed_files": [
+      "ModelAssets/BiRefNet/coreml/RMBG-2-native.mlpackage.zip",
+      "/tmp/sellercamera_rmbg2_r06_runtime/RMBG-2-native.mlpackage (runtime extraction)"
+    ],
+    "repository_observation": "HF 当前仓库树仅公开 RMBG-2-native.mlpackage.zip 条目，未见独立 int8 zip 条目。",
+    "license_boundary": {
+      "license": "CC BY-NC 4.0",
+      "commercial_restriction": "commercial_use_requires_separate_authorization",
+      "current_usage": "engineering_feasibility_only"
+    }
+  },
+  "single_point_check": {
+    "check_file": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r06-rmbg2-single-point.json",
+    "wrapper_check_file": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r06-rmbg2-runtime-wrapper.json",
+    "sample": "WhiteBackgroundBaseline/samples/expanded_v1/pexels-roo-1110882060-30130003.jpg",
+    "output_feature": "output_3",
+    "result": {
+      "model_load_success": true,
+      "inference_triggered": true,
+      "mask_produced": true,
+      "fallback_ready": true,
+      "status": "single_point_closure_passed",
+      "error": null
+    }
+  },
+  "decision": {
+    "result": "ready_for_admission_r01",
+    "admission_r01_ready": true,
+    "rationale": [
+      "现成 CoreML 资产已在当前工程边界下完成真实单点闭环（load->infer->mask）。",
+      "output_3 已成功提取并生成 mask 输出，满足进入 admission R01 的最小可运行前置资格。",
+      "Vision 默认路径保持可回退，主链未被污染。"
+    ],
+    "not_interpreted_as": [
+      "不代表 RMBG-2 资产已完成 admission 样本级验证",
+      "不代表可直接商用上线（需遵守 CC BY-NC 4.0 与商业授权约束）",
+      "不代表原版 BiRefNet CoreML 转换链已被打通"
+    ]
+  }
+}

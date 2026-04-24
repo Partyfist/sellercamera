@@ -8,6 +8,8 @@
 import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import CoreML
+import CoreVideo
 import Foundation
 import Vision
 
@@ -15,8 +17,12 @@ enum CaptureWhiteBackgroundProcessorError: LocalizedError {
     case unsupportedSystemVersion
     case invalidInputImage
     case subjectMaskUnavailable
+    case segmentationModelUnavailable
+    case segmentationInferenceFailed
     case outputCompositionFailed
     case outputEncodingFailed
+    case segmentationModelContractMismatch
+    case segmentationRuntimeDependencyUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -26,15 +32,52 @@ enum CaptureWhiteBackgroundProcessorError: LocalizedError {
             return "输入图片不可用"
         case .subjectMaskUnavailable:
             return "未识别到可处理主体"
+        case .segmentationModelUnavailable:
+            return "分割模型资产不可用"
+        case .segmentationInferenceFailed:
+            return "分割推理失败"
         case .outputCompositionFailed:
             return "白底合成失败"
         case .outputEncodingFailed:
             return "处理结果编码失败"
+        case .segmentationModelContractMismatch:
+            return "当前分割模型输入/输出 contract 与 provider 不匹配"
+        case .segmentationRuntimeDependencyUnavailable:
+            return "当前运行环境未引入 ONNX Runtime iOS 依赖，tiny ORT provider 暂不可用"
         }
     }
 }
 
 struct CaptureWhiteBackgroundProcessor {
+    private enum SegmentationProviderID: String {
+        case vision
+        case visionAttentionSaliency = "vision_attention_saliency"
+        case visionObjectnessSaliency = "vision_objectness_saliency"
+        case visionForegroundLatestRevision = "vision_foreground_latest_revision"
+        case visionForegroundObjectnessHybrid = "vision_foreground_objectness_hybrid"
+        case birefnet = "birefnet"
+        case birefnetTinyORT = "birefnet_tiny_ort"
+    }
+
+    private enum SegmentationExperimentEnvironment {
+        static let providerKey = "SELLERCAMERA_SEGMENTATION_PROVIDER"
+        static let birefnetResourceKey = "SELLERCAMERA_BIREFNET_MODEL_RESOURCE"
+        static let birefnetModelPathKey = "SELLERCAMERA_BIREFNET_MODEL_PATH"
+        static let birefnetTinyORTModelPathKey = "SELLERCAMERA_BIREFNET_TINY_ORT_MODEL_PATH"
+    }
+
+    private enum BiRefNetConfig {
+        static let defaultResourceName = "RMBG-2-native-int8"
+        static let fallbackResourceNames = ["RMBG-2-native", "BiRefNetSegmentation", "BiRefNet", "birefnet"]
+        static let track = "admission_candidate_birefnet_v1"
+        static let preferredOutputFeatureName = "output_3"
+        static let tinyORTTrack = "admission_candidate_birefnet_tiny_ort_v1"
+        static let tinyORTDefaultModelPath = "ModelAssets/BiRefNet/onnx/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx"
+        static let tinyORTBundledModelFileName = "BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx"
+        static let tinyORTInputWidth = 1024
+        static let tinyORTInputHeight = 1024
+    }
+
     private enum ProcessingConfig {
         enum Refinement {
             static let closedMaskMorphologyRadius = 1.1
@@ -53,6 +96,16 @@ struct CaptureWhiteBackgroundProcessor {
             static let coreAnchorBlurRadius = 0.06
             static let deepCoreMinimumRadius = 0.62
             static let deepCoreBlurRadius = 0.04
+            // R1.5: refinement phase-2 micro-tuning (low-risk, targeted on core_v1 hard spots)
+            static let edgePreserveRegionBlurRadius = 0.3
+            static let thinStructurePreserveBoostFactor: CGFloat = 0.2
+            static let contactEdgeShiftY: CGFloat = 1.8
+            static let contactEdgeSupportBlurRadius = 0.44
+            static let contactEdgeSupportBoostFactor: CGFloat = 0.21
+            static let nearWhiteCoreThreshold: CGFloat = 0.73
+            static let nearWhiteCoreBlurRadius = 0.46
+            static let nearWhiteCoreBoostFactor: CGFloat = 0.17
+            static let nearWhiteCoreAnchorWeight: CGFloat = 0.24
         }
 
         enum Decontamination {
@@ -70,6 +123,16 @@ struct CaptureWhiteBackgroundProcessor {
             static let topShiftY: CGFloat = -1.9
             static let topInfluenceBlurRadius = 0.68
             static let topGrayBandReductionWeight: CGFloat = 0.38
+            // R2.1 (Package-5): decontam/compose handoff stage-1 tuning
+            static let bottomShiftY: CGFloat = 1.75
+            static let bottomInfluenceBlurRadius = 0.52
+            static let bottomGrayFloatSupportWeight: CGFloat = 0.22
+            static let bottomZoneUpperRatio: CGFloat = 0.46
+            static let nearWhiteProtectThreshold: CGFloat = 0.7
+            static let nearWhiteProtectBlurRadius = 0.48
+            static let nearWhiteProtectGuardWeight: CGFloat = 0.82
+            static let edgeTailCleanupBlurRadius = 0.38
+            static let edgeTailCleanupWeight: CGFloat = 0.22
         }
 
         enum BoundaryRecovery {
@@ -183,8 +246,19 @@ struct CaptureWhiteBackgroundProcessor {
         }
     }
 
+    private struct SegmentationOutput {
+        let maskImage: CIImage
+        let metadata: [String: String]
+    }
+
+    private struct TinyORTSignalSummary {
+        let coverageRatio: Double
+        let confidenceScore: Double
+        let edgeDensityScore: Double
+    }
+
     private struct SegmentationProvider {
-        let makeMask: (_ sourceImage: CIImage, _ extent: CGRect) throws -> CIImage
+        let makeMask: (_ sourceImage: CIImage, _ extent: CGRect) throws -> SegmentationOutput
     }
 
     @available(iOS 17.0, *)
@@ -206,7 +280,490 @@ struct CaptureWhiteBackgroundProcessor {
             forInstances: instances,
             from: requestHandler
         )
-        return CIImage(cvPixelBuffer: maskPixelBuffer).cropped(to: extent)
+        let maskImage = CIImage(cvPixelBuffer: maskPixelBuffer).cropped(to: extent)
+        return SegmentationOutput(
+            maskImage: maskImage,
+            metadata: [
+                "segmentation_provider": "vision",
+                "segmentation_request": "VNGenerateForegroundInstanceMaskRequest",
+                "segmentation_revision_policy": "default_unpinned",
+                "segmentation_revision_resolved": "\(request.revision)",
+                "segmentation_instance_count": "\(instances.count)",
+                "segmentation_track": "stable_vision_default"
+            ]
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static let visionAttentionSaliencyProvider = SegmentationProvider { sourceImage, extent in
+        let request = VNGenerateAttentionBasedSaliencyImageRequest()
+        let requestHandler = VNImageRequestHandler(ciImage: sourceImage, options: [:])
+        try requestHandler.perform([request])
+
+        guard let observation = request.results?.first else {
+            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
+        }
+
+        let rawMask = CIImage(cvPixelBuffer: observation.pixelBuffer)
+        let scaledMask = normalizedMask(rawMask, targetExtent: extent)
+        return SegmentationOutput(
+            maskImage: scaledMask,
+            metadata: [
+                "segmentation_provider": SegmentationProviderID.visionAttentionSaliency.rawValue,
+                "segmentation_request": "VNGenerateAttentionBasedSaliencyImageRequest",
+                "segmentation_revision_policy": "default_unpinned",
+                "segmentation_revision_resolved": "\(request.revision)",
+                "segmentation_instance_count": "1",
+                "segmentation_track": "admission_candidate_attention_saliency_v1"
+            ]
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static let visionObjectnessSaliencyProvider = SegmentationProvider { sourceImage, extent in
+        let request = VNGenerateObjectnessBasedSaliencyImageRequest()
+        let requestHandler = VNImageRequestHandler(ciImage: sourceImage, options: [:])
+        try requestHandler.perform([request])
+
+        guard let observation = request.results?.first else {
+            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
+        }
+
+        let rawMask = CIImage(cvPixelBuffer: observation.pixelBuffer)
+        let scaledMask = normalizedMask(rawMask, targetExtent: extent)
+        return SegmentationOutput(
+            maskImage: scaledMask,
+            metadata: [
+                "segmentation_provider": SegmentationProviderID.visionObjectnessSaliency.rawValue,
+                "segmentation_request": "VNGenerateObjectnessBasedSaliencyImageRequest",
+                "segmentation_revision_policy": "default_unpinned",
+                "segmentation_revision_resolved": "\(request.revision)",
+                "segmentation_instance_count": "1",
+                "segmentation_track": "admission_candidate_objectness_saliency_v1"
+            ]
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static let visionForegroundLatestRevisionProvider = SegmentationProvider { sourceImage, extent in
+        let request = VNGenerateForegroundInstanceMaskRequest()
+        if let latestRevision = VNGenerateForegroundInstanceMaskRequest.supportedRevisions.last {
+            request.revision = latestRevision
+        }
+        let requestHandler = VNImageRequestHandler(ciImage: sourceImage, options: [:])
+        try requestHandler.perform([request])
+
+        guard let observation = request.results?.first else {
+            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
+        }
+
+        let instances = observation.allInstances
+        guard !instances.isEmpty else {
+            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
+        }
+
+        let maskPixelBuffer = try observation.generateScaledMaskForImage(
+            forInstances: instances,
+            from: requestHandler
+        )
+        let maskImage = CIImage(cvPixelBuffer: maskPixelBuffer).cropped(to: extent)
+        return SegmentationOutput(
+            maskImage: maskImage,
+            metadata: [
+                "segmentation_provider": SegmentationProviderID.visionForegroundLatestRevision.rawValue,
+                "segmentation_request": "VNGenerateForegroundInstanceMaskRequest",
+                "segmentation_revision_policy": "pinned_latest_supported",
+                "segmentation_revision_resolved": "\(request.revision)",
+                "segmentation_instance_count": "\(instances.count)",
+                "segmentation_track": "admission_candidate_foreground_latest_revision_v1"
+            ]
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static let visionForegroundObjectnessHybridProvider = SegmentationProvider { sourceImage, extent in
+        let foregroundRequest = VNGenerateForegroundInstanceMaskRequest()
+        let foregroundHandler = VNImageRequestHandler(ciImage: sourceImage, options: [:])
+        try foregroundHandler.perform([foregroundRequest])
+
+        if let foregroundObservation = foregroundRequest.results?.first {
+            let foregroundInstances = foregroundObservation.allInstances
+            if !foregroundInstances.isEmpty {
+                let foregroundMaskBuffer = try foregroundObservation.generateScaledMaskForImage(
+                    forInstances: foregroundInstances,
+                    from: foregroundHandler
+                )
+                let foregroundMaskImage = CIImage(cvPixelBuffer: foregroundMaskBuffer).cropped(to: extent)
+                return SegmentationOutput(
+                    maskImage: foregroundMaskImage,
+                    metadata: [
+                        "segmentation_provider": SegmentationProviderID.visionForegroundObjectnessHybrid.rawValue,
+                        "segmentation_request": "VNGenerateForegroundInstanceMaskRequest+VNGenerateObjectnessBasedSaliencyImageRequest",
+                        "segmentation_revision_policy": "foreground_default_with_objectness_fallback",
+                        "segmentation_revision_resolved": "\(foregroundRequest.revision)",
+                        "segmentation_instance_count": "\(foregroundInstances.count)",
+                        "segmentation_track": "admission_candidate_foreground_objectness_hybrid_v1",
+                        "segmentation_fallback_path": "foreground_instance_mask"
+                    ]
+                )
+            }
+        }
+
+        let objectnessRequest = VNGenerateObjectnessBasedSaliencyImageRequest()
+        let objectnessHandler = VNImageRequestHandler(ciImage: sourceImage, options: [:])
+        try objectnessHandler.perform([objectnessRequest])
+        guard let objectnessObservation = objectnessRequest.results?.first else {
+            throw CaptureWhiteBackgroundProcessorError.subjectMaskUnavailable
+        }
+        let objectnessRawMask = CIImage(cvPixelBuffer: objectnessObservation.pixelBuffer)
+        let objectnessScaledMask = normalizedMask(objectnessRawMask, targetExtent: extent)
+        return SegmentationOutput(
+            maskImage: objectnessScaledMask,
+            metadata: [
+                "segmentation_provider": SegmentationProviderID.visionForegroundObjectnessHybrid.rawValue,
+                "segmentation_request": "VNGenerateForegroundInstanceMaskRequest+VNGenerateObjectnessBasedSaliencyImageRequest",
+                "segmentation_revision_policy": "foreground_default_with_objectness_fallback",
+                "segmentation_revision_resolved": "\(foregroundRequest.revision)",
+                "segmentation_instance_count": "1",
+                "segmentation_track": "admission_candidate_foreground_objectness_hybrid_v1",
+                "segmentation_fallback_path": "objectness_saliency_fallback"
+            ]
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static let biRefNetProvider = SegmentationProvider { sourceImage, extent in
+        let model = try loadBiRefNetCoreMLModel()
+        let inferenceOutput = try runBiRefNetCoreMLInference(
+            sourceImage: sourceImage,
+            extent: extent,
+            model: model
+        )
+        return SegmentationOutput(
+            maskImage: inferenceOutput.maskImage,
+            metadata: [
+                "segmentation_provider": SegmentationProviderID.birefnet.rawValue,
+                "segmentation_revision_policy": "runtime_coreml_model_loading",
+                "segmentation_revision_resolved": "n/a",
+                "segmentation_instance_count": "1",
+                "segmentation_track": BiRefNetConfig.track,
+                "segmentation_model_resource": currentBiRefNetResourceName(),
+                "segmentation_model_output_feature": BiRefNetConfig.preferredOutputFeatureName
+            ].merging(inferenceOutput.metadata) { _, new in new }
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private struct BiRefNetCoreMLInferenceOutput {
+        let maskImage: CIImage
+        let metadata: [String: String]
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func runBiRefNetCoreMLInference(
+        sourceImage: CIImage,
+        extent: CGRect,
+        model: MLModel
+    ) throws -> BiRefNetCoreMLInferenceOutput {
+        let inputDescriptions = model.modelDescription.inputDescriptionsByName
+        if let multiArrayInput = inputDescriptions["input"], multiArrayInput.type == .multiArray {
+            return try runBiRefNetMultiArrayInference(
+                sourceImage: sourceImage,
+                extent: extent,
+                model: model,
+                inputFeatureName: "input",
+                inputFeatureDescription: multiArrayInput
+            )
+        }
+        if let firstMultiArrayInput = inputDescriptions.first(where: { $0.value.type == .multiArray }) {
+            return try runBiRefNetMultiArrayInference(
+                sourceImage: sourceImage,
+                extent: extent,
+                model: model,
+                inputFeatureName: firstMultiArrayInput.key,
+                inputFeatureDescription: firstMultiArrayInput.value
+            )
+        }
+        if inputDescriptions.contains(where: { $0.value.type == .image }) {
+            return try runBiRefNetVisionImageInference(
+                sourceImage: sourceImage,
+                extent: extent,
+                model: model
+            )
+        }
+        throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func runBiRefNetVisionImageInference(
+        sourceImage: CIImage,
+        extent: CGRect,
+        model: MLModel
+    ) throws -> BiRefNetCoreMLInferenceOutput {
+        let visionModel = try VNCoreMLModel(for: model)
+        let request = VNCoreMLRequest(model: visionModel)
+        request.imageCropAndScaleOption = .scaleFill
+        let requestHandler = VNImageRequestHandler(ciImage: sourceImage, options: [:])
+        do {
+            try requestHandler.perform([request])
+        } catch {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        guard let observations = request.results, !observations.isEmpty else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        if let pixelBufferObservation = observations.first(where: { $0 is VNPixelBufferObservation }) as? VNPixelBufferObservation {
+            let rawMask = CIImage(cvPixelBuffer: pixelBufferObservation.pixelBuffer)
+            return BiRefNetCoreMLInferenceOutput(
+                maskImage: normalizedMask(rawMask, targetExtent: extent),
+                metadata: [
+                    "segmentation_request": "VNCoreMLRequest(BiRefNet)",
+                    "segmentation_model_input_type": "image",
+                    "segmentation_model_output_type": "pixelBuffer"
+                ]
+            )
+        }
+        if let featureValueObservation = observations
+            .compactMap({ $0 as? VNCoreMLFeatureValueObservation })
+            .first(where: { $0.featureName == BiRefNetConfig.preferredOutputFeatureName && $0.featureValue.multiArrayValue != nil })
+            ?? observations
+                .compactMap({ $0 as? VNCoreMLFeatureValueObservation })
+                .first(where: { $0.featureValue.multiArrayValue != nil }) {
+            guard let multiArray = featureValueObservation.featureValue.multiArrayValue else {
+                throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+            }
+            let rawMask = try maskCIImage(from: multiArray)
+            return BiRefNetCoreMLInferenceOutput(
+                maskImage: normalizedMask(rawMask, targetExtent: extent),
+                metadata: [
+                    "segmentation_request": "VNCoreMLRequest(BiRefNet)",
+                    "segmentation_model_input_type": "image",
+                    "segmentation_model_output_type": "multiArray",
+                    "segmentation_model_output_feature": featureValueObservation.featureName
+                ]
+            )
+        }
+        throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func runBiRefNetMultiArrayInference(
+        sourceImage: CIImage,
+        extent: CGRect,
+        model: MLModel,
+        inputFeatureName: String,
+        inputFeatureDescription: MLFeatureDescription
+    ) throws -> BiRefNetCoreMLInferenceOutput {
+        let modelInput = try makeBiRefNetCoreMLInputMultiArray(
+            sourceImage: sourceImage,
+            inputFeatureDescription: inputFeatureDescription
+        )
+        let inputProvider = try MLDictionaryFeatureProvider(dictionary: [
+            inputFeatureName: MLFeatureValue(multiArray: modelInput.array)
+        ])
+
+        let prediction: MLFeatureProvider
+        do {
+            prediction = try model.prediction(from: inputProvider)
+        } catch {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        let preferredOutput = prediction.featureValue(for: BiRefNetConfig.preferredOutputFeatureName)?.multiArrayValue
+        let outputFeatureName: String
+        let outputMultiArray: MLMultiArray
+        if let preferredOutput {
+            outputFeatureName = BiRefNetConfig.preferredOutputFeatureName
+            outputMultiArray = preferredOutput
+        } else if let fallback = prediction.featureNames
+            .sorted()
+            .compactMap({ name -> (String, MLMultiArray)? in
+                guard let multiArray = prediction.featureValue(for: name)?.multiArrayValue else {
+                    return nil
+                }
+                return (name, multiArray)
+            })
+            .first {
+            outputFeatureName = fallback.0
+            outputMultiArray = fallback.1
+        } else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        let rawMask = try maskCIImage(from: outputMultiArray)
+        return BiRefNetCoreMLInferenceOutput(
+            maskImage: normalizedMask(rawMask, targetExtent: extent),
+            metadata: [
+                "segmentation_request": "MLModel.prediction(BiRefNetCoreML)",
+                "segmentation_model_input_type": "multiArray",
+                "segmentation_model_input_feature": inputFeatureName,
+                "segmentation_model_input_shape": modelInput.shapeDescription,
+                "segmentation_model_input_data_type": modelInput.dataTypeDescription,
+                "segmentation_model_output_type": "multiArray",
+                "segmentation_model_output_feature": outputFeatureName
+            ]
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private struct BiRefNetCoreMLInputMultiArray {
+        let array: MLMultiArray
+        let shapeDescription: String
+        let dataTypeDescription: String
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func makeBiRefNetCoreMLInputMultiArray(
+        sourceImage: CIImage,
+        inputFeatureDescription: MLFeatureDescription
+    ) throws -> BiRefNetCoreMLInputMultiArray {
+        guard let multiArrayConstraint = inputFeatureDescription.multiArrayConstraint else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+        }
+
+        let shape = multiArrayConstraint.shape.map { Int(truncating: $0) }
+        guard shape.count >= 3 else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+        }
+        let channelIndex = shape.count - 3
+        let heightIndex = shape.count - 2
+        let widthIndex = shape.count - 1
+        let channels = shape[channelIndex]
+        let targetHeight = shape[heightIndex]
+        let targetWidth = shape[widthIndex]
+        guard channels == 3, targetWidth > 0, targetHeight > 0 else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+        }
+
+        let supportedDataType = multiArrayConstraint.dataType
+        guard supportedDataType == .float16 || supportedDataType == .float32 || supportedDataType == .double else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+        }
+
+        let inputArray = try MLMultiArray(
+            shape: shape.map { NSNumber(value: $0) },
+            dataType: supportedDataType
+        )
+        let strides = inputArray.strides.map { Int(truncating: $0) }
+        guard strides.count == shape.count else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        let sourceExtent = sourceImage.extent
+        guard sourceExtent.width > 0, sourceExtent.height > 0 else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        let scaleX = CGFloat(targetWidth) / sourceExtent.width
+        let scaleY = CGFloat(targetHeight) / sourceExtent.height
+        let resized = sourceImage
+            .transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+            .cropped(to: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+
+        let renderContext = CIContext(options: nil)
+        var rgbaBytes = [UInt8](repeating: 0, count: targetWidth * targetHeight * 4)
+        renderContext.render(
+            resized,
+            toBitmap: &rgbaBytes,
+            rowBytes: targetWidth * 4,
+            bounds: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight),
+            format: .RGBA8,
+            colorSpace: CGColorSpaceCreateDeviceRGB()
+        )
+
+        let means: [Double] = [0.485, 0.456, 0.406]
+        let stds: [Double] = [0.229, 0.224, 0.225]
+        let strideC = strides[channelIndex]
+        let strideH = strides[heightIndex]
+        let strideW = strides[widthIndex]
+        let arrayCount = inputArray.count
+
+        func linearIndex(channel: Int, y: Int, x: Int) -> Int {
+            channel * strideC + y * strideH + x * strideW
+        }
+
+        switch supportedDataType {
+        case .float16:
+            let pointer = inputArray.dataPointer.assumingMemoryBound(to: UInt16.self)
+            for y in 0..<targetHeight {
+                for x in 0..<targetWidth {
+                    let rgbaIndex = ((y * targetWidth) + x) * 4
+                    for channel in 0..<3 {
+                        let pixel = Double(rgbaBytes[rgbaIndex + channel]) / 255.0
+                        let normalized = (pixel - means[channel]) / stds[channel]
+                        let index = linearIndex(channel: channel, y: y, x: x)
+                        guard index >= 0, index < arrayCount else {
+                            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+                        }
+                        pointer[index] = Float16(normalized).bitPattern
+                    }
+                }
+            }
+        case .float32:
+            let pointer = inputArray.dataPointer.assumingMemoryBound(to: Float.self)
+            for y in 0..<targetHeight {
+                for x in 0..<targetWidth {
+                    let rgbaIndex = ((y * targetWidth) + x) * 4
+                    for channel in 0..<3 {
+                        let pixel = Double(rgbaBytes[rgbaIndex + channel]) / 255.0
+                        let normalized = (pixel - means[channel]) / stds[channel]
+                        let index = linearIndex(channel: channel, y: y, x: x)
+                        guard index >= 0, index < arrayCount else {
+                            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+                        }
+                        pointer[index] = Float(normalized)
+                    }
+                }
+            }
+        case .double:
+            let pointer = inputArray.dataPointer.assumingMemoryBound(to: Double.self)
+            for y in 0..<targetHeight {
+                for x in 0..<targetWidth {
+                    let rgbaIndex = ((y * targetWidth) + x) * 4
+                    for channel in 0..<3 {
+                        let pixel = Double(rgbaBytes[rgbaIndex + channel]) / 255.0
+                        let normalized = (pixel - means[channel]) / stds[channel]
+                        let index = linearIndex(channel: channel, y: y, x: x)
+                        guard index >= 0, index < arrayCount else {
+                            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+                        }
+                        pointer[index] = normalized
+                    }
+                }
+            }
+        default:
+            throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+        }
+
+        return BiRefNetCoreMLInputMultiArray(
+            array: inputArray,
+            shapeDescription: shape.map(String.init).joined(separator: "x"),
+            dataTypeDescription: String(describing: supportedDataType)
+        )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static let biRefNetTinyORTProvider = SegmentationProvider { sourceImage, extent in
+        let modelURL = try loadBiRefNetTinyORTModelURL()
+        let inferenceOutput = try runBiRefNetTinyORTInference(
+            sourceImage: sourceImage,
+            extent: extent,
+            modelURL: modelURL
+        )
+        var metadata: [String: String] = [
+            "segmentation_provider": SegmentationProviderID.birefnetTinyORT.rawValue,
+            "segmentation_request": "ORTSession(BiRefNetTinyONNX)",
+            "segmentation_revision_policy": "runtime_tiny_onnx_ort_loading",
+            "segmentation_revision_resolved": "n/a",
+            "segmentation_instance_count": "1",
+            "segmentation_track": BiRefNetConfig.tinyORTTrack,
+            "segmentation_model_path": modelURL.path
+        ]
+        metadata.merge(inferenceOutput.signalMetadata) { _, new in new }
+        return SegmentationOutput(
+            maskImage: inferenceOutput.maskImage,
+            metadata: metadata
+        )
     }
 
     nonisolated static func process(confirmedStillPhoto: CaptureStillPhotoResult) async throws -> CaptureProcessedPhotoResult {
@@ -221,7 +778,11 @@ struct CaptureWhiteBackgroundProcessor {
         guard #available(iOS 17.0, *) else {
             throw CaptureWhiteBackgroundProcessorError.unsupportedSystemVersion
         }
-        return try processOnSupportedSystem(confirmedStillPhoto: confirmedStillPhoto)
+        let segmentationProvider = resolveSegmentationProvider(from: confirmedStillPhoto.metadata)
+        return try processOnSupportedSystem(
+            confirmedStillPhoto: confirmedStillPhoto,
+            segmentationProvider: segmentationProvider
+        )
     }
 
     @available(iOS 17.0, *)
@@ -233,12 +794,14 @@ struct CaptureWhiteBackgroundProcessor {
             throw CaptureWhiteBackgroundProcessorError.invalidInputImage
         }
         let extent = inputImage.extent.integral
-        let renderContext = CIContext()
 
-        let subjectMask = try segmentationProvider.makeMask(
+        let segmentationOutput = try segmentationProvider.makeMask(
             inputImage,
             extent
         )
+        let segmentationProviderID = segmentationOutput.metadata["segmentation_provider"]
+        let renderContext = makeRenderContext(for: segmentationProviderID)
+        let subjectMask = segmentationOutput.maskImage
         let refinementArtifacts = refineSubjectMask(subjectMask, sourceImage: inputImage, extent: extent)
         let refinedMaskImage = refinementArtifacts.refinedMask
 
@@ -277,20 +840,34 @@ struct CaptureWhiteBackgroundProcessor {
         guard let outputData = renderContext.jpegRepresentation(of: fidelityPreservedImage, colorSpace: colorSpace) else {
             throw CaptureWhiteBackgroundProcessorError.outputEncodingFailed
         }
-        let qualityMetadata = buildQualityMetadata(
-            refinedMask: refinedMaskImage,
-            edgeBandMask: refinementArtifacts.edgeBandMask,
-            edgeGuideMask: refinementArtifacts.edgeGuideMask,
-            highlightEdgeMask: refinementArtifacts.highlightEdgeMask,
-            hardEdgeMask: refinementArtifacts.hardEdgeMask,
-            darkEdgeRiskMask: refinementArtifacts.darkEdgeRiskMask,
-            thinStructureMask: refinementArtifacts.thinStructureMask,
-            chromaSpillRiskMask: refinementArtifacts.chromaSpillRiskMask,
-            outputImage: fidelityPreservedImage,
-            sourceImage: inputImage,
-            extent: extent,
-            renderContext: renderContext
-        )
+        let qualityMetadataUsesFallback = shouldUseTinyORTCoverageMetadataFallback(segmentationProviderID: segmentationProviderID)
+        var qualityMetadata: [String: String]
+        if qualityMetadataUsesFallback {
+            // R18 signal recovery:
+            // keep simulator runtime stability guard, but replace one-size-fits-all review
+            // metadata with lightweight logits-driven signal summary from ORT inference.
+            qualityMetadata = makeTinyORTRuntimeSignalMetadata(segmentationMetadata: segmentationOutput.metadata)
+            qualityMetadata["quality_metadata_mode"] = "tiny_ort_runtime_signal_v1"
+        } else {
+            qualityMetadata = buildQualityMetadata(
+                refinedMask: refinedMaskImage,
+                edgeBandMask: refinementArtifacts.edgeBandMask,
+                edgeGuideMask: refinementArtifacts.edgeGuideMask,
+                highlightEdgeMask: refinementArtifacts.highlightEdgeMask,
+                hardEdgeMask: refinementArtifacts.hardEdgeMask,
+                darkEdgeRiskMask: refinementArtifacts.darkEdgeRiskMask,
+                thinStructureMask: refinementArtifacts.thinStructureMask,
+                chromaSpillRiskMask: refinementArtifacts.chromaSpillRiskMask,
+                outputImage: fidelityPreservedImage,
+                sourceImage: inputImage,
+                extent: extent,
+                renderContext: renderContext
+            )
+        }
+        qualityMetadata["segmentation_boundary"] = "SegmentationProvider"
+        for (key, value) in segmentationOutput.metadata {
+            qualityMetadata[key] = value
+        }
 
         return CaptureProcessedPhotoResult(
             sourceStillPhotoID: confirmedStillPhoto.id,
@@ -298,6 +875,453 @@ struct CaptureWhiteBackgroundProcessor {
             pixelSize: CGSize(width: fidelityPreservedImage.extent.width, height: fidelityPreservedImage.extent.height),
             metadata: qualityMetadata
         )
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func resolveSegmentationProvider(
+        from stillMetadata: [String: String]
+    ) -> SegmentationProvider {
+        let metadataHint = stillMetadata["baseline_segmentation_provider"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let environmentHint = ProcessInfo.processInfo.environment[SegmentationExperimentEnvironment.providerKey]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawValue = (metadataHint?.isEmpty == false ? metadataHint : environmentHint) ?? SegmentationProviderID.vision.rawValue
+        let normalized = rawValue.lowercased()
+
+        switch normalized {
+        case SegmentationProviderID.visionAttentionSaliency.rawValue,
+             "vision-saliency-attention",
+             "attention_saliency",
+             "candidate_attention":
+            return visionAttentionSaliencyProvider
+        case SegmentationProviderID.visionObjectnessSaliency.rawValue,
+             "vision-saliency-objectness",
+             "objectness_saliency",
+             "candidate_objectness":
+            return visionObjectnessSaliencyProvider
+        case SegmentationProviderID.visionForegroundLatestRevision.rawValue,
+             "vision-foreground-latest",
+             "foreground_latest_revision",
+             "candidate_foreground_latest":
+            return visionForegroundLatestRevisionProvider
+        case SegmentationProviderID.visionForegroundObjectnessHybrid.rawValue,
+             "vision-foreground-objectness-hybrid",
+             "foreground_objectness_hybrid",
+             "candidate_foreground_objectness_hybrid":
+            return visionForegroundObjectnessHybridProvider
+        case SegmentationProviderID.birefnet.rawValue,
+             "candidate_birefnet",
+             "vision-birefnet":
+            return biRefNetProvider
+        case SegmentationProviderID.birefnetTinyORT.rawValue,
+             "candidate_birefnet_tiny_ort",
+             "candidate_birefnet_tiny":
+            return biRefNetTinyORTProvider
+        default:
+            return visionSegmentationProvider
+        }
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func loadBiRefNetCoreMLModel() throws -> MLModel {
+        if let explicitModelPath = ProcessInfo.processInfo.environment[SegmentationExperimentEnvironment.birefnetModelPathKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !explicitModelPath.isEmpty {
+            let explicitURL = URL(fileURLWithPath: explicitModelPath).resolvingSymlinksInPath()
+            guard FileManager.default.fileExists(atPath: explicitURL.path) else {
+                throw CaptureWhiteBackgroundProcessorError.segmentationModelUnavailable
+            }
+            let loadableURL = try loadableCoreMLURL(from: explicitURL)
+            return try MLModel(contentsOf: loadableURL)
+        }
+
+        let bundle = Bundle.main
+        let resourceCandidates = [currentBiRefNetResourceName()] + BiRefNetConfig.fallbackResourceNames
+        for resourceName in resourceCandidates {
+            if let modelURL = bundle.url(forResource: resourceName, withExtension: "mlmodelc") {
+                return try MLModel(contentsOf: modelURL)
+            }
+            if let modelPackageURL = bundle.url(forResource: resourceName, withExtension: "mlpackage") {
+                let loadableURL = try loadableCoreMLURL(from: modelPackageURL)
+                return try MLModel(contentsOf: loadableURL)
+            }
+            if let nestedModelURL = findBiRefNetModelInBundle(named: resourceName, bundle: bundle, extensions: ["mlmodelc", "mlpackage"]) {
+                let loadableURL = try loadableCoreMLURL(from: nestedModelURL)
+                return try MLModel(contentsOf: loadableURL)
+            }
+        }
+        throw CaptureWhiteBackgroundProcessorError.segmentationModelUnavailable
+    }
+
+    private nonisolated static func findBiRefNetModelInBundle(
+        named resourceName: String,
+        bundle: Bundle,
+        extensions: [String]
+    ) -> URL? {
+        guard let resourceRoot = bundle.resourceURL else {
+            return nil
+        }
+        let modelFolderNames = Set(extensions.map { "\(resourceName).\($0)" })
+        let enumerator = FileManager.default.enumerator(
+            at: resourceRoot,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+        while let next = enumerator?.nextObject() as? URL {
+            if modelFolderNames.contains(next.lastPathComponent) {
+                return next
+            }
+        }
+        return nil
+    }
+
+    private nonisolated static func loadableCoreMLURL(from modelURL: URL) throws -> URL {
+        let resolvedURL = modelURL.resolvingSymlinksInPath()
+        let pathExtension = resolvedURL.pathExtension.lowercased()
+        if pathExtension == "mlmodelc" {
+            return resolvedURL
+        }
+        if pathExtension == "mlpackage" || pathExtension == "mlmodel" {
+            return try MLModel.compileModel(at: resolvedURL)
+        }
+        throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+    }
+
+    private nonisolated static func currentBiRefNetResourceName() -> String {
+        let rawValue = ProcessInfo.processInfo.environment[SegmentationExperimentEnvironment.birefnetResourceKey]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let rawValue, !rawValue.isEmpty {
+            return rawValue
+        }
+        return BiRefNetConfig.defaultResourceName
+    }
+
+    private nonisolated static func loadBiRefNetTinyORTModelURL() throws -> URL {
+        if let explicitPath = ProcessInfo.processInfo.environment[SegmentationExperimentEnvironment.birefnetTinyORTModelPathKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !explicitPath.isEmpty {
+            let explicitURL = URL(fileURLWithPath: explicitPath).resolvingSymlinksInPath()
+            guard FileManager.default.fileExists(atPath: explicitURL.path) else {
+                throw CaptureWhiteBackgroundProcessorError.segmentationModelUnavailable
+            }
+            guard explicitURL.pathExtension.lowercased() == "onnx" else {
+                throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+            }
+            return explicitURL
+        }
+
+        if let bundledModelURL = findTinyORTModelInBundle(named: BiRefNetConfig.tinyORTBundledModelFileName) {
+            return bundledModelURL
+        }
+
+        let defaultURL = URL(fileURLWithPath: BiRefNetConfig.tinyORTDefaultModelPath).resolvingSymlinksInPath()
+        guard FileManager.default.fileExists(atPath: defaultURL.path) else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationModelUnavailable
+        }
+        guard defaultURL.pathExtension.lowercased() == "onnx" else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationModelContractMismatch
+        }
+        return defaultURL
+    }
+
+    private nonisolated static func findTinyORTModelInBundle(named fileName: String) -> URL? {
+        guard let resourceRoot = Bundle.main.resourceURL else {
+            return nil
+        }
+        let enumerator = FileManager.default.enumerator(
+            at: resourceRoot,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        while let next = enumerator?.nextObject() as? URL {
+            if next.lastPathComponent == fileName, next.pathExtension.lowercased() == "onnx" {
+                return next
+            }
+        }
+        return nil
+    }
+
+    private nonisolated static func makeRenderContext(for segmentationProviderID: String?) -> CIContext {
+#if targetEnvironment(simulator)
+        if segmentationProviderID == SegmentationProviderID.birefnetTinyORT.rawValue {
+            // Tiny ORT admission autorun on simulator repeatedly hit CI::MetalContext crashes.
+            // Force software rendering on this path to keep runtime coverage stable.
+            return CIContext(options: [.useSoftwareRenderer: true])
+        }
+#endif
+        return CIContext()
+    }
+
+    private nonisolated static func shouldUseTinyORTCoverageMetadataFallback(segmentationProviderID: String?) -> Bool {
+#if targetEnvironment(simulator)
+        return segmentationProviderID == SegmentationProviderID.birefnetTinyORT.rawValue
+#else
+        return false
+#endif
+    }
+
+    @available(iOS 17.0, *)
+    private struct TinyORTInferenceOutput {
+        let maskImage: CIImage
+        let signalMetadata: [String: String]
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func runBiRefNetTinyORTInference(
+        sourceImage: CIImage,
+        extent: CGRect,
+        modelURL: URL
+    ) throws -> TinyORTInferenceOutput {
+        let runtimeDependencyUnavailableCode = 1001
+        let inputTensorData = try makeBiRefNetTinyORTInputTensorData(
+            sourceImage: sourceImage,
+            targetWidth: BiRefNetConfig.tinyORTInputWidth,
+            targetHeight: BiRefNetConfig.tinyORTInputHeight
+        )
+
+        var outputWidth = 0
+        var outputHeight = 0
+        let logitsData: Data
+        do {
+            logitsData = try BiRefNetTinyORTBridge.runTinyModel(
+                atPath: modelURL.path,
+                inputTensorData: inputTensorData,
+                inputWidth: BiRefNetConfig.tinyORTInputWidth,
+                inputHeight: BiRefNetConfig.tinyORTInputHeight,
+                preferredOutputName: BiRefNetConfig.preferredOutputFeatureName,
+                outputWidth: &outputWidth,
+                outputHeight: &outputHeight
+            )
+        } catch let bridgeError as NSError {
+            if bridgeError.domain == BiRefNetTinyORTBridgeErrorDomain,
+               bridgeError.code == runtimeDependencyUnavailableCode {
+                throw CaptureWhiteBackgroundProcessorError.segmentationRuntimeDependencyUnavailable
+            }
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        let resolvedWidth = outputWidth > 0 ? outputWidth : BiRefNetConfig.tinyORTInputWidth
+        let resolvedHeight = outputHeight > 0 ? outputHeight : BiRefNetConfig.tinyORTInputHeight
+        let rawMask = try maskCIImage(
+            fromLogitsData: logitsData,
+            width: resolvedWidth,
+            height: resolvedHeight
+        )
+        let signalSummary = summarizeTinyORTSignals(
+            logitsData: logitsData,
+            width: resolvedWidth,
+            height: resolvedHeight
+        )
+        let signalMetadata: [String: String] = [
+            "tiny_ort_signal_coverage_ratio": String(format: "%.4f", signalSummary.coverageRatio),
+            "tiny_ort_signal_confidence_score": String(format: "%.4f", signalSummary.confidenceScore),
+            "tiny_ort_signal_edge_density_score": String(format: "%.4f", signalSummary.edgeDensityScore)
+        ]
+        return TinyORTInferenceOutput(
+            maskImage: normalizedMask(rawMask, targetExtent: extent),
+            signalMetadata: signalMetadata
+        )
+    }
+
+    private nonisolated static func makeBiRefNetTinyORTInputTensorData(
+        sourceImage: CIImage,
+        targetWidth: Int,
+        targetHeight: Int
+    ) throws -> Data {
+        let sourceExtent = sourceImage.extent
+        guard sourceExtent.width > 0, sourceExtent.height > 0 else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        let scaleX = CGFloat(targetWidth) / sourceExtent.width
+        let scaleY = CGFloat(targetHeight) / sourceExtent.height
+        let resized = sourceImage
+            .transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+            .cropped(to: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+
+        let renderContext = CIContext(options: nil)
+        var rgbaBytes = [UInt8](repeating: 0, count: targetWidth * targetHeight * 4)
+        renderContext.render(
+            resized,
+            toBitmap: &rgbaBytes,
+            rowBytes: targetWidth * 4,
+            bounds: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight),
+            format: .RGBA8,
+            colorSpace: CGColorSpaceCreateDeviceRGB()
+        )
+
+        let means: [Float] = [0.485, 0.456, 0.406]
+        let stds: [Float] = [0.229, 0.224, 0.225]
+        let planeSize = targetWidth * targetHeight
+        var tensorData = Data(count: planeSize * 3 * MemoryLayout<Float>.size)
+        tensorData.withUnsafeMutableBytes { rawBuffer in
+            let floatBuffer = rawBuffer.bindMemory(to: Float.self)
+            for y in 0..<targetHeight {
+                for x in 0..<targetWidth {
+                    let rgbaIndex = ((y * targetWidth) + x) * 4
+                    for channel in 0..<3 {
+                        let pixelValue = Float(rgbaBytes[rgbaIndex + channel]) / 255.0
+                        let normalized = (pixelValue - means[channel]) / stds[channel]
+                        let tensorIndex = channel * planeSize + y * targetWidth + x
+                        floatBuffer[tensorIndex] = normalized
+                    }
+                }
+            }
+        }
+        return tensorData
+    }
+
+    private nonisolated static func maskCIImage(
+        fromLogitsData logitsData: Data,
+        width: Int,
+        height: Int
+    ) throws -> CIImage {
+        guard width > 0, height > 0 else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        let requiredBytes = width * height * MemoryLayout<Float>.size
+        guard logitsData.count >= requiredBytes else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        var maskBytes = [UInt8](repeating: 0, count: width * height)
+        logitsData.withUnsafeBytes { rawBuffer in
+            let floatBuffer = rawBuffer.bindMemory(to: Float.self)
+            for index in 0..<(width * height) {
+                let raw = Double(floatBuffer[index])
+                let activated = 1.0 / (1.0 + exp(-raw))
+                let clamped = max(0.0, min(1.0, activated))
+                maskBytes[index] = UInt8(clamped * 255.0)
+            }
+        }
+
+        var pixelBuffer: CVPixelBuffer?
+        let attributes: [String: Any] = [
+            kCVPixelBufferCGImageCompatibilityKey as String: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+        ]
+        let createStatus = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_OneComponent8,
+            attributes as CFDictionary,
+            &pixelBuffer
+        )
+        guard createStatus == kCVReturnSuccess, let pixelBuffer else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        let destinationBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        for row in 0..<height {
+            let destination = baseAddress.advanced(by: row * destinationBytesPerRow)
+            maskBytes.withUnsafeBytes { rawBuffer in
+                let source = rawBuffer.baseAddress!.advanced(by: row * width)
+                memcpy(destination, source, width)
+            }
+            if destinationBytesPerRow > width {
+                memset(destination.advanced(by: width), 0, destinationBytesPerRow - width)
+            }
+        }
+
+        return CIImage(cvPixelBuffer: pixelBuffer)
+    }
+
+    private nonisolated static func maskCIImage(from multiArray: MLMultiArray) throws -> CIImage {
+        let dimensions = multiArray.shape.map { Int(truncating: $0) }
+        let strides = multiArray.strides.map { Int(truncating: $0) }
+        guard dimensions.count >= 2 else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        let heightIndex = dimensions.count - 2
+        let widthIndex = dimensions.count - 1
+        let height = dimensions[heightIndex]
+        let width = dimensions[widthIndex]
+        guard height > 0, width > 0 else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        let scalarValue: (Int) -> Double = { linearIndex in
+            multiArray[linearIndex].doubleValue
+        }
+
+        var maskBytes = [UInt8](repeating: 0, count: width * height)
+        let strideHeight = strides[heightIndex]
+        let strideWidth = strides[widthIndex]
+        for y in 0..<height {
+            for x in 0..<width {
+                let linearIndex = y * strideHeight + x * strideWidth
+                let raw = scalarValue(linearIndex)
+                let activated = 1.0 / (1.0 + exp(-raw))
+                let clamped = max(0.0, min(1.0, activated))
+                maskBytes[(y * width) + x] = UInt8(clamped * 255.0)
+            }
+        }
+
+        var pixelBuffer: CVPixelBuffer?
+        let attributes: [String: Any] = [
+            kCVPixelBufferCGImageCompatibilityKey as String: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+        ]
+        let createStatus = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_OneComponent8,
+            attributes as CFDictionary,
+            &pixelBuffer
+        )
+        guard createStatus == kCVReturnSuccess, let pixelBuffer else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+            throw CaptureWhiteBackgroundProcessorError.segmentationInferenceFailed
+        }
+        let destinationBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        for row in 0..<height {
+            let destination = baseAddress.advanced(by: row * destinationBytesPerRow)
+            maskBytes.withUnsafeBytes { rawBuffer in
+                let source = rawBuffer.baseAddress!.advanced(by: row * width)
+                memcpy(destination, source, width)
+            }
+            if destinationBytesPerRow > width {
+                memset(destination.advanced(by: width), 0, destinationBytesPerRow - width)
+            }
+        }
+
+        return CIImage(cvPixelBuffer: pixelBuffer)
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func normalizedMask(
+        _ rawMask: CIImage,
+        targetExtent: CGRect
+    ) -> CIImage {
+        let maskExtent = rawMask.extent
+        guard maskExtent.width > 0, maskExtent.height > 0 else {
+            return rawMask.cropped(to: targetExtent)
+        }
+
+        let scaleX = targetExtent.width / maskExtent.width
+        let scaleY = targetExtent.height / maskExtent.height
+        let scaledMask = rawMask
+            .transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+            .transformed(by: CGAffineTransform(
+                translationX: targetExtent.minX - maskExtent.minX * scaleX,
+                y: targetExtent.minY - maskExtent.minY * scaleY
+            ))
+            .cropped(to: targetExtent)
+
+        return scaledMask
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: targetExtent)
     }
 
     @available(iOS 17.0, *)
@@ -434,6 +1458,16 @@ struct CaptureWhiteBackgroundProcessor {
             edgeBandMask: edgeBandMask,
             extent: extent
         )
+        let contactEdgeSupportMask = buildContactEdgeSupportMask(
+            from: coreMask,
+            edgeBandMask: edgeBandMask,
+            extent: extent
+        )
+        let nearWhiteCoreMask = buildNearWhiteCoreMask(
+            from: sourceImage,
+            coreMask: coreMask,
+            extent: extent
+        )
         let chromaSpillRiskMask = buildChromaSpillRiskMask(
             from: sourceImage,
             edgeBandMask: edgeBandMask,
@@ -502,10 +1536,64 @@ struct CaptureWhiteBackgroundProcessor {
         let hardEdgeStabilizedMask = (hardEdgeBlend.outputImage ?? thinStructureRestoredMask)
             .cropped(to: extent)
 
-        let finalRefinedMask = hardEdgeStabilizedMask
+        let thinStructurePreserveBoost = scaleMask(
+            thinStructureMask,
+            factor: ProcessingConfig.Refinement.thinStructurePreserveBoostFactor
+        )
+        let contactEdgeSupportBoost = scaleMask(
+            contactEdgeSupportMask,
+            factor: ProcessingConfig.Refinement.contactEdgeSupportBoostFactor
+        )
+        let nearWhiteCoreBoost = scaleMask(
+            nearWhiteCoreMask,
+            factor: ProcessingConfig.Refinement.nearWhiteCoreBoostFactor
+        )
+        let preservationBoost = thinStructurePreserveBoost
+            .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: contactEdgeSupportBoost])
+            .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: nearWhiteCoreBoost])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+        let preservationAugmentedMask = hardEdgeStabilizedMask
+            .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: preservationBoost])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+        let edgePreserveRegionMask = thinStructureMask
+            .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: contactEdgeSupportMask])
             .clampedToExtent()
-            // R1.3: keep edge smoothing minimal so core area stays dense.
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.edgePreserveRegionBlurRadius])
+            .cropped(to: extent)
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+        let smoothedAugmentedMask = preservationAugmentedMask
+            .clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.finalEdgeBlurRadius])
+            .cropped(to: extent)
+        let edgeAwareBlend = CIFilter.blendWithMask()
+        edgeAwareBlend.inputImage = preservationAugmentedMask
+        edgeAwareBlend.backgroundImage = smoothedAugmentedMask
+        edgeAwareBlend.maskImage = edgePreserveRegionMask
+        let edgeAwareRefinedMask = (edgeAwareBlend.outputImage ?? smoothedAugmentedMask)
+            .cropped(to: extent)
+
+        let finalRefinedMask = edgeAwareRefinedMask
             .applyingFilter(
                 "CIColorClamp",
                 parameters: [
@@ -529,6 +1617,19 @@ struct CaptureWhiteBackgroundProcessor {
         anchorBlend.maskImage = subjectCoreAnchorMask
         let anchoredRefinedMask = (anchorBlend.outputImage ?? finalRefinedMask)
             .cropped(to: extent)
+        let nearWhiteCoreAnchorMask = weightMask(
+            nearWhiteCoreMask,
+            factor: ProcessingConfig.Refinement.nearWhiteCoreAnchorWeight
+        )
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.nearWhiteCoreBlurRadius])
+            .cropped(to: extent)
+        let nearWhiteAnchorBlend = CIFilter.blendWithMask()
+        nearWhiteAnchorBlend.inputImage = fullOpacityMask
+        nearWhiteAnchorBlend.backgroundImage = anchoredRefinedMask
+        nearWhiteAnchorBlend.maskImage = nearWhiteCoreAnchorMask
+        let nearWhiteAnchoredMask = (nearWhiteAnchorBlend.outputImage ?? anchoredRefinedMask)
+            .cropped(to: extent)
 
         // R1.4: raise alpha floor only in deep subject core.
         // Keep edge transition untouched by using a stronger-eroded interior mask.
@@ -539,9 +1640,9 @@ struct CaptureWhiteBackgroundProcessor {
             .cropped(to: extent)
         let deepCoreAnchorBlend = CIFilter.blendWithMask()
         deepCoreAnchorBlend.inputImage = fullOpacityMask
-        deepCoreAnchorBlend.backgroundImage = anchoredRefinedMask
+        deepCoreAnchorBlend.backgroundImage = nearWhiteAnchoredMask
         deepCoreAnchorBlend.maskImage = deepCoreMask
-        let coreFloorRaisedMask = (deepCoreAnchorBlend.outputImage ?? anchoredRefinedMask)
+        let coreFloorRaisedMask = (deepCoreAnchorBlend.outputImage ?? nearWhiteAnchoredMask)
             .applyingFilter(
                 "CIColorClamp",
                 parameters: [
@@ -613,9 +1714,41 @@ struct CaptureWhiteBackgroundProcessor {
         let nonHighlightMask = highlightPreserveMask
             .applyingFilter("CIColorInvert")
             .cropped(to: extent)
+        let subjectCoreMask = refinedMask
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.subjectCoreRadius])
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.subjectCoreBlurRadius])
+            .cropped(to: extent)
+
+        let nearWhiteProtectMask = sourceImage
+            .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(
+                        x: ProcessingConfig.Decontamination.nearWhiteProtectThreshold,
+                        y: ProcessingConfig.Decontamination.nearWhiteProtectThreshold,
+                        z: ProcessingConfig.Decontamination.nearWhiteProtectThreshold,
+                        w: 0
+                    ),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            // R2.2: guard near-white core first, avoid over-protecting boundary cleanup zone.
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: subjectCoreMask])
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.nearWhiteProtectBlurRadius])
+            .cropped(to: extent)
+        let nearWhiteProtectInvertedMask = weightMask(
+            nearWhiteProtectMask,
+            factor: ProcessingConfig.Decontamination.nearWhiteProtectGuardWeight
+        )
+            .applyingFilter("CIColorInvert")
+            .cropped(to: extent)
         let guardedAdaptiveRiskMask = adaptiveRiskMask
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nonDarkEdgeMask])
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nonHighlightMask])
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nearWhiteProtectInvertedMask])
             .cropped(to: extent)
         let tonedAdaptiveRiskMask = weightMask(
             guardedAdaptiveRiskMask,
@@ -628,11 +1761,6 @@ struct CaptureWhiteBackgroundProcessor {
         adaptiveBlend.maskImage = tonedAdaptiveRiskMask
         let adaptiveDecontaminated = adaptiveBlend.outputImage?.cropped(to: extent) ?? mildlyDecontaminated
 
-        let subjectCoreMask = refinedMask
-            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.subjectCoreRadius])
-            .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.subjectCoreBlurRadius])
-            .cropped(to: extent)
         let subjectInnerRing = refinedMask
             .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: subjectCoreMask])
             .cropped(to: extent)
@@ -710,10 +1838,78 @@ struct CaptureWhiteBackgroundProcessor {
             )
             .cropped(to: extent)
 
+        let bottomShiftedMask = refinedMask
+            .transformed(by: CGAffineTransform(translationX: 0, y: ProcessingConfig.Decontamination.bottomShiftY))
+            .cropped(to: extent)
+        let bottomInteriorStrip = refinedMask
+            .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: bottomShiftedMask])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+        let bottomOuterRingInfluence = bottomInteriorStrip
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.bottomInfluenceBlurRadius])
+            .cropped(to: extent)
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: outerRingMask])
+            .cropped(to: extent)
+        let bottomZoneMask = CIImage.empty()
+            .applyingFilter(
+                "CILinearGradient",
+                parameters: [
+                    "inputPoint0": CIVector(x: extent.midX, y: extent.minY),
+                    "inputPoint1": CIVector(
+                        x: extent.midX,
+                        y: extent.minY + extent.height * ProcessingConfig.Decontamination.bottomZoneUpperRatio
+                    ),
+                    "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1),
+                    "inputColor1": CIColor(red: 0, green: 0, blue: 0, alpha: 1)
+                ]
+            )
+            .cropped(to: extent)
+        let bottomFocusedOuterRingInfluence = bottomOuterRingInfluence
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: bottomZoneMask])
+            .cropped(to: extent)
+        let bottomGrayFloatSupportMask = weightMask(
+            bottomFocusedOuterRingInfluence,
+            factor: ProcessingConfig.Decontamination.bottomGrayFloatSupportWeight
+        )
+        let bottomSupportedEdgeBand = grayBandReducedEdgeBand
+            .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: bottomGrayFloatSupportMask])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+
+        let edgeTailCleanupMask = chromaSpillRiskMask
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: outerRingMask])
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nonDarkEdgeMask])
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: nearWhiteProtectInvertedMask])
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Decontamination.edgeTailCleanupBlurRadius])
+            .cropped(to: extent)
+        let tonedEdgeTailCleanupMask = weightMask(
+            edgeTailCleanupMask,
+            factor: ProcessingConfig.Decontamination.edgeTailCleanupWeight
+        )
+        let edgeTailCleanupBlend = CIFilter.blendWithMask()
+        edgeTailCleanupBlend.inputImage = stronglyDecontaminated
+        edgeTailCleanupBlend.backgroundImage = adaptiveDecontaminated
+        edgeTailCleanupBlend.maskImage = tonedEdgeTailCleanupMask
+        let tailCleanedAdaptiveImage = edgeTailCleanupBlend.outputImage?.cropped(to: extent) ?? adaptiveDecontaminated
+
         let blendFilter = CIFilter.blendWithMask()
-        blendFilter.inputImage = adaptiveDecontaminated
+        blendFilter.inputImage = tailCleanedAdaptiveImage
         blendFilter.backgroundImage = sourceImage
-        blendFilter.maskImage = grayBandReducedEdgeBand
+        blendFilter.maskImage = bottomSupportedEdgeBand
         return blendFilter.outputImage?.cropped(to: extent) ?? sourceImage
     }
 
@@ -982,6 +2178,18 @@ struct CaptureWhiteBackgroundProcessor {
             "r1_2_foreground_inner_core_bypass": "enabled",
             "r1_3_core_alpha_floor": "raised",
             "r1_3_edge_transition_band": "narrowed",
+            "r1_4_refine_thin_edge_preserve": "enabled",
+            "r1_4_refine_contact_edge_support": "enabled",
+            "r1_4_refine_near_white_core_anchor": "enabled",
+            "r1_5_refine_thin_edge_tuning": "enabled",
+            "r1_5_refine_contact_edge_tuning": "enabled",
+            "r1_5_refine_near_white_core_tuning": "enabled",
+            "r2_1_decontam_bottom_gray_float_support": "enabled",
+            "r2_1_decontam_near_white_guard": "enabled",
+            "r2_1_decontam_edge_tail_cleanup": "enabled",
+            "r2_2_bottom_zone_focus": "enabled",
+            "r2_2_near_white_core_priority": "enabled",
+            "r2_2_tail_cleanup_balance_tuning": "enabled",
             "background": "white+contact-shadow",
             "coverage_ratio": String(format: "%.4f", coverageRatio),
             "edge_ratio": String(format: "%.4f", edgeRatio),
@@ -997,6 +2205,180 @@ struct CaptureWhiteBackgroundProcessor {
             "hard_case_signal": hardCaseSignal.rawValue,
             "quality_level": qualityLevel.rawValue
         ]
+    }
+
+    private nonisolated static func makeTinyORTRuntimeSignalMetadata(segmentationMetadata: [String: String]) -> [String: String] {
+        let coverageRatio = Double(segmentationMetadata["tiny_ort_signal_coverage_ratio"] ?? "") ?? 0
+        let confidenceScore = Double(segmentationMetadata["tiny_ort_signal_confidence_score"] ?? "") ?? 0
+        let edgeDensityScore = Double(segmentationMetadata["tiny_ort_signal_edge_density_score"] ?? "") ?? 0
+
+        let thinEdgeRisk = max(0, edgeDensityScore - 0.11)
+        let hardEdgeInstabilityRisk = max(0, (1.0 - confidenceScore) - 0.2)
+        let foregroundWashoutRisk = max(0, (0.42 - confidenceScore) * 0.6)
+        let darkEdgeWashoutRisk = max(0, (0.34 - confidenceScore) * 0.45)
+        let fringeRisk = max(0, edgeDensityScore - 0.18)
+        let softEdgeRisk = max(0, (0.24 - confidenceScore) * 0.5)
+
+        let baselineHardCaseSignal = hardCaseSignalForResult(
+            hardEdgeInstabilityRisk: hardEdgeInstabilityRisk,
+            foregroundWashoutRisk: foregroundWashoutRisk,
+            darkEdgeWashoutRisk: darkEdgeWashoutRisk,
+            fringeRisk: fringeRisk,
+            highlightCutRisk: 0,
+            thinEdgeRisk: thinEdgeRisk,
+            softEdgeRisk: softEdgeRisk
+        )
+        let baselineQualityLevel = qualityLevelForResult(
+            coverageRatio: coverageRatio,
+            edgeRatio: edgeDensityScore,
+            edgeComplexity: edgeDensityScore,
+            hardEdgeInstabilityRisk: hardEdgeInstabilityRisk,
+            foregroundWashoutRisk: foregroundWashoutRisk,
+            darkEdgeWashoutRisk: darkEdgeWashoutRisk,
+            fringeRisk: fringeRisk,
+            highlightCutRisk: 0,
+            thinEdgeRisk: thinEdgeRisk,
+            softEdgeRisk: softEdgeRisk
+        )
+        let tinyRuntimeQualityLevel: WhiteBackgroundQualityLevel
+        if coverageRatio < 0.07 || coverageRatio > 0.58 {
+            tinyRuntimeQualityLevel = .risk
+        } else if coverageRatio < 0.12
+            || coverageRatio > 0.40
+            || confidenceScore < 0.985
+            || edgeDensityScore > 0.0035 {
+            tinyRuntimeQualityLevel = .review
+        } else {
+            tinyRuntimeQualityLevel = baselineQualityLevel == .risk ? .review : .ready
+        }
+
+        let tinyRuntimeHardCaseSignal: WhiteBackgroundHardCaseSignal
+        switch tinyRuntimeQualityLevel {
+        case .risk:
+            tinyRuntimeHardCaseSignal = .hardEdgeInstability
+        case .review:
+            if coverageRatio < 0.12 {
+                tinyRuntimeHardCaseSignal = .thinDetailEdge
+            } else if coverageRatio > 0.40 {
+                tinyRuntimeHardCaseSignal = .foregroundWashout
+            } else if confidenceScore < 0.985 {
+                tinyRuntimeHardCaseSignal = .softEdge
+            } else {
+                tinyRuntimeHardCaseSignal = baselineHardCaseSignal
+            }
+        case .ready:
+            tinyRuntimeHardCaseSignal = .stable
+        }
+
+        return [
+            "processor": "VNForegroundMask+EdgeRefineV2.4",
+            "foreground_tone_preservation": "enabled",
+            "r1_regression_fix": "enabled",
+            "r1_decontam_profile": "tone-safe-background-outer-ring-only",
+            "r1_subject_core_opacity_anchor": "enabled",
+            "r1_21_benefit_recovery": "guarded_adaptive_edge_decontam",
+            "r1_highlight_preserve_guard": "enabled",
+            "r1_2_foreground_inner_core_bypass": "enabled",
+            "r1_3_core_alpha_floor": "raised",
+            "r1_3_edge_transition_band": "narrowed",
+            "r1_4_refine_thin_edge_preserve": "enabled",
+            "r1_4_refine_contact_edge_support": "enabled",
+            "r1_4_refine_near_white_core_anchor": "enabled",
+            "r1_5_refine_thin_edge_tuning": "enabled",
+            "r1_5_refine_contact_edge_tuning": "enabled",
+            "r1_5_refine_near_white_core_tuning": "enabled",
+            "r2_1_decontam_bottom_gray_float_support": "enabled",
+            "r2_1_decontam_near_white_guard": "enabled",
+            "r2_1_decontam_edge_tail_cleanup": "enabled",
+            "r2_2_bottom_zone_focus": "enabled",
+            "r2_2_near_white_core_priority": "enabled",
+            "r2_2_tail_cleanup_balance_tuning": "enabled",
+            "background": "white+contact-shadow",
+            "coverage_ratio": String(format: "%.4f", coverageRatio),
+            "edge_ratio": String(format: "%.4f", edgeDensityScore),
+            "edge_complexity_score": String(format: "%.4f", edgeDensityScore),
+            "hard_edge_instability_risk_score": String(format: "%.4f", hardEdgeInstabilityRisk),
+            "dark_edge_risk_score": String(format: "%.4f", darkEdgeWashoutRisk),
+            "foreground_washout_risk_score": String(format: "%.4f", foregroundWashoutRisk),
+            "dark_edge_washout_risk_score": String(format: "%.4f", darkEdgeWashoutRisk),
+            "fringe_risk_score": String(format: "%.4f", fringeRisk),
+            "highlight_cut_risk_score": "0.0000",
+            "thin_edge_risk_score": String(format: "%.4f", thinEdgeRisk),
+            "soft_edge_risk_score": String(format: "%.4f", softEdgeRisk),
+            "tiny_ort_signal_coverage_ratio": String(format: "%.4f", coverageRatio),
+            "tiny_ort_signal_confidence_score": String(format: "%.4f", confidenceScore),
+            "tiny_ort_signal_edge_density_score": String(format: "%.4f", edgeDensityScore),
+            "hard_case_signal": tinyRuntimeHardCaseSignal.rawValue,
+            "quality_level": tinyRuntimeQualityLevel.rawValue
+        ]
+    }
+
+    private nonisolated static func summarizeTinyORTSignals(
+        logitsData: Data,
+        width: Int,
+        height: Int
+    ) -> TinyORTSignalSummary {
+        guard width > 0, height > 0 else {
+            return TinyORTSignalSummary(coverageRatio: 0, confidenceScore: 0, edgeDensityScore: 0)
+        }
+
+        let requiredBytes = width * height * MemoryLayout<Float>.size
+        guard logitsData.count >= requiredBytes else {
+            return TinyORTSignalSummary(coverageRatio: 0, confidenceScore: 0, edgeDensityScore: 0)
+        }
+
+        let pixelCount = width * height
+        var binaryMask = [UInt8](repeating: 0, count: pixelCount)
+        var foregroundCount = 0
+        var confidenceAccum = 0.0
+
+        logitsData.withUnsafeBytes { rawBuffer in
+            let floatBuffer = rawBuffer.bindMemory(to: Float.self)
+            for index in 0..<pixelCount {
+                let raw = Double(floatBuffer[index])
+                let activated = 1.0 / (1.0 + exp(-raw))
+                if activated >= 0.5 {
+                    binaryMask[index] = 1
+                    foregroundCount += 1
+                }
+                confidenceAccum += abs(activated - 0.5) * 2.0
+            }
+        }
+
+        let coverageRatio = Double(foregroundCount) / Double(pixelCount)
+        let confidenceScore = confidenceAccum / Double(pixelCount)
+
+        var edgeTransitions = 0
+        var totalComparisons = 0
+        for y in 0..<height {
+            let rowStart = y * width
+            if width > 1 {
+                for x in 0..<(width - 1) {
+                    totalComparisons += 1
+                    if binaryMask[rowStart + x] != binaryMask[rowStart + x + 1] {
+                        edgeTransitions += 1
+                    }
+                }
+            }
+            if y < height - 1 {
+                let nextRowStart = (y + 1) * width
+                for x in 0..<width {
+                    totalComparisons += 1
+                    if binaryMask[rowStart + x] != binaryMask[nextRowStart + x] {
+                        edgeTransitions += 1
+                    }
+                }
+            }
+        }
+        let edgeDensityScore = totalComparisons > 0
+            ? Double(edgeTransitions) / Double(totalComparisons)
+            : 0
+
+        return TinyORTSignalSummary(
+            coverageRatio: coverageRatio,
+            confidenceScore: confidenceScore,
+            edgeDensityScore: edgeDensityScore
+        )
     }
 
     @available(iOS 17.0, *)
@@ -1270,6 +2652,76 @@ struct CaptureWhiteBackgroundProcessor {
             .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: narrowBand])
             .clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.35])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func buildContactEdgeSupportMask(
+        from coreMask: CIImage,
+        edgeBandMask: CIImage,
+        extent: CGRect
+    ) -> CIImage {
+        let shiftedUpCore = coreMask
+            .transformed(by: CGAffineTransform(translationX: 0, y: ProcessingConfig.Refinement.contactEdgeShiftY))
+            .cropped(to: extent)
+        let lowerContactStrip = coreMask
+            .applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: shiftedUpCore])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+        return lowerContactStrip
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: edgeBandMask])
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.contactEdgeSupportBlurRadius])
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+    }
+
+    @available(iOS 17.0, *)
+    private nonisolated static func buildNearWhiteCoreMask(
+        from sourceImage: CIImage,
+        coreMask: CIImage,
+        extent: CGRect
+    ) -> CIImage {
+        let grayscale = sourceImage
+            .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
+            .cropped(to: extent)
+        let nearWhiteLumaMask = grayscale
+            .applyingFilter(
+                "CIColorClamp",
+                parameters: [
+                    "inputMinComponents": CIVector(
+                        x: ProcessingConfig.Refinement.nearWhiteCoreThreshold,
+                        y: ProcessingConfig.Refinement.nearWhiteCoreThreshold,
+                        z: ProcessingConfig.Refinement.nearWhiteCoreThreshold,
+                        w: 0
+                    ),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]
+            )
+            .cropped(to: extent)
+        return nearWhiteLumaMask
+            .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: coreMask])
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: ProcessingConfig.Refinement.nearWhiteCoreBlurRadius])
             .applyingFilter(
                 "CIColorClamp",
                 parameters: [

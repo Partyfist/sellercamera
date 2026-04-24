@@ -1,0 +1,41 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r01-birefnet-admission-audit",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet",
+    "track": "admission_candidate_birefnet_v1"
+  },
+  "scope": {
+    "goal": "仅执行 BiRefNet 入场审查；若审查通过才允许进入 SegmentationProvider 最小接入与 admission_v1 首轮运行。",
+    "did_not_run_experiment": true,
+    "reason": "入场审查未通过，按纪律停止接入动作。"
+  },
+  "admission_audit": {
+    "fit_hard_gate_theory": {
+      "status": "pass",
+      "evidence": "BiRefNet 属于高质量 DIS 主干，理论上可提升复杂背景/同色前后景/跨域边界分离能力。"
+    },
+    "minimal_integration_feasibility": {
+      "status": "fail",
+      "evidence": "仓库内未发现任何 BiRefNet 可运行模型资产（.mlmodel/.mlpackage/.mlmodelc/.onnx 均为空），当前仅有 Vision 请求族 provider。"
+    },
+    "mobile_runtime_feasibility": {
+      "status": "fail",
+      "evidence": "缺少 iOS 端推理包装与性能基线，无法在当前轮次形成可复核真机最小实验。"
+    },
+    "rollback_isolation": {
+      "status": "not_applicable",
+      "evidence": "未接入候选路径，不存在回退污染风险。"
+    }
+  },
+  "decision": {
+    "result": "stop_current_candidate",
+    "stage_conclusion": "BiRefNet 本轮入场审查不通过；不进入最小接入与 admission_v1 首轮运行。",
+    "why": [
+      "未满足“最小接入可行”硬条件（缺模型资产、缺推理桥接）。",
+      "未满足“移动端实验可行”硬条件（当前无法形成可复核运行链路）。",
+      "按 admission 纪律，审查未通过即停止，避免主链污染和无效投入。"
+    ]
+  }
+}

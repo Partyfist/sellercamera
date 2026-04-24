@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-core-v1",
+  "reviewed_at": "2026-04-19T13:52:56Z",
+  "reviewer": "codex",
+  "records_source": "WhiteBackgroundBaseline/runs/whitebg-vision-core-v1/baseline-20260419-r14.jsonl",
+  "samples": [
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "global_haze"
+      ],
+      "summary": "透明容器边缘可用，细纹理有轻微灰边风险，建议后续关注薄边保真。"
+    },
+    {
+      "sample_id": "S002_bottle_reflection_window",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "瓶身与玻璃杯主体分离稳定，窗框区域背景残留风险可控。"
+    },
+    {
+      "sample_id": "S003_ring_macro_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_contamination",
+        "thin_structure_loss"
+      ],
+      "summary": "高反首饰主体可用，细闪区域边缘仍需后续 refinement 重点观察。"
+    },
+    {
+      "sample_id": "S004_paper_cups_light_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "white_background_impure",
+        "foreground_washout"
+      ],
+      "summary": "浅色主体在近白背景下可产出，核心区未见明显冲淡。"
+    },
+    {
+      "sample_id": "S005_transparent_bowls_dark_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "thin_structure_loss",
+        "edge_contamination"
+      ],
+      "summary": "透明碗与托盘组合可分离，透明边缘仍存在后续精修空间。"
+    },
+    {
+      "sample_id": "S006_portrait_with_product",
+      "result": "review",
+      "severity": "medium",
+      "problem_tags": [
+        "hard_case_fallback_acceptable",
+        "background_residual"
+      ],
+      "summary": "人像+商品混合场景进入 review，属于跨域难例，当前建议人工复核后再放行。"
+    },
+    {
+      "sample_id": "S007_snacks_on_dark_plate",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "edge_gray_fringe",
+        "background_residual"
+      ],
+      "summary": "深色盘体样本可产出，暗背景边缘控制基本稳定。"
+    },
+    {
+      "sample_id": "S008_white_tubes_near_white_bg",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "foreground_washout",
+        "white_background_impure"
+      ],
+      "summary": "白色管体近白背景可产出，主体核心能量保持尚可。"
+    },
+    {
+      "sample_id": "S009_multi_product_shelf_complex",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "background_residual",
+        "hard_case_fallback_unacceptable"
+      ],
+      "summary": "复杂货架样本可产出，但语义复杂度高，后续需继续监测主干上限风险。"
+    },
+    {
+      "sample_id": "S010_food_tray_contact_edge",
+      "result": "ready",
+      "severity": "low",
+      "problem_tags": [
+        "contact_edge_abnormal",
+        "edge_gray_fringe"
+      ],
+      "summary": "托盘接触边缘可产出，贴地边缘自然度仍建议后续做专项回归。"
+    }
+  ],
+  "note": "R1.4 refinement phase-1 rerun; manual judgments are carried over as baseline-consistent first pass (no new unacceptable failure observed)."
+}

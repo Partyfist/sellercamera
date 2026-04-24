@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r01-reopen-birefnet-tiny-admission",
+  "reviewed_at": "2026-04-22T23:20:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "本轮候选是 BiRefNet tiny 自有权重轨道（BiRefNet-general-bb_swin_v1_tiny-epoch_232），不等同于原版 BiRefNet 全链路打通。",
+      "本轮是 tiny admission R01 的重开首轮（入口恢复后重新首轮），不是 admission 第二轮。",
+      "本轮结论不等同于 tiny 已可替代 RMBG-2，仅在当前 SegmentationProvider 与 admission_v1 边界内成立。"
+    ]
+  },
+  "records_source": {
+    "vision_control_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260422-admission-v1-r01-reopen-birefnet-tiny-vision-sim-ios26_4-r2.jsonl",
+    "candidate_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260422-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4-r2.jsonl"
+  },
+  "checks_source": {
+    "vision_control_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-admission-v1-r01-reopen-birefnet-tiny-vision-sim-ios26_4-r2.txt",
+    "candidate_r1": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4.txt",
+    "candidate_r2": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4-r2.txt"
+  },
+  "environment_notes": [
+    "iOS 26.4.1 simulator 下，R15 重开首轮 candidate 连续两次均只覆盖 3/26，停在 EV006/EV013/EV021。",
+    "R15 重开首轮 candidate 记录 metadata 已显示 ORT provider 被命中（segmentation_provider=birefnet_tiny_ort，segmentation_request=ORTSession(BiRefNetTinyONNX)）。",
+    "由于 candidate 首轮覆盖不完整，本轮无法形成 hard_gate/focus/stability 的有效全量首轮证据。"
+  ],
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "failed": 26
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "failed": 8
+        },
+        "focus_comparison": {
+          "failed": 10
+        },
+        "stability_witness": {
+          "failed": 8
+        }
+      },
+      "dominant_failure": {
+        "domain": "com.apple.Vision",
+        "code": "9",
+        "description": "Could not create inference context",
+        "count": 26
+      }
+    },
+    "candidate": {
+      "coverage": "3/26",
+      "quality_distribution": {
+        "ready": 3
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 3,
+          "missing": 5
+        },
+        "focus_comparison": {
+          "missing": 10
+        },
+        "stability_witness": {
+          "missing": 8
+        }
+      },
+      "coverage_gap": "missing_23_samples"
+    }
+  },
+  "hard_gate_findings": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "candidate_result": "ready",
+      "decision_impact": "partial_positive_only",
+      "summary": "EV006 在重开首轮中可产生 ready 记录，但单点命中不足以支撑首轮整体 continue。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "candidate_result": "ready",
+      "decision_impact": "partial_positive_only",
+      "summary": "EV013 可处理，但不改变首轮证据不完整事实。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "candidate_result": "ready",
+      "decision_impact": "partial_positive_only",
+      "summary": "EV021 可处理，但 hard_gate 其余关键阻塞位仍缺失。"
+    },
+    {
+      "sample_ids": [
+        "EV028_flower_vase_garden_bg",
+        "EV033_blue_vase_blue_curtain",
+        "EV038_dark_shoes_shelf_plants",
+        "EV042_cakes_in_booth_scene",
+        "EV044_person_outdoor_complex"
+      ],
+      "candidate_result": "missing",
+      "decision_impact": "hard_gate_incomplete",
+      "summary": "hard_gate 关键阻塞位未形成本轮 candidate 有效记录，无法给出完整首轮门槛判断。"
+    }
+  ],
+  "focus_comparison_findings": [
+    {
+      "candidate_coverage": "0/10",
+      "decision_impact": "no_evaluable_signal",
+      "summary": "focus_comparison 无记录，不能判断是否存在结构性收益。"
+    }
+  ],
+  "stability_witness_findings": [
+    {
+      "candidate_coverage": "0/8",
+      "decision_impact": "safety_not_established",
+      "summary": "stability_witness 无记录，无法建立 continue 所需的稳定性旁证。"
+    }
+  ],
+  "admission_round1_reopen_judgement": {
+    "decision": "stop_current_candidate",
+    "recommended_next_stage": "tiny_runtime_full_suite_coverage_fix_non_admission",
+    "why": [
+      "重开首轮 candidate 连续两次均只覆盖 3/26，首轮有效入口仍未满足全量样本准入要求。",
+      "hard_gate/focus/stability 三层证据不完整，无法支撑进入第二轮复核。",
+      "在当前证据完整度下继续 admission 只会重复低收益投入，不符合 admission 纪律。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅针对 R15 重开首轮边界成立，不外推为 tiny 路线永久不可行。",
+      "本结论不等同于原版 BiRefNet 打通结论。",
+      "本结论不构成主链替换或 RMBG-2 替代结论。"
+    ]
+  }
+}

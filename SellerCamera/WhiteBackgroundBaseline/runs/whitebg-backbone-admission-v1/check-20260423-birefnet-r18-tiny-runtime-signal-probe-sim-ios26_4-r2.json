@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r18-birefnet-tiny-runtime-signal-recovery-probe-r2",
+  "generated_at": "2026-04-23T10:59:18+08:00",
+  "records": 26,
+  "samples_in_manifest": 26,
+  "samples_covered": 26,
+  "missing_samples": [],
+  "quality_distribution": {
+    "review": 7,
+    "ready": 19
+  },
+  "hard_case_distribution": {
+    "thinDetailEdge": 4,
+    "stable": 19,
+    "foregroundWashout": 1,
+    "softEdge": 2
+  },
+  "provider_distribution": {
+    "birefnet_tiny_ort": 26
+  },
+  "quality_metadata_mode_distribution": {
+    "tiny_ort_runtime_signal_v1": 26
+  },
+  "coverage_complete": true,
+  "run_records": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-birefnet-r18-tiny-runtime-signal-probe-sim-ios26_4-r2.jsonl",
+  "check_text": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-birefnet-r18-tiny-runtime-signal-probe-sim-ios26_4-r2.txt"
+}

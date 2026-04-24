@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r01-reopen-effective-birefnet-tiny-admission-after-r18-signal-recovery",
+  "reviewed_at": "2026-04-23T15:12:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "本轮候选是 BiRefNet tiny 自有权重轨道（BiRefNet-general-bb_swin_v1_tiny-epoch_232），不等同于原版 BiRefNet 全链路打通。",
+      "本轮是覆盖恢复+信号恢复后的有效首轮重跑，不是 admission 第二轮。",
+      "本轮结论不等同于 tiny 已可替代 RMBG-2，仅在当前 SegmentationProvider 与 admission_v1 边界内成立。"
+    ]
+  },
+  "records_source": {
+    "vision_control_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-admission-v1-r01-reopen-birefnet-tiny-vision-sim-ios26_4-r5.jsonl",
+    "candidate_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4-r5.jsonl"
+  },
+  "checks_source": {
+    "vision_control_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-admission-v1-r01-reopen-birefnet-tiny-vision-sim-ios26_4-r5.txt",
+    "candidate_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4-r5.txt"
+  },
+  "probe_logs": {
+    "vision_control_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/runlog-20260423-admission-v1-r01-reopen-birefnet-tiny-vision-sim-ios26_4-r5-probe.log",
+    "candidate_r5": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/runlog-20260423-admission-v1-r01-reopen-birefnet-tiny-candidate-sim-ios26_4-r5-probe.log"
+  },
+  "environment_notes": [
+    "R19 建立在 R18 signal recovery 完成后执行，Vision 与 candidate 均完成 26/26 覆盖。",
+    "candidate 全量命中 ORT tiny provider（segmentation_provider=birefnet_tiny_ort）。",
+    "candidate 质量信号模式为 quality_metadata_mode=tiny_ort_runtime_signal_v1（26/26），不再一刀切 review。"
+  ],
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "failed": 26
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "failed": 8
+        },
+        "focus_comparison": {
+          "failed": 10
+        },
+        "stability_witness": {
+          "failed": 8
+        }
+      },
+      "dominant_failure": {
+        "domain": "com.apple.Vision",
+        "code": "9",
+        "description": "Could not create inference context",
+        "count": 26
+      }
+    },
+    "candidate": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 19,
+        "review": 7
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 3,
+          "review": 5
+        },
+        "focus_comparison": {
+          "ready": 9,
+          "review": 1
+        },
+        "stability_witness": {
+          "ready": 7,
+          "review": 1
+        }
+      },
+      "provider_distribution": {
+        "birefnet_tiny_ort": 26
+      },
+      "quality_metadata_mode_distribution": {
+        "tiny_ort_runtime_signal_v1": 26
+      }
+    }
+  },
+  "hard_gate_findings": [
+    {
+      "sample_ids_ready": [
+        "EV013_full_body_person_gray_bg",
+        "EV038_dark_shoes_shelf_plants",
+        "EV042_cakes_in_booth_scene"
+      ],
+      "sample_ids_review": [
+        "EV006_beaded_string_on_texture",
+        "EV021_hand_with_beads",
+        "EV028_flower_vase_garden_bg",
+        "EV033_blue_vase_blue_curtain",
+        "EV044_person_outdoor_complex"
+      ],
+      "vision_result": "8/8 failed",
+      "candidate_result": "3/8 ready + 5/8 review",
+      "decision_impact": "confirmed_partial_gain_with_remaining_blockers",
+      "summary": "hard_gate 已从全 review 恢复出 ready 信号，但关键阻塞位仍有 5 个 review，需要第二轮聚焦复核。"
+    }
+  ],
+  "focus_comparison_findings": [
+    {
+      "sample_ids_review": [
+        "S008_white_tubes_near_white_bg"
+      ],
+      "vision_result": "10/10 failed",
+      "candidate_result": "9/10 ready + 1/10 review",
+      "decision_impact": "clear_structural_positive_signal",
+      "summary": "focus_comparison 显示结构性收益，不是仅覆盖恢复或 parity。"
+    }
+  ],
+  "stability_witness_findings": [
+    {
+      "sample_ids_review": [
+        "S007_snacks_on_dark_plate"
+      ],
+      "vision_result": "8/8 failed",
+      "candidate_result": "7/8 ready + 1/8 review",
+      "decision_impact": "safe_without_failed_redline",
+      "summary": "stability_witness 无 failed 红线，当前稳定性足以继续保留。"
+    }
+  ],
+  "admission_round1_reopen_effective_judgement": {
+    "decision": "continue_to_admission_round2_review",
+    "recommended_next_stage": "tiny_admission_round2_hard_gate_blocker_review",
+    "why": [
+      "本轮在有效入口+完整覆盖+可区分信号前提下，首次得到可判别样本级证据。",
+      "hard_gate 已出现 ready 级收益（3/8），focus 与 stability 分别达到 9/10、7/8 ready。",
+      "candidate 未触发 failed 红线，继续第二轮复核的收益高于停止。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅表示继续留在 admission 体系做第二轮复核，不代表 tiny 已通过 admission。",
+      "本结论不等同于主链替换结论。",
+      "本结论不构成 tiny 已可替代 RMBG-2 的商业结论。"
+    ]
+  }
+}

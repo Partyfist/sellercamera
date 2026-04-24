@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r02-objectness-hard-gate-review",
+  "reviewed_at": "2026-04-21T23:35:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "vision_objectness_saliency",
+    "request": "VNGenerateObjectnessBasedSaliencyImageRequest",
+    "track": "admission_candidate_objectness_saliency_v1"
+  },
+  "scope": {
+    "goal": "在不扩样本、不改代码边界前提下，对 objectness 在 admission_v1 的 hard_gate 主问题做第二轮更完整人工复核。",
+    "records_source": {
+      "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-objectness-vision-device.jsonl",
+      "objectness_candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260421-admission-v1-r01-objectness-candidate-device.jsonl"
+    },
+    "checks_source": {
+      "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-objectness-vision-device.txt",
+      "objectness_candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260421-admission-v1-r01-objectness-candidate-device.txt"
+    },
+    "evidence_scope": {
+      "metadata_level": true,
+      "hard_gate_problem_level": true,
+      "focus_and_stability_level": true,
+      "pixel_side_by_side_exported": false,
+      "note": "本轮重点是 hard_gate 主问题证据强度，不新增更大样本或像素级导出资产。"
+    }
+  },
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 25,
+        "failed": 1
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 7,
+          "failed": 1
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    },
+    "objectness_candidate": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "ready": 26,
+        "failed": 0
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "ready": 8,
+          "failed": 0
+        },
+        "focus_comparison": {
+          "ready": 10,
+          "failed": 0
+        },
+        "stability_witness": {
+          "ready": 8,
+          "failed": 0
+        }
+      }
+    }
+  },
+  "hard_gate_problem_review": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "primary_problem": "细珠串主体在纹理背景上无法稳定形成可用主体掩码（Vision 下为 subjectMaskUnavailable）。",
+      "vision_observation": {
+        "quality_level": "failed",
+        "hard_case_signal": "unknown",
+        "coverage_ratio": null
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.2157"
+      },
+      "judgement": "clear_improved",
+      "reason": "从 pipeline 失败到可产出，属于硬门槛实质触达。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "primary_problem": "人物裤线与近灰背景交界主问题仍缺可复核的分离增强证据。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.5176"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.5020"
+      },
+      "judgement": "not_proven",
+      "reason": "质量层级保持 parity，但 coverage 变化很小，不足以证明主问题已改善。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "primary_problem": "手部与珠串细结构交界在复杂纹理背景中仍缺稳定分离证据。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.6039"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.5647"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "存在分割几何变化，但目前仅能证明未回退，证据强度不足以判定明确改善。"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "primary_problem": "花枝外缘在自然背景纹理中的残留压制仍缺明确收益证据。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3647"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.2588"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "coverage 降幅明显但未形成可复核的主问题级改善结论。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "primary_problem": "花瓶外缘与蓝幕同色交界分离仍是升级阻塞位。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3843"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.4431"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "有变化但同色分离主问题仍缺明确改善证据。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "primary_problem": "深色鞋体外缘在杂乱货架背景中的纹理残留仍缺稳定收敛证据。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.4510"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.5059"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "质量层级未回退，但复杂背景残留主问题仍无明确可复核改善。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "primary_problem": "多主体场景下主主体聚焦与接触边稳定性仍缺明确收益证据。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3216"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.4941"
+      },
+      "judgement": "changed_but_insufficient",
+      "reason": "变化幅度较大，但当前证据仍不足以证明多主体主问题已明确改善。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "primary_problem": "人物外轮廓与树枝背景交界稳定性仍未形成可复核改进证据。",
+      "vision_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3216"
+      },
+      "objectness_observation": {
+        "quality_level": "ready",
+        "hard_case_signal": "stable",
+        "coverage_ratio": "0.3176"
+      },
+      "judgement": "not_proven",
+      "reason": "几乎无有效变化信号，当前不能判定主问题受益。"
+    }
+  ],
+  "tier_summary_r02_objectness": {
+    "clear_improved": [
+      "EV006_beaded_string_on_texture"
+    ],
+    "changed_but_insufficient": [
+      "EV021_hand_with_beads",
+      "EV028_flower_vase_garden_bg",
+      "EV033_blue_vase_blue_curtain",
+      "EV038_dark_shoes_shelf_plants",
+      "EV042_cakes_in_booth_scene"
+    ],
+    "not_proven": [
+      "EV013_full_body_person_gray_bg",
+      "EV044_person_outdoor_complex"
+    ],
+    "hard_gate_improved_count": 1,
+    "hard_gate_threshold_reference": "new_backbone_admission_prep_v1.md 要求至少 4/8 硬门槛样本主问题出现可复核改善。"
+  },
+  "focus_comparison_observation": {
+    "result": "10/10 ready (vision/objectness 均为 10/10 ready)",
+    "judgement": "no_regression_but_not_strong_gain",
+    "note": "当前 focus 层证据仍主要是“未回退”，未形成足够强的跨问题明确收益。"
+  },
+  "stability_witness_observation": {
+    "result": "8/8 ready (vision/objectness 均为 8/8 ready)",
+    "risk_tier": "minor_risk_not_redline",
+    "notes": [
+      "未出现 ready->review 或 failed，未触发红线。",
+      "EV034/EV026 的 coverage 变化较大，当前仅记为轻微观察项，尚无质量级回退证据。"
+    ]
+  },
+  "admission_round2_objectness_judgement": {
+    "decision": "continue_within_admission_v1",
+    "three_way_decision": "继续停留在 admission_v1",
+    "hard_gate_threshold_met": false,
+    "recommended_next_stage": "admission_v1_round3_objectness_hard_gate_strengthening",
+    "why": [
+      "EV006 的 failed->ready 价值已稳定成立，说明候选主干并非无价值。",
+      "hard_gate 主问题明确改善仅 1/8，尚未达到 4/8 的升级门槛。",
+      "稳定层未触发红线，当前不支持停止候选；但证据强度也不足以升级到更大范围。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅基于 admission_v1，不外推到 expanded_v1 全量。",
+      "本轮未新增像素级并排导出，主问题结论仍以人工问题级复核为准。"
+    ]
+  }
+}

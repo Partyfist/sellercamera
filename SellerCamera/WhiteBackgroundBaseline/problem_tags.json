@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "tags": [
+    {
+      "id": "edge_gray_fringe",
+      "label": "边缘灰边",
+      "description": "主体外轮廓出现明显灰边或泛灰光晕"
+    },
+    {
+      "id": "edge_contamination",
+      "label": "边缘脏边/污染",
+      "description": "边缘存在背景色污染、脏边、杂色"
+    },
+    {
+      "id": "foreground_washout",
+      "label": "主体发白/被洗",
+      "description": "主体核心区密度下降、颜色变淡、发雾"
+    },
+    {
+      "id": "small_text_loss",
+      "label": "小字/logo 丢失",
+      "description": "文字、logo、细小纹理在白底结果中丢失或变糊"
+    },
+    {
+      "id": "thin_structure_loss",
+      "label": "细边/提手/绳带缺损",
+      "description": "细结构出现断裂、缺失或明显削弱"
+    },
+    {
+      "id": "contact_edge_abnormal",
+      "label": "底边接触面异常",
+      "description": "主体与底部接触边界不自然或异常发虚/发黑"
+    },
+    {
+      "id": "background_residual",
+      "label": "背景未清干净",
+      "description": "白底外区域残留背景纹理或色块"
+    },
+    {
+      "id": "white_background_impure",
+      "label": "白底不纯",
+      "description": "背景整体偏灰/偏色，白底不够纯净"
+    },
+    {
+      "id": "global_haze",
+      "label": "整体发雾/主体不立",
+      "description": "画面整体对比不足，主体立体感弱"
+    },
+    {
+      "id": "hard_case_fallback_acceptable",
+      "label": "难例失败但可接受回退",
+      "description": "在难例中存在缺陷但仍可作为可用回退结果"
+    },
+    {
+      "id": "hard_case_fallback_unacceptable",
+      "label": "难例失败且不可接受",
+      "description": "难例结果已不可用于商用，需重点治理"
+    }
+  ]
+}

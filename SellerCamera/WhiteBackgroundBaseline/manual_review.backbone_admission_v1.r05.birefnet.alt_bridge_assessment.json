@@ -1,0 +1,127 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r05-birefnet-alternative-bridge-assessment",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet",
+    "track": "admission_candidate_birefnet_v1"
+  },
+  "scope": {
+    "goal": "论证 BiRefNet 是否值得进入替代桥接路线最小可行化包",
+    "in_scope": [
+      "总结 CoreML 路线停止依据",
+      "限定替代桥接路线评估范围",
+      "评估 ONNX Runtime iOS 路线的工程可行性、成本、风险、收益",
+      "给出是否进入下一包的二选一结论"
+    ],
+    "out_of_scope": [
+      "ONNX Runtime 正式接入",
+      "BiRefNet admission 样本跑测",
+      "第二候选并行接入",
+      "白底主流程与下游联动改造"
+    ]
+  },
+  "coreml_route_stop_summary": {
+    "already_completed": [
+      "R01: 入场审查未通过（缺模型资产与桥接）",
+      "R02: provider 路由与最小桥接骨架落地",
+      "R03: ONNX 资产落地，单点闭环失败于 mlmodelc_not_found",
+      "R04: 三条 CoreML 最小转换路径继续失败，单点闭环仍未成立"
+    ],
+    "failure_layers": [
+      "CoreML 成品资产无法形成（mlmodelc 不存在）",
+      "模型加载失败导致 infer 与 mask 均未触发",
+      "重复同类转换尝试边际收益低"
+    ],
+    "why_stop_further_coreml_trials": "当前阻塞已集中在工具链/资产层，继续同类 CoreML 打通包无法新增 admission 所需证据，且会持续消耗工程资源。"
+  },
+  "alternative_bridge_scope_definition": {
+    "primary_route": "ONNX Runtime iOS（含 CoreML EP/缓存能力作为可选运行策略）",
+    "deferred_routes": [
+      "主链重写",
+      "自建大型推理运行时层",
+      "多候选并行桥接",
+      "云端推理方案"
+    ]
+  },
+  "onnxruntime_engineering_assessment": {
+    "boundary_fit": {
+      "provider_scope_possible": true,
+      "vision_default_path_preservable": true,
+      "downstream_linked_refactor_required": false,
+      "notes": "可在 SegmentationProvider 内增加 ORT provider 分支并保持失败回退；前提是严格禁止下游联动改造。"
+    },
+    "minimal_feasibility": {
+      "ios_integration_path_exists": true,
+      "minimal_closure_plan_clear": true,
+      "fallback_semantics_clear": true,
+      "notes": "可将下一包目标限制为依赖引入 + 单点 load/infer/mask/fallback 验证，不进入 admission。"
+    },
+    "cost": {
+      "dependency_introduction": "medium_to_high",
+      "binary_size_impact": "medium_to_high",
+      "build_pipeline_complexity": "medium",
+      "maintenance_cost": "medium"
+    },
+    "risk": {
+      "runtime_compatibility_uncertainty": "medium",
+      "device_specific_behavior_risk": "medium",
+      "debugging_complexity": "medium_to_high",
+      "admission_discipline_conflict_risk": "low_if_boundaries_enforced"
+    },
+    "benefit": {
+      "bypass_coreml_asset_blocker": "high",
+      "probability_to_reach_birefnet_admission_r01": "medium",
+      "strategic_value": "medium_to_high"
+    }
+  },
+  "project_principles_fit": {
+    "low_risk_incremental": "conditionally_yes",
+    "clear_boundaries": "yes_if_provider_only",
+    "failure_rollback": "yes",
+    "no_over_abstraction": "yes_if_no_runtime_platform_expansion",
+    "main_constraints": [
+      "必须禁止 admission 跑测与下游联动改造",
+      "必须保留 Vision 默认路径与显式开关",
+      "必须把通过标准限制在单点闭环"
+    ]
+  },
+  "decision": {
+    "result": "proceed_to_alt_bridge_minimal_feasibility_package",
+    "rationale": [
+      "CoreML 路线在当前边界已形成连续失败闭环，继续同类试错收益低",
+      "ONNX Runtime 路线有现实工程入口，且有机会绕开 CoreML 成品资产阻塞",
+      "在严格 provider 边界与单点闭环约束下，风险可控且可回退"
+    ],
+    "not_interpreted_as": [
+      "不代表 BiRefNet 已可进入 admission",
+      "不代表 BiRefNet 一定优于历史候选",
+      "不代表要立即做运行时体系扩张"
+    ]
+  },
+  "next_package_minimal_boundary": {
+    "allowed": [
+      "最小依赖引入（仅用于 ORT 单点闭环）",
+      "SegmentationProvider 内最小 ORT provider 对接",
+      "单点 load->infer->mask 验证",
+      "失败回退验证"
+    ],
+    "forbidden": [
+      "admission_v1 跑测",
+      "主链重写",
+      "refinement/去污染/合成联动改造",
+      "并行引入第二候选"
+    ],
+    "pass_condition_for_next_package": [
+      "ORT 路线下模型可加载",
+      "至少一次真实 infer 触发",
+      "mask 回到 provider 边界",
+      "Vision 回退保持可用"
+    ],
+    "fail_condition_for_next_package": [
+      "依赖/运行时引入后仍无法形成单点闭环",
+      "需要越界改主链才能运行",
+      "回退语义不稳定"
+    ]
+  }
+}

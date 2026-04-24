@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r14-birefnet-tiny-ort-ios-dependency-closure",
+  "reviewed_at": "2026-04-22T22:20:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "当前对象是 BiRefNet tiny 自有权重轨道（BiRefNet-general-bb_swin_v1_tiny-epoch_232），不是原版 BiRefNet 全链路打通结论。",
+      "本轮是 ORT iOS 依赖落地与 provider 入口复验包（非 admission 包）。",
+      "本轮只判断正式 runtime 入口是否可消费 tiny ONNX，不做样本级效果结论外推。"
+    ]
+  },
+  "problem_layer_lock": {
+    "locked_problem": "ios_runtime_ort_dependency_gate",
+    "explicit_statement": "R13 阻塞点是 iOS 正式 runtime 侧 ORT 依赖未落地，导致 tiny provider 选路后仍无法形成正式消费入口。",
+    "why_not_quality_problem": [
+      "R10 单点 ONNXRuntime 已通过，模型与推理能力本身可运行。",
+      "R11 stop 主因为 segmentationModelUnavailable，失败层在入口合同而非质量判读。"
+    ],
+    "why_not_reopen_admission_before_r14": [
+      "在 iOS 正式依赖未落地前，重开 admission 会重复无效入口失败。",
+      "必须先确认 app 正式 provider/runtime 路径可真实完成 load/infer/mask。"
+    ]
+  },
+  "selected_main_route": {
+    "name": "tiny_ort_ios_vendor_minimal_route",
+    "why_selected": [
+      "以最小范围命中 R13 依赖门槛阻塞。",
+      "仅服务 tiny provider，不扩成通用运行时平台。",
+      "不改白底主流程和下游链路，可回退性最强。"
+    ],
+    "why_not_others_now": [
+      "本轮不做 admission 第二轮。",
+      "本轮不做 expanded 子集。",
+      "本轮不做 provider 体系重构。"
+    ]
+  },
+  "ios_dependency_landing": {
+    "vendor_assets": [
+      "Vendor/ONNXRuntime/onnxruntime.xcframework",
+      "Vendor/ONNXRuntimeObjC/include/onnxruntime.h"
+    ],
+    "bridge": [
+      "BiRefNetTinyORTBridge.h",
+      "BiRefNetTinyORTBridge.mm",
+      "SellerCamera-Bridging-Header.h"
+    ],
+    "app_build_status": "build_succeeded",
+    "app_bundle_assets": {
+      "tiny_onnx_bundled": true,
+      "runtime_probe_manifest_bundled": true
+    }
+  },
+  "verification": {
+    "runtime_probe_records": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260422-birefnet-r14-tiny-ort-runtime-probe-sim-ios26_4.jsonl",
+    "runtime_probe_check": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r14-tiny-ort-runtime-probe-sim-ios26_4.txt",
+    "runtime_provider_check": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r14-tiny-ort-ios-runtime-provider.json",
+    "formal_runtime_non_admission_result": {
+      "sample_count": 1,
+      "sample_id": "S001_glass_container_translucent",
+      "provider_hint": "candidate_birefnet_tiny_ort",
+      "segmentation_provider": "birefnet_tiny_ort",
+      "segmentation_request": "ORTSession(BiRefNetTinyONNX)",
+      "quality_level": "ready",
+      "hard_case_signal": "stable",
+      "runtime_contract_opened": true
+    },
+    "fallback_ready": true
+  },
+  "judgement": {
+    "decision": "reopen_tiny_admission_r01",
+    "why": [
+      "iOS ORT 依赖已在当前工程内可用，且通过正式 app provider 入口完成了非 admission 的真实 load/infer/mask。",
+      "R13 的依赖门槛阻塞已被实证打通，不再是仅脚本可跑、正式入口不可用的状态。",
+      "本轮结论仅恢复 tiny 入口资格，不代表 tiny 已通过 admission。"
+    ],
+    "next_package_recommendation": "tiny_admission_r01_reopen",
+    "not_allowed_next_now": [
+      "admission_round2",
+      "expanded_subset_experiments",
+      "provider_runtime_platform_refactor"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论只表示 tiny 已重新具备重开 admission R01 的运行资格。",
+      "本结论不代表 tiny 已可替代 RMBG-2。",
+      "本结论不构成主链替换或商业效果判断。"
+    ]
+  }
+}

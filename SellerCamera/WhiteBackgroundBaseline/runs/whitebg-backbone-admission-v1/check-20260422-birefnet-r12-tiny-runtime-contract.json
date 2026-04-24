@@ -1,0 +1,21 @@
+{
+  "contractOpened" : false,
+  "error" : "runtime_expects_coreml_asset_but_got_onnx",
+  "errorStage" : "contract",
+  "expectedModelExtensions" : [
+    "mlmodelc",
+    "mlpackage",
+    "mlmodel"
+  ],
+  "loadAttempted" : false,
+  "loadSucceeded" : false,
+  "modelExists" : true,
+  "modelExtension" : "onnx",
+  "modelPath" : "\/Users\/sungning\/Projects\/SellerCamera\/SellerCamera\/ModelAssets\/BiRefNet\/onnx\/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+  "providerHint" : "candidate_birefnet",
+  "resolvedProvider" : "birefnet_coreml_provider",
+  "runtimeEngine" : "coreml_vncoremlrequest",
+  "singlePointEngine" : "onnxruntime",
+  "stage" : "birefnet_tiny_runtime_contract_check",
+  "status" : "runtime_contract_mismatch"
+}

@@ -1,0 +1,23 @@
+{
+  "status": "completed",
+  "wrapper_stage": "r06_runtime_single_point",
+  "cmd": [
+    "/usr/bin/swift",
+    "/Users/sungning/Projects/SellerCamera/SellerCamera/WhiteBackgroundBaseline/scripts/birefnet_single_point_closure_check.swiftscript",
+    "--model",
+    "/tmp/sellercamera_rmbg2_r06_runtime/RMBG-2-native-int8.mlpackage",
+    "--image",
+    "/Users/sungning/Projects/SellerCamera/SellerCamera/WhiteBackgroundBaseline/samples/expanded_v1/pexels-roo-1110882060-30130003.jpg",
+    "--mask-output",
+    "/tmp/sellercamera_rmbg2_r06_runtime/mask.png",
+    "--output-feature",
+    "output_3",
+    "--report",
+    "/Users/sungning/Projects/SellerCamera/SellerCamera/WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r06-rmbg2-single-point.json"
+  ],
+  "timeout_seconds": 360,
+  "tmp_root": "/tmp/sellercamera_rmbg2_r06_runtime",
+  "returncode": 0,
+  "stdout_tail": "{\"modelExists\":true,\"inferenceTriggered\":true,\"imageExists\":true,\"resolvedModelPath\":\"\\/var\\/folders\\/m6\\/21cn616n0_g9fzyn33rnf0580000gn\\/T\\/RMBG-2-native_D28FDC12-728F-42F9-A0F5-B401C10D3EEA.mlmodelc\",\"modelPath\":\"\\/tmp\\/sellercamera_rmbg2_r06_runtime\\/RMBG-2-native-int8.mlpackage\",\"outputFeatureName\":\"output_3\",\"maskProduced\":true,\"maskOutputPath\":\"\\/tmp\\/sellercamera_rmbg2_r06_runtime\\/mask.png\",\"loadSucceeded\":true,\"status\":\"single_point_closure_passed\",\"stage\":\"birefnet_single_point_closure_check\",\"fallbackReady\":true,\"imagePath\":\"\\/Users\\/sungning\\/Projects\\/SellerCamera\\/SellerCamera\\/WhiteBackgroundBaseline\\/samples\\/expanded_v1\\/pexels-roo-1110882060-30130003.jpg\"}\n",
+  "stderr_tail": ""
+}

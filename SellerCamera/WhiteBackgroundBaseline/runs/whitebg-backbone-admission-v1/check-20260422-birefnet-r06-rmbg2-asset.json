@@ -1,0 +1,15 @@
+{
+  "stage": "birefnet_r06_rmbg2_asset_check",
+  "hf_repo": "sihai0506/rmbg2.0-coreml",
+  "hf_tree_files": [
+    ".gitattributes",
+    "README.md",
+    "RMBG-2-native.mlpackage.zip",
+    "config.json"
+  ],
+  "zip_path": "/Users/sungning/Projects/SellerCamera/SellerCamera/ModelAssets/BiRefNet/coreml/RMBG-2-native.mlpackage.zip",
+  "zip_exists": true,
+  "zip_size_bytes": 407253936,
+  "zip_sha256": "3c9655910b9b4c960f2303c8476e6b3420b719fbec202f1416566769252795e8",
+  "int8_named_package_in_hf_tree": false
+}

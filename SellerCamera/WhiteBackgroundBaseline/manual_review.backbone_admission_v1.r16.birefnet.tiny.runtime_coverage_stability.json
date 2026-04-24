@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r16-birefnet-tiny-runtime-coverage-stability",
+  "reviewed_at": "2026-04-23T09:56:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_ort_v1",
+    "identity_boundary": [
+      "本轮对象仍是 BiRefNet tiny 自有权重轨道，不等同于原版 BiRefNet 全链路打通。",
+      "本轮是 runtime 覆盖稳定性修复（非 admission 包），不做样本效果优劣判断。",
+      "本轮结论只回答是否恢复重开 tiny admission R01 的入口资格，不外推为已可替代 RMBG-2。"
+    ]
+  },
+  "problem_layer_lock": {
+    "locked_problem": "runtime_continuous_coverage_stability",
+    "explicit_statement": "R15 stop 的主因是 tiny 在正式 runtime 下只覆盖 3/26，首轮证据无效。",
+    "why_not_quality_problem": [
+      "R14 已验证正式 provider/runtime 路径可完成一次 load/infer/mask。",
+      "R15 的 hard_gate/focus/stability 失效来自覆盖缺失，不是样本质量红线。",
+      "只有先恢复完整覆盖，后续 admission 判断才有意义。"
+    ]
+  },
+  "root_cause_analysis": {
+    "observed_pattern": {
+      "coverage_before_fix": "3/26",
+      "stable_sample_ids_before_fix": [
+        "EV006_beaded_string_on_texture",
+        "EV013_full_body_person_gray_bg",
+        "EV021_hand_with_beads"
+      ]
+    },
+    "crash_evidence": [
+      {
+        "file": "~/Library/Logs/DiagnosticReports/SellerCamera-2026-04-23-093008.ips",
+        "exception": "EXC_BAD_ACCESS(SIGSEGV)",
+        "frame_anchor": "CaptureWhiteBackgroundProcessor.averageIntensity -> buildQualityMetadata -> processOnSupportedSystem"
+      },
+      {
+        "file": "~/Library/Logs/DiagnosticReports/SellerCamera-2026-04-23-094038.ips",
+        "exception": "EXC_BAD_ACCESS(SIGSEGV)",
+        "frame_anchor": "CI::MetalContext render chain via averageIntensity"
+      },
+      {
+        "file": "~/Library/Logs/DiagnosticReports/SellerCamera-2026-04-23-094355.ips",
+        "exception": "EXC_BAD_ACCESS(SIGSEGV)",
+        "frame_anchor": "CI::MetalContext render chain via averageIntensity"
+      }
+    ],
+    "conclusion": "3/26 的主因是 tiny 路径质量元数据归约阶段在 simulator 下触发 CI Metal 崩溃，导致连续运行中断。"
+  },
+  "selected_main_route": {
+    "name": "tiny_ort_simulator_quality_metadata_fallback",
+    "why_selected": [
+      "直接命中崩溃堆栈唯一高频阻塞点（buildQualityMetadata/averageIntensity）。",
+      "改动局部，保持 SegmentationProvider 边界，不改白底主链和下游顺序。",
+      "可直接验证 coverage 是否恢复到 26/26。"
+    ],
+    "why_not_others_now": [
+      "本轮不做 provider 平台重构。",
+      "本轮不做 admission 第二轮。",
+      "本轮不做效果层参数调优。"
+    ]
+  },
+  "implementation": {
+    "file": "CaptureWhiteBackgroundProcessor.swift",
+    "changes": [
+      "新增 shouldUseTinyORTCoverageMetadataFallback(segmentationProviderID:)（仅 simulator+birefnet_tiny_ort 命中）。",
+      "新增 makeTinyORTCoverageFallbackMetadata()，在 fallback 分支替代 buildQualityMetadata。",
+      "在 processOnSupportedSystem 中按 segmentation_provider 切换质量元数据路径，并打 quality_metadata_mode=tiny_ort_runtime_fallback。"
+    ],
+    "boundary_statement": [
+      "未改 segmentation 推理主路径。",
+      "未改 refinement / 去污染 / 合成顺序。",
+      "Vision 默认路径与失败回退语义保持。"
+    ]
+  },
+  "verification": {
+    "probe_log": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/runlog-20260423-r16-runtime-coverage-probe-v3.log",
+    "records": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260423-birefnet-r16-tiny-runtime-coverage-sim-ios26_4.jsonl",
+    "check_text": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-birefnet-r16-tiny-runtime-coverage-sim-ios26_4.txt",
+    "check_json": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-birefnet-r16-tiny-runtime-coverage-sim-ios26_4.json",
+    "coverage_after_fix": "26/26",
+    "provider_distribution": {
+      "birefnet_tiny_ort": 26
+    },
+    "quality_distribution": {
+      "review": 26
+    },
+    "coverage_complete": true,
+    "latest_crash_files_seen": [
+      "SellerCamera-2026-04-23-094355.ips",
+      "SellerCamera-2026-04-23-094038.ips",
+      "SellerCamera-2026-04-23-093008.ips"
+    ],
+    "post_fix_new_crash_observed": false
+  },
+  "coverage_pass_criteria": {
+    "required": [
+      "正式 runtime 非 admission 复验覆盖 26/26",
+      "记录可映射到 manifest 全样本",
+      "provider 持续命中 birefnet_tiny_ort"
+    ],
+    "fail_conditions": [
+      "覆盖 < 26",
+      "重复出现 3/26 截断",
+      "中途崩溃导致样本链中断"
+    ]
+  },
+  "judgement": {
+    "decision": "reopen_tiny_admission_r01",
+    "why": [
+      "R15 stop 的根因（coverage stability）已通过正式 runtime 复验恢复到 26/26。",
+      "本轮证据是 app 正式 provider 路径结果，不是独立脚本外推。",
+      "因此可以重开 tiny admission R01 获取有效样本级首轮结论。"
+    ],
+    "next_package_recommendation": "tiny_admission_r01_reopen_after_r16_coverage_fix",
+    "not_allowed_next_now": [
+      "admission_round2",
+      "expanded_subset_experiments",
+      "provider_platform_refactor"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅表示重开 admission R01 的入口资格恢复。",
+      "不代表 tiny 已通过 admission。",
+      "不代表 tiny 已可替代 RMBG-2。"
+    ]
+  }
+}

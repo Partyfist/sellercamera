@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "objective": "用于新分割主干准入评估准备的门槛样本包，不替代 core_v1 或 expanded_v1。",
+  "derived_from": [
+    "WhiteBackgroundBaseline/sample_manifest.core_v1.json",
+    "WhiteBackgroundBaseline/sample_manifest.expanded_v1.json",
+    "WhiteBackgroundBaseline/manual_review.expanded_v1.r02.json",
+    "WhiteBackgroundBaseline/vision_baseline_report_expanded_v1.md"
+  ],
+  "sample_layers": {
+    "hard_gate": {
+      "description": "硬门槛样本。若该层未达标，不建议新主干进入下一阶段。",
+      "sample_ids": [
+        "EV006_beaded_string_on_texture",
+        "EV013_full_body_person_gray_bg",
+        "EV021_hand_with_beads",
+        "EV028_flower_vase_garden_bg",
+        "EV033_blue_vase_blue_curtain",
+        "EV038_dark_shoes_shelf_plants",
+        "EV042_cakes_in_booth_scene",
+        "EV044_person_outdoor_complex"
+      ]
+    },
+    "focus_comparison": {
+      "description": "重点对比样本。用于验证复杂边界、透明/反光、近白与接地问题是否实质改善。",
+      "sample_ids": [
+        "S001_glass_container_translucent",
+        "S003_ring_macro_dark_bg",
+        "S005_transparent_bowls_dark_bg",
+        "S008_white_tubes_near_white_bg",
+        "S010_food_tray_contact_edge",
+        "EV014_glass_teapot_transparent_stack",
+        "EV019_white_shoes_dark_indoor",
+        "EV025_white_shoes_reflective_platform",
+        "EV039_white_sneaker_yellow_line",
+        "EV048_wood_vase_texture_bg"
+      ]
+    },
+    "stability_witness": {
+      "description": "稳定性旁证样本。防止新主干在难例提升时引入常规样本回退。",
+      "sample_ids": [
+        "S002_bottle_reflection_window",
+        "S004_paper_cups_light_bg",
+        "S007_snacks_on_dark_plate",
+        "EV004_white_devices_on_light_bg",
+        "EV011_cupcake_on_plate_contact",
+        "EV026_pastry_plate_light_contact",
+        "EV034_appliance_set_warm_bg",
+        "EV046_cream_kettle_warm_bg"
+      ]
+    }
+  },
+  "samples": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-roo-1110882060-30130003.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["thin_structure_loss", "edge_contamination"],
+      "note": "当前链路真实失败样本（subjectMaskUnavailable），为必过门槛。"
+    },
+    {
+      "sample_id": "EV013_full_body_person_gray_bg",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-lvu-image-1599405908-28570309.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["hard_case_fallback_acceptable", "background_residual"],
+      "note": "跨域人像样本，验证复杂语义场景稳态。"
+    },
+    {
+      "sample_id": "EV021_hand_with_beads",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-cup-of-couple-6633930.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["hard_case_fallback_acceptable", "thin_structure_loss"],
+      "note": "人体+细珠串复合结构，验证细结构与跨域边界。"
+    },
+    {
+      "sample_id": "EV028_flower_vase_garden_bg",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-nguy-n-ti-n-th-nh-2150376175-33765870.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["background_residual", "thin_structure_loss"],
+      "note": "复杂自然背景，验证背景剥离稳态。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-g-m-s-c-ng-duyen-1570923256-35603953.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["background_residual", "edge_contamination"],
+      "note": "前后景近色样本，验证同色分离能力。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-ravinepz-7187252.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["background_residual", "edge_gray_fringe"],
+      "note": "复杂室内背景+深色主体，验证边界污染控制。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-yesehoon-31899738.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["background_residual", "contact_edge_abnormal"],
+      "note": "多主体+复杂环境，验证主体聚焦和接触边缘。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-khezez-23947088.jpg",
+      "admission_tier": "hard_gate",
+      "tags": ["hard_case_fallback_acceptable", "background_residual"],
+      "note": "户外跨域样本，验证复杂场景下背景残留风险。"
+    },
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-vindli-15791148.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["thin_structure_loss", "global_haze"],
+      "note": "透明边与主体密度保持对比样本。"
+    },
+    {
+      "sample_id": "S003_ring_macro_dark_bg",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-kunal-lakhotia-781256899-32988524.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["edge_contamination", "thin_structure_loss"],
+      "note": "高反薄边和微距细节保真对比。"
+    },
+    {
+      "sample_id": "S005_transparent_bowls_dark_bg",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-change-c-c-974768353-32149255.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["thin_structure_loss", "edge_contamination"],
+      "note": "透明碗+暗背景，验证透明边末端污染控制。"
+    },
+    {
+      "sample_id": "S008_white_tubes_near_white_bg",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-cup-of-couple-8015469.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["foreground_washout", "white_background_impure"],
+      "note": "近白主体核心能量保持对比。"
+    },
+    {
+      "sample_id": "S010_food_tray_contact_edge",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-marceloverfe-18784857.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "贴地边缘自然度与灰浮控制对比。"
+    },
+    {
+      "sample_id": "EV014_glass_teapot_transparent_stack",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-mohammadabbasi-30319694.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["thin_structure_loss", "foreground_washout"],
+      "note": "透明容器与液体叠层，验证透明区域稳态。"
+    },
+    {
+      "sample_id": "EV019_white_shoes_dark_indoor",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-gonzalo-acuna-166058093-18110858.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["foreground_washout", "contact_edge_abnormal"],
+      "note": "近白主体+深背景的平衡对比样本。"
+    },
+    {
+      "sample_id": "EV025_white_shoes_reflective_platform",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-jibarofoto-13536939.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "高反接地场景，验证底边灰浮抑制。"
+    },
+    {
+      "sample_id": "EV039_white_sneaker_yellow_line",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-samfi17-6833597.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "强色背景下白鞋边缘稳定性对比。"
+    },
+    {
+      "sample_id": "EV048_wood_vase_texture_bg",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-leon-kohle-3158283-12148041.jpg",
+      "admission_tier": "focus_comparison",
+      "tags": ["edge_contamination", "background_residual"],
+      "note": "纹理主体+纹理背景，验证污染与残留控制。"
+    },
+    {
+      "sample_id": "S002_bottle_reflection_window",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-walter-medina-foto-2154680637-34418075.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["edge_gray_fringe", "background_residual"],
+      "note": "常规可用样本，防止新主干引入边缘回退。"
+    },
+    {
+      "sample_id": "S004_paper_cups_light_bg",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-cup-of-couple-8015705.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["white_background_impure", "foreground_washout"],
+      "note": "浅背景常规样本，观察近白主体是否被洗薄。"
+    },
+    {
+      "sample_id": "S007_snacks_on_dark_plate",
+      "source_suite": "core_v1",
+      "source_file_name": "pexels-bertellifotografia-31393442.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["edge_gray_fringe", "background_residual"],
+      "note": "深色常规样本，观察边缘灰带是否上升。"
+    },
+    {
+      "sample_id": "EV004_white_devices_on_light_bg",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-jakubzerdzicki-16888144.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["foreground_washout", "white_background_impure"],
+      "note": "近白常规样本，防止新主干引入主体冲淡。"
+    },
+    {
+      "sample_id": "EV011_cupcake_on_plate_contact",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-cansu-hangul-464804780-27525462.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["contact_edge_abnormal", "edge_gray_fringe"],
+      "note": "接地常规样本，防止底边自然度回退。"
+    },
+    {
+      "sample_id": "EV026_pastry_plate_light_contact",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-catscoming-5501154.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["contact_edge_abnormal", "white_background_impure"],
+      "note": "浅色接触边界常规样本。"
+    },
+    {
+      "sample_id": "EV034_appliance_set_warm_bg",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-mohammadabbasi-30946801.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["background_residual", "edge_gray_fringe"],
+      "note": "多主体常规样本，防止整体一致性回退。"
+    },
+    {
+      "sample_id": "EV046_cream_kettle_warm_bg",
+      "source_suite": "expanded_v1",
+      "source_file_name": "pexels-mohammadabbasi-30946797.jpg",
+      "admission_tier": "stability_witness",
+      "tags": ["edge_gray_fringe", "global_haze"],
+      "note": "暖色背景常规样本，防止整体雾感上升。"
+    }
+  ]
+}

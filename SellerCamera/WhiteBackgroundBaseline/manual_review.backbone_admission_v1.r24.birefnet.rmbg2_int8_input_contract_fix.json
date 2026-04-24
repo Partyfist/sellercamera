@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r24-rmbg2-int8-input-contract-fix",
+  "reviewed_at": "2026-04-23T18:45:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_rmbg2_int8_coreml_track",
+    "track": "runtime_probe_birefnet_coreml_input_contract_fix_v1",
+    "identity_boundary": [
+      "本轮只做 RMBG-2 INT8 输入 contract 对齐修复。",
+      "本轮不是 admission 包，不做效果优劣判断。",
+      "本轮不构成主链替换或商业可替代结论。"
+    ]
+  },
+  "runtime_identity": {
+    "ui_display_name": "RMBG-2 INT8",
+    "provider_id": "birefnet",
+    "provider_entry": "CaptureWhiteBackgroundProcessor.biRefNetProvider",
+    "model_load_entry": "CaptureWhiteBackgroundProcessor.loadBiRefNetCoreMLModel",
+    "model_inference_entry": "CaptureWhiteBackgroundProcessor.runBiRefNetCoreMLInference"
+  },
+  "model_contract": {
+    "resolved_model_asset": "ModelAssets/BiRefNet/coreml/RMBG-2-native.mlpackage",
+    "input_feature_name": "input",
+    "input_feature_type": "MLMultiArray",
+    "input_shape": "1x3x1024x1024",
+    "input_data_type": "float16",
+    "preferred_output_feature": "output_3"
+  },
+  "root_cause": {
+    "symptom": "真机执行白底处理报 The model does not have a valid input feature of type image",
+    "direct_reason": "birefnet 路径固定走 VNCoreMLRequest(image 输入)，而 RMBG-2 INT8 是 multiArray 输入模型。",
+    "impact": "模型资产可找到，但在调用层输入 contract 不匹配导致推理失败。"
+  },
+  "fix_scope": {
+    "minimal_change": "在 birefnet provider 内按模型输入类型分流：image 保持 Vision，multiArray 走 MLModel.prediction；补最小 image->multiArray 预处理与输出读取。",
+    "non_goals": [
+      "不改默认 Vision 主链",
+      "不做通用模型输入适配平台",
+      "不做效果评估结论"
+    ]
+  },
+  "verification": {
+    "ios_build": {
+      "command": "xcodebuild -project ../SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO",
+      "result": "BUILD SUCCEEDED",
+      "evidence": "CaptureWhiteBackgroundProcessor 新增 multiArray 推理分支编译通过；CoreMLModelCompile 继续成立。"
+    },
+    "contract_alignment": {
+      "codegen_header_confirms_multiarray_input": true,
+      "runtime_path_supports_multiarray_input": true,
+      "metadata_alignment_retained": true
+    },
+    "single_point_closure_check": {
+      "command": "swift WhiteBackgroundBaseline/scripts/birefnet_single_point_closure_check.swiftscript --model ModelAssets/BiRefNet/coreml/RMBG-2-native.mlpackage --image WhiteBackgroundBaseline/samples/core_v1/pexels-adrienne-andersen-1174503-2661256.jpg --mask-output WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/mask-20260423-r24-rmbg2-int8-single-point.png --report WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260423-birefnet-r24-rmbg2-int8-single-point.json",
+      "result": "single_point_closure_passed",
+      "evidence": "loadSucceeded=true, inferenceTriggered=true, maskProduced=true"
+    },
+    "device_runtime_probe": {
+      "executed_in_this_environment": false,
+      "blocking_reason": "当前会话无法直接操作目标真机并采集设备日志。",
+      "expected_confirmation": "真机切换 RMBG-2 INT8 后不再出现 image input 错误，且可产出白底结果。"
+    }
+  },
+  "decision": {
+    "result": "rmbg2_int8_input_contract_aligned",
+    "reason": [
+      "模型真实输入定义已压实为 multiArray(input)。",
+      "birefnet 推理入口已从单一路径 VNCoreMLRequest 调整为输入类型分流。",
+      "构建链与模型 contract 已完成对齐。"
+    ],
+    "boundary_note": "该结论表示输入 contract 已修通，不代表模型效果结论。"
+  }
+}

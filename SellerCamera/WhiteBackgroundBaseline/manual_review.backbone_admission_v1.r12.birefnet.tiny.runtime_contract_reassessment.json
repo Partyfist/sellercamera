@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r12-birefnet-tiny-runtime-contract-reassessment",
+  "reviewed_at": "2026-04-22T17:40:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+    "track": "admission_candidate_birefnet_tiny_onnx_v1",
+    "identity_boundary": [
+      "当前对象是 BiRefNet tiny 自有权重轨道（BiRefNet-general-bb_swin_v1_tiny-epoch_232），不是原版 BiRefNet 全链路打通结论。",
+      "本轮是 runtime contract 重审包（非 admission 包），不做样本级效果判断。",
+      "本轮只判断 tiny 资产在正式 runtime 路径是否可被消费，不外推到主链替换结论。"
+    ]
+  },
+  "evidence_sources": {
+    "single_point_closure_r10": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r10-tiny-single-point.json",
+    "admission_r01_r11_review": "WhiteBackgroundBaseline/manual_review.backbone_admission_v1.r11.birefnet.tiny.admission_r01.json",
+    "runtime_contract_check_r12": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r12-tiny-runtime-contract.json",
+    "runtime_path_diff_check_r12": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r12-tiny-runtime-path-diff.json"
+  },
+  "problem_layer_lock": {
+    "locked_problem": "runtime_contract_not_open",
+    "explicit_statement": "正式运行时 candidate_birefnet 合同为 CoreML-only；tiny 当前产物为 ONNX，导致 segmentationModelUnavailable。",
+    "why_not_quality_problem": [
+      "R10 单点 ONNXRuntime 闭环已通过，说明并非权重不可用。",
+      "R11 admission 26/26 failed 的主因是模型资产不可用，而不是样本级质量回退。"
+    ],
+    "why_not_admission_round2_now": [
+      "在 runtime contract 未打通前重开 admission 会重复无效入口。",
+      "当前需要的是运行时合同修复，不是样本层证据补强。"
+    ]
+  },
+  "runtime_path_diff": {
+    "single_point_path": {
+      "engine": "onnxruntime",
+      "status": "single_point_closure_passed",
+      "output_feature": "output_image"
+    },
+    "admission_runtime_path": {
+      "provider": "candidate_birefnet",
+      "engine": "coreml_vncoremlrequest",
+      "dominant_failure": {
+        "domain": "SellerCamera.CaptureWhiteBackgroundProcessorError",
+        "code": "3",
+        "description": "分割模型资产不可用"
+      }
+    },
+    "core_diff": "single-point consumes ONNX directly; admission/runtime consumes CoreML assets via VNCoreMLRequest"
+  },
+  "selected_main_route": {
+    "name": "explicit_coreml_contract_guard_and_runtime_recheck",
+    "why_selected": [
+      "最小增量且直接命中 R11 失败原因。",
+      "无需 admission 跑测即可验证 runtime 合同是否打开。",
+      "不引入第二桥接路线，不扩大到运行时重构。"
+    ],
+    "why_not_others_now": [
+      "本包不正式接入 ONNX Runtime iOS provider。",
+      "本包不做 CoreML 转换新路线试错。",
+      "本包不重跑 admission_v1。"
+    ]
+  },
+  "minimal_changes": {
+    "code_changes": [
+      {
+        "file": "CaptureWhiteBackgroundProcessor.swift",
+        "change": "新增 segmentationModelContractMismatch 错误语义；对非 CoreML 扩展名做显式合同拒绝。"
+      }
+    ],
+    "new_scripts": [
+      "WhiteBackgroundBaseline/scripts/birefnet_tiny_runtime_contract_check.swiftscript",
+      "WhiteBackgroundBaseline/scripts/birefnet_tiny_runtime_path_diff_check.py"
+    ]
+  },
+  "verification": {
+    "runtime_contract_check": {
+      "status": "runtime_contract_mismatch",
+      "error_stage": "contract",
+      "error": "runtime_expects_coreml_asset_but_got_onnx",
+      "contract_opened": false
+    },
+    "path_diff_check": {
+      "status": "completed",
+      "conclusion": "single-point passed on onnxruntime but admission/runtime is still coreml contract"
+    }
+  },
+  "judgement": {
+    "decision": "continue_stop_do_not_reopen_tiny_admission_r01",
+    "why": [
+      "正式 runtime 仍未形成 tiny ONNX 的可消费入口。",
+      "runtime contract 检查明确为 contract mismatch，当前并非 admission 层问题。",
+      "重开 admission R01 将重复 R11 的无效入口失败。"
+    ],
+    "next_package_recommendation": "tiny_runtime_contract_bridge_choice_package",
+    "allowed_next_options": [
+      "tiny CoreML asset closure package",
+      "tiny ORT provider minimal feasibility package"
+    ],
+    "not_allowed_next_now": [
+      "reopen_tiny_admission_r01",
+      "admission_round2",
+      "expanded_subset_experiments"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅针对 tiny 路线当前 runtime contract 边界。",
+      "本结论不等于 tiny 路线永久不可行。",
+      "本结论不构成主链替换或商业效果判断。"
+    ]
+  }
+}

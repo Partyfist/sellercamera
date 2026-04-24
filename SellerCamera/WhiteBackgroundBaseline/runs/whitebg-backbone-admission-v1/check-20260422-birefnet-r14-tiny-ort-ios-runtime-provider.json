@@ -1,0 +1,33 @@
+{
+  "stage": "birefnet_tiny_ort_ios_dependency_and_runtime_probe",
+  "date": "2026-04-22",
+  "candidate": "birefnet_general_bb_swin_v1_tiny_epoch_232",
+  "problem_layer": "ios_ort_dependency_and_formal_provider_runtime_entry",
+  "simulator": {
+    "name": "iPhone 17",
+    "os": "26.4.1"
+  },
+  "asset": {
+    "onnx_path": "/Users/sungning/Projects/SellerCamera/SellerCamera/ModelAssets/BiRefNet/onnx/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+    "onnx_exists": true,
+    "onnx_size_bytes": 171076568,
+    "onnx_sha256": "97b75d75719ad00c295e644b76f2a2d0c7dc6bad60043154d76a25d58931a678",
+    "bundled_in_app": true,
+    "runtime_probe_manifest_bundled": true
+  },
+  "runtime_probe": {
+    "mode": "formal_runtime_provider_path_non_admission",
+    "suite": "birefnet_tiny_runtime_probe_v1",
+    "provider_hint": "candidate_birefnet_tiny_ort",
+    "record_sample_id": "S001_glass_container_translucent",
+    "segmentation_provider": "birefnet_tiny_ort",
+    "segmentation_request": "ORTSession(BiRefNetTinyONNX)",
+    "quality_level": "ready",
+    "hard_case_signal": "stable",
+    "model_path_used": "/Users/sungning/Library/Developer/CoreSimulator/Devices/A0A7DEE4-1460-40E1-9AAD-32BA001E1AC0/data/Containers/Bundle/Application/525358E6-0568-4673-A1FE-0328331D0984/SellerCamera.app/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx"
+  },
+  "runtime_contract_opened": true,
+  "fallback_ready": true,
+  "conclusion": "ort_ios_dependency_and_provider_entry_opened",
+  "non_admission_boundary": true
+}

@@ -1,0 +1,39 @@
+{
+  "stage": "birefnet_tiny_feasibility_preflight",
+  "weight_path": "/Users/sungning/Projects/SellerCamera/SellerCamera/ModelAssets/BiRefNet/pytorch/BiRefNet-general-bb_swin_v1_tiny-epoch_232.pth",
+  "weight_exists": true,
+  "weight_size_bytes": 177791685,
+  "weight_sha256": "6a1e050c6ec2697e5ed268455df544782b023acf8643ab771250979094875ab1",
+  "expected_sha256": "6a1e050c6ec2697e5ed268455df544782b023acf8643ab771250979094875ab1",
+  "sha_match": true,
+  "entrypoints": {
+    "onnx_to_coreml_script_exists": true,
+    "pth_to_onnx_export_script_exists": false
+  },
+  "python_modules": {
+    "torch": {
+      "available": false,
+      "error": "ModuleNotFoundError: No module named 'torch'"
+    },
+    "onnx": {
+      "available": false,
+      "error": "ModuleNotFoundError: No module named 'onnx'"
+    },
+    "coremltools": {
+      "available": false,
+      "error": "ModuleNotFoundError: No module named 'coremltools'"
+    },
+    "onnxruntime": {
+      "available": false,
+      "error": "ModuleNotFoundError: No module named 'onnxruntime'"
+    }
+  },
+  "decision_hint": "not_ready_yet_but_candidate_still_worth_preparing",
+  "blocking_items": [
+    "pth_to_onnx_entry_missing",
+    "python_module_missing:torch",
+    "python_module_missing:onnx",
+    "python_module_missing:coremltools",
+    "python_module_missing:onnxruntime"
+  ]
+}

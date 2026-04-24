@@ -1,0 +1,70 @@
+{
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r03-birefnet-asset-and-single-point-closure",
+  "date": "2026-04-22",
+  "candidate": {
+    "id": "birefnet",
+    "track": "admission_candidate_birefnet_v1"
+  },
+  "single_point_gate_definition": {
+    "pass_requires_all": [
+      "模型资产在当前工程路径真实落地",
+      "桥接加载规则可定位模型资源（Bundle 或显式路径）",
+      "模型可被真实加载并触发一次推理",
+      "推理输出可回到 SegmentationProvider 约定 mask 边界",
+      "失败时可保持 Vision 默认回退语义"
+    ],
+    "fail_if_any": [
+      "缺少可加载 CoreML 资产（.mlmodelc）",
+      "推理无法触发",
+      "输出无法形成 mask",
+      "回退语义不清楚"
+    ]
+  },
+  "asset_landing": {
+    "status": "partial",
+    "onnx_asset": {
+      "path": "ModelAssets/BiRefNet/onnx/BiRefNet_lite_model_fp16.onnx",
+      "size_bytes": 114538221,
+      "sha256": "d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402",
+      "landed": true
+    },
+    "coreml_asset": {
+      "expected_path": "ModelAssets/BiRefNet/coreml/BiRefNetSegmentation.mlmodelc",
+      "landed": false
+    }
+  },
+  "conversion_attempt": {
+    "check_file": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r03-conversion.json",
+    "conversion_success": false,
+    "attempts": [
+      {
+        "name": "coremltools_convert",
+        "result": "failed",
+        "error": "ValueError: Unrecognized value of argument \"source\": onnx"
+      },
+      {
+        "name": "onnx_coreml_convert",
+        "result": "failed",
+        "error": "ModuleNotFoundError: No module named 'coremltools.converters.nnssa'"
+      }
+    ]
+  },
+  "single_point_closure_validation": {
+    "check_file": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-birefnet-r03-single-point.json",
+    "status": "failed",
+    "load_model": "failed",
+    "inference_triggered": false,
+    "mask_output_produced": false,
+    "failure_stage": "model_loading",
+    "failure_reason": "mlmodelc_not_found",
+    "fallback_semantics": "ready (Vision default path preserved)"
+  },
+  "feasibility_conclusion": {
+    "result": "stop_current_candidate",
+    "is_minimal_runnable_candidate_ready": false,
+    "summary": "R03 已完成 ONNX 资产落地与真实加载/推理尝试，但因 CoreML 资产未形成，单点闭环仍失败于模型加载层，BiRefNet 仍不具备进入 admission R01 的最小可运行资格。",
+    "next_step_guardrail": "仅当 BiRefNet CoreML 资产（mlmodelc）真实落地并通过一次 load->infer->mask 单点闭环后，才允许开启 BiRefNet admission R01。"
+  }
+}
+

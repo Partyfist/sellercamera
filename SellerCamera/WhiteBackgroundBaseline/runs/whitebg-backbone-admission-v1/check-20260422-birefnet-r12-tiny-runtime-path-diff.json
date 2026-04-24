@@ -1,0 +1,34 @@
+{
+  "stage": "birefnet_tiny_runtime_path_diff_check",
+  "single_point_path": {
+    "engine": "onnxruntime",
+    "status": "single_point_closure_passed",
+    "load_succeeded": true,
+    "inference_triggered": true,
+    "mask_produced": true,
+    "chosen_output_name": "output_image"
+  },
+  "admission_runtime_path": {
+    "provider": "candidate_birefnet",
+    "engine": "coreml_vncoremlrequest",
+    "candidate_dominant_failure_domain": "SellerCamera.CaptureWhiteBackgroundProcessorError",
+    "candidate_dominant_failure_code": "3",
+    "candidate_dominant_failure_description": "分割模型资产不可用"
+  },
+  "runtime_contract_check": {
+    "status": "runtime_contract_mismatch",
+    "error_stage": "contract",
+    "error": "runtime_expects_coreml_asset_but_got_onnx",
+    "model_extension": "onnx",
+    "expected_model_extensions": [
+      "mlmodelc",
+      "mlpackage",
+      "mlmodel"
+    ],
+    "contract_opened": false
+  },
+  "conclusion": {
+    "why_single_point_passed_but_admission_failed": "single-point uses ONNXRuntime and directly consumes .onnx; admission runtime uses candidate_birefnet(CoreML/VNCoreMLRequest) contract which only accepts CoreML assets.",
+    "runtime_contract_opened": false
+  }
+}

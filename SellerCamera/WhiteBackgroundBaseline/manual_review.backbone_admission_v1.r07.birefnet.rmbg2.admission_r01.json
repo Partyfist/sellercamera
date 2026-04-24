@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-backbone-admission-v1",
+  "round": "r01-birefnet-rmbg2-admission",
+  "reviewed_at": "2026-04-22T03:42:00+08:00",
+  "reviewer": "codex",
+  "candidate": {
+    "id": "birefnet_rmbg2_coreml_int8_track",
+    "track": "admission_candidate_birefnet_rmbg2_coreml_v1",
+    "identity_boundary": [
+      "本轮候选是 BiRefNet 架构系的 RMBG-2 CoreML INT8 轨道，不等同于原版 BiRefNet CoreML 转换链已打通。",
+      "本轮仅做 admission_v1 首轮最小准入实验，不外推到 expanded 子集或主链替换。",
+      "模型许可仍受 CC BY-NC 4.0 约束，不能据此给出商业上线结论。"
+    ]
+  },
+  "records_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260422-admission-v1-r01-birefnet-rmbg2-vision-sim-ios18_0.jsonl",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/baseline-20260422-admission-v1-r01-birefnet-rmbg2-candidate-sim-ios18_0.jsonl"
+  },
+  "checks_source": {
+    "vision_control": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-admission-v1-r01-birefnet-rmbg2-vision-sim-ios18_0.txt",
+    "candidate": "WhiteBackgroundBaseline/runs/whitebg-backbone-admission-v1/check-20260422-admission-v1-r01-birefnet-rmbg2-candidate-sim-ios18_0.txt"
+  },
+  "environment_notes": [
+    "iOS 18.0 simulator 与 iOS 18.6 simulator 结果一致复现：Vision 全量失败为 inference context 阻塞，candidate 全量失败为模型输入类型不匹配。",
+    "当前结论仅在本轮 admission_v1 首轮实验边界内成立。"
+  ],
+  "summary": {
+    "vision_control": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "failed": 26
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "failed": 8
+        },
+        "focus_comparison": {
+          "failed": 10
+        },
+        "stability_witness": {
+          "failed": 8
+        }
+      },
+      "dominant_failure": {
+        "domain": "com.apple.Vision",
+        "code": "9",
+        "description": "Could not create inference context",
+        "count": 26
+      }
+    },
+    "candidate": {
+      "coverage": "26/26",
+      "quality_distribution": {
+        "failed": 26
+      },
+      "tier_distribution": {
+        "hard_gate": {
+          "failed": 8
+        },
+        "focus_comparison": {
+          "failed": 10
+        },
+        "stability_witness": {
+          "failed": 8
+        }
+      },
+      "dominant_failure": {
+        "domain": "com.apple.Vision",
+        "code": "15",
+        "description": "The model does not have a valid input feature of type image",
+        "count": 26
+      }
+    }
+  },
+  "hard_gate_findings": [
+    {
+      "sample_id": "EV006_beaded_string_on_texture",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "no_hard_gate_hit",
+      "summary": "EV006 未保持 R06 单点闭环中的正向触达，candidate 在 admission R01 中未形成 hard_gate 命中。"
+    },
+    {
+      "sample_id": "EV033_blue_vase_blue_curtain",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "同色前后景关键阻塞位未产出可比较结果，candidate 处理阶段直接失败。"
+    },
+    {
+      "sample_id": "EV038_dark_shoes_shelf_plants",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "复杂纹理背景关键阻塞位未产出可比较结果，candidate 处理阶段直接失败。"
+    },
+    {
+      "sample_id": "EV042_cakes_in_booth_scene",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "多主体聚焦关键阻塞位未产出可比较结果，candidate 处理阶段直接失败。"
+    },
+    {
+      "sample_id": "EV044_person_outdoor_complex",
+      "vision_result": "failed",
+      "candidate_result": "failed",
+      "decision_impact": "blocked",
+      "summary": "跨域人物/商品边界关键阻塞位未产出可比较结果，candidate 处理阶段直接失败。"
+    }
+  ],
+  "focus_comparison_findings": [
+    {
+      "vision_result": "10/10 failed",
+      "candidate_result": "10/10 failed",
+      "decision_impact": "no_positive_signal",
+      "summary": "focus_comparison 未出现任何可支持继续评估的正向信号。"
+    }
+  ],
+  "stability_witness_findings": [
+    {
+      "vision_result": "8/8 failed",
+      "candidate_result": "8/8 failed",
+      "decision_impact": "safety_not_established",
+      "summary": "stability_witness 无法验证防回退安全性；本轮不存在 ready 样本可用于红线守护判断。"
+    }
+  ],
+  "admission_round1_judgement": {
+    "decision": "stop_current_candidate",
+    "recommended_next_stage": "candidate_switch_or_provider_contract_reassessment",
+    "why": [
+      "candidate 在 admission_v1 首轮 26/26 全量 failed，未形成 EV006 或其他 hard_gate 命中。",
+      "candidate 失败原因稳定指向输入类型不匹配（Vision code=15），说明当前 provider 合同与该资产 I/O 形态不兼容。",
+      "focus/stability 均未提供继续评估所需的最小正向证据，当前不满足继续 admission 第二轮的价值条件。"
+    ],
+    "non_exaggeration_boundary": [
+      "本结论仅针对当前 RMBG-2 CoreML INT8 轨道在现有 SegmentationProvider 合同下的 admission R01 首轮实验。",
+      "本结论不等同于原版 BiRefNet 或该资产在其他桥接路线/运行时中的永久否定。",
+      "本结论不构成任何商业可用判断，许可限制仍需独立满足。"
+    ]
+  }
+}

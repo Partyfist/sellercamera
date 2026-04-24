@@ -1,0 +1,46 @@
+[Suite] whitebg-backbone-admission-v1
+[Records] 12
+[Samples in manifest] 26
+[Samples covered] 12
+
+[Missing Samples]
+- S010_food_tray_contact_edge
+- EV014_glass_teapot_transparent_stack
+- EV019_white_shoes_dark_indoor
+- EV025_white_shoes_reflective_platform
+- EV039_white_sneaker_yellow_line
+- EV048_wood_vase_texture_bg
+- S002_bottle_reflection_window
+- S004_paper_cups_light_bg
+- S007_snacks_on_dark_plate
+- EV004_white_devices_on_light_bg
+- EV011_cupcake_on_plate_contact
+- EV026_pastry_plate_light_contact
+- EV034_appliance_set_warm_bg
+- EV046_cream_kettle_warm_bg
+
+[Quality Distribution]
+- ready: 11
+- failed: 1
+
+[Hard Case Distribution]
+- stable: 11
+- unknown: 1
+
+[Environment Snapshots]
+- model=iPhone15,3, iOS=18.7.7, visionRevision=1
+- model=iPhone15,3, iOS=18.7.7, visionRevision=unknown
+
+[Per Sample Latest]
+- EV006_beaded_string_on_texture: quality=failed, hard_case=unknown, processed_id=failed-EV006_beaded_string_on_texture
+- EV013_full_body_person_gray_bg: quality=ready, hard_case=stable, processed_id=AC2893BD-514C-49B5-BA12-AC84479CC215
+- EV021_hand_with_beads: quality=ready, hard_case=stable, processed_id=0A7C1E6C-625B-4D24-A0D1-065B2B2D36CB
+- EV028_flower_vase_garden_bg: quality=ready, hard_case=stable, processed_id=3A935F3A-F8C5-4A3E-8EEA-412F71F84403
+- EV033_blue_vase_blue_curtain: quality=ready, hard_case=stable, processed_id=1762E247-9A05-4C63-A1FD-115D90BFC360
+- EV038_dark_shoes_shelf_plants: quality=ready, hard_case=stable, processed_id=37F27E69-AA2D-4D5E-8878-39D51812199D
+- EV042_cakes_in_booth_scene: quality=ready, hard_case=stable, processed_id=0704AD34-ED02-41FB-87B5-1BF4F7E0F6A5
+- EV044_person_outdoor_complex: quality=ready, hard_case=stable, processed_id=7E525E4D-DC2A-44C0-882A-E2A626EB49D3
+- S001_glass_container_translucent: quality=ready, hard_case=stable, processed_id=C2ADBB42-C164-4809-A4A9-290F895081FE
+- S003_ring_macro_dark_bg: quality=ready, hard_case=stable, processed_id=80C07124-534A-4585-B669-232DF8DD1183
+- S005_transparent_bowls_dark_bg: quality=ready, hard_case=stable, processed_id=EE264B9B-29F9-442F-AF59-A459D83D7740
+- S008_white_tubes_near_white_bg: quality=ready, hard_case=stable, processed_id=F4C85F43-D08B-471C-8D43-5ED269FC6E75

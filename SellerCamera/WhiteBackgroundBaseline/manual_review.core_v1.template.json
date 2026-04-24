@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "suite_name": "whitebg-vision-core-v1",
+  "reviewed_at": "2026-04-18T00:00:00Z",
+  "reviewer": "codex",
+  "records_source": "WhiteBackgroundBaselineRuns/baseline-YYYYMMDD.jsonl",
+  "samples": [
+    {
+      "sample_id": "S001_glass_container_translucent",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S002_bottle_reflection_window",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S003_ring_macro_dark_bg",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S004_paper_cups_light_bg",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S005_transparent_bowls_dark_bg",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S006_portrait_with_product",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S007_snacks_on_dark_plate",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S008_white_tubes_near_white_bg",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S009_multi_product_shelf_complex",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    },
+    {
+      "sample_id": "S010_food_tray_contact_edge",
+      "result": "pending",
+      "severity": "pending",
+      "problem_tags": [],
+      "summary": ""
+    }
+  ]
+}
