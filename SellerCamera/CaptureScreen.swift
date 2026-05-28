@@ -600,7 +600,7 @@ struct CaptureScreen: View {
                 "deviceReadbackDuration=\(String(format: "%.8f", value)) " +
                 "deltaTargetToReadback=\(String(format: "%.8f", delta)) " +
                 "runtimeConfirmedTickIndex=\(runtimeConfirmedTickIndex.map(String.init) ?? "nil") " +
-                "pendingTickIndex=\((pendingShutterWheelDurationSeconds == nil ? nil : lastDispatchedShutterTickIndex).map(String.init) ?? "nil") " +
+                "pendingTickIndex=\(lastDispatchedShutterTickIndex.map(String.init) ?? "nil") " +
                 "committedTickIndex=\(committedShutterTickIndex.map(String.init) ?? "nil") " +
                 "display=\(formattedShutterDisplayText(seconds: value) ?? "--") " +
                 "reason=\(isShutterRulerInteracting ? "deferredDuringDrag" : (delta <= confirmationTolerance ? "runtimeConfirmed" : "waiting"))"
@@ -895,6 +895,8 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var isDragInProgress = false
     @State private var lastStepAppliedAt: Date = .distantPast
     @State private var lastDragDirection: Int = 0
+    @State private var lastHapticAt: Date = .distantPast
+    @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
     private let tickSpacing: CGFloat = 28
 
@@ -945,7 +947,7 @@ private struct CaptureManualFocusRulerPanel: View {
                     .onChanged { value in
                         guard isEnabled else { return }
                         dragOffset = value.translation.width - lastDragStepTranslation
-                        handleDrag(value.translation.width)
+                        handleDrag(value.translation)
                     }
                     .onEnded { _ in
                         finishDrag(animateOffset: true)
@@ -1021,13 +1023,15 @@ private struct CaptureManualFocusRulerPanel: View {
             .allowsHitTesting(false)
     }
 
-    private func handleDrag(_ translationWidth: CGFloat) {
+    private func handleDrag(_ translation: CGSize) {
         guard isEnabled else { return }
         isDragInProgress = true
 
         let threshold: CGFloat = 40
+        let effectiveThreshold = threshold / scrubSensitivity(for: translation.height)
+        let translationWidth = translation.width
         let delta = translationWidth - lastDragStepTranslation
-        let rawStepCount = Int((delta / threshold).rounded(.towardZero))
+        let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
         guard rawStepCount != 0 else { return }
 
         let now = Date()
@@ -1037,7 +1041,7 @@ private struct CaptureManualFocusRulerPanel: View {
         }
         lastDragDirection = rawDirection
         // Consume boundary/cooldown movement to avoid residual drag that requires a reverse swipe to clear.
-        lastDragStepTranslation += CGFloat(rawStepCount) * threshold
+        lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
         guard now.timeIntervalSince(lastStepAppliedAt) >= 0.12 else { return }
 
         let clampedStepCount = max(-1, min(1, -rawStepCount))
@@ -1045,7 +1049,7 @@ private struct CaptureManualFocusRulerPanel: View {
         guard didApply else { return }
 
         lastStepAppliedAt = now
-        UISelectionFeedbackGenerator().selectionChanged()
+        triggerGearHapticIfNeeded(step: clampedStepCount, at: now)
     }
 
     private func finishDrag(animateOffset: Bool) {
@@ -1059,6 +1063,22 @@ private struct CaptureManualFocusRulerPanel: View {
         } else {
             dragOffset = 0
         }
+    }
+
+    private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
+        let lift = max(0, -verticalTranslation)
+        if lift > 90 { return 0.12 }
+        if lift > 40 { return 0.35 }
+        return 1.0
+    }
+
+    private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
+        let signature = "mf-\(selectedIndex)-\(step)"
+        guard signature != lastHapticSignature else { return }
+        guard now.timeIntervalSince(lastHapticAt) >= 0.09 else { return }
+        lastHapticSignature = signature
+        lastHapticAt = now
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func isMajorTick(_ value: Double) -> Bool {
@@ -1793,6 +1813,9 @@ private struct CaptureZoomDialView: View {
     @State private var lastDragStepTranslation: CGFloat = 0
     @State private var isDragInProgress = false
     @State private var lastStepAppliedAt: Date = .distantPast
+    @State private var lastDragDirection: Int = 0
+    @State private var lastHapticAt: Date = .distantPast
+    @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.20, green: 0.88, blue: 0.76)
     private let tickSpacing: CGFloat = 34
 
@@ -1823,16 +1846,15 @@ private struct CaptureZoomDialView: View {
                     .onChanged { value in
                         guard isEnabled else { return }
                         dragOffset = value.translation.width - lastDragStepTranslation
-                        handleDrag(value.translation.width)
+                        handleDrag(value.translation)
                     }
                     .onEnded { _ in
-                        isDragInProgress = false
-                        lastDragStepTranslation = 0
-                        withAnimation(.easeOut(duration: 0.12)) {
-                            dragOffset = 0
-                        }
+                        finishDrag(animateOffset: true)
                     }
             )
+            .onDisappear {
+                finishDrag(animateOffset: false)
+            }
         }
         .frame(height: 70)
         .padding(.horizontal, 8)
@@ -1923,25 +1945,62 @@ private struct CaptureZoomDialView: View {
         return .white.opacity(0.42)
     }
 
-    private func handleDrag(_ translationWidth: CGFloat) {
+    private func handleDrag(_ translation: CGSize) {
         guard isEnabled else { return }
         isDragInProgress = true
 
         let threshold: CGFloat = 30
+        let effectiveThreshold = threshold / scrubSensitivity(for: translation.height)
+        let translationWidth = translation.width
         let delta = translationWidth - lastDragStepTranslation
-        let rawStepCount = Int((delta / threshold).rounded(.towardZero))
+        let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
         guard rawStepCount != 0 else { return }
 
         let now = Date()
+        let rawDirection = rawStepCount > 0 ? 1 : -1
+        if lastDragDirection != 0, rawDirection != lastDragDirection {
+            lastStepAppliedAt = .distantPast
+        }
+        lastDragDirection = rawDirection
+        // Consume movement before cooldown so boundary/cooldown drags do not become residual reverse resistance.
+        lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
         guard now.timeIntervalSince(lastStepAppliedAt) >= 0.08 else { return }
 
         let clampedStepCount = max(-2, min(2, -rawStepCount))
-        lastDragStepTranslation += CGFloat(rawStepCount) * threshold
         let didApply = onStep(clampedStepCount)
         guard didApply else { return }
 
         lastStepAppliedAt = now
-        UISelectionFeedbackGenerator().selectionChanged()
+        triggerGearHapticIfNeeded(step: clampedStepCount, at: now)
+    }
+
+    private func finishDrag(animateOffset: Bool) {
+        isDragInProgress = false
+        lastDragStepTranslation = 0
+        lastDragDirection = 0
+        if animateOffset {
+            withAnimation(.easeOut(duration: 0.12)) {
+                dragOffset = 0
+            }
+        } else {
+            dragOffset = 0
+        }
+    }
+
+    private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
+        let lift = max(0, -verticalTranslation)
+        if lift > 90 { return 0.12 }
+        if lift > 40 { return 0.35 }
+        return 1.0
+    }
+
+    private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
+        let signature = "lens-\(selectedIndex)-\(step)"
+        guard signature != lastHapticSignature else { return }
+        guard now.timeIntervalSince(lastHapticAt) >= 0.08 else { return }
+        lastHapticSignature = signature
+        lastHapticAt = now
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func formatMultiplier(_ multiplier: Double) -> String {
