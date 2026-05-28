@@ -1,0 +1,117 @@
+{
+  "report": "r70_shutter_ruler_interaction_mapping_fix",
+  "task": "R70 Shutter ruler interaction mapping fix",
+  "scope": {
+    "implemented": [
+      "Increased Shutter ruler tick density from 1/3 stop to 1/6 stop",
+      "Injected product-photography Shutter anchors inside activeFormat range",
+      "Kept activeFormat min and max endpoints",
+      "Kept pending, runtime, and manual durations as alignment ticks",
+      "Replaced broad duplicate duration guard with tick-index and high-precision duration identity guard",
+      "Added Debug-only Shutter readback logs",
+      "Updated README report index"
+    ],
+    "not_implemented": [
+      "No WB changes",
+      "No ISO changes",
+      "No EV linkage changes",
+      "No Focus or MF changes",
+      "No lens zoom changes",
+      "No white-background or post-capture changes",
+      "No page layout changes",
+      "No new exposure engine"
+    ]
+  },
+  "tick_mapping": {
+    "range_source": "current activeFormat minExposureDuration and maxExposureDuration",
+    "scale": "log",
+    "step": "1/6 stop",
+    "dedupe": "nanosecond duration identity key",
+    "sorting": "slow to fast using descending duration order",
+    "preserved_values": [
+      "min endpoint",
+      "max endpoint",
+      "pending duration",
+      "runtime duration",
+      "manual duration",
+      "product-photography anchors"
+    ]
+  },
+  "product_anchors": [
+    "1/30",
+    "1/33",
+    "1/48",
+    "1/50",
+    "1/60",
+    "1/96",
+    "1/100",
+    "1/120",
+    "1/125",
+    "1/200",
+    "1/240",
+    "1/250",
+    "1/500",
+    "1/1000",
+    "1/2000",
+    "1/4000",
+    "1/8000"
+  ],
+  "duplicate_guard": {
+    "old_behavior": "Skipped when target duration was close to runtime or last dispatched duration with a broad tolerance.",
+    "new_behavior": "Skip only when tick index is identical, duration delta is below identity epsilon, and there is no pending write.",
+    "display_string_used_for_identity": false
+  },
+  "readback_logging": {
+    "tags": [
+      "[CaptureShutterRange]",
+      "[CaptureShutterWheel]",
+      "[CaptureExposureWrite]",
+      "[CaptureExposureReadback]"
+    ],
+    "fields": [
+      "min",
+      "max",
+      "tickCount",
+      "tickIndex",
+      "targetDuration",
+      "quantizedDuration",
+      "safeDuration",
+      "display",
+      "deviceReadbackDuration",
+      "deltaTargetToReadback",
+      "reason"
+    ],
+    "release_behavior": "no_output_due_to_DEBUG_guard"
+  },
+  "regression_protection": {
+    "r66_sanitized_custom_exposure_write_modified": false,
+    "r68_exposure_triangle_modified": false,
+    "r69_active_format_range_mapping_retained": true,
+    "wb_modified": false,
+    "iso_modified": false,
+    "ev_modified": false,
+    "mf_modified": false,
+    "lens_zoom_modified": false,
+    "white_background_modified": false,
+    "post_capture_modified": false
+  },
+  "files": {
+    "modified": [
+      "SellerCamera/CaptureScreen.swift",
+      "README.md"
+    ],
+    "added": [
+      "docs/reports/r70_shutter_ruler_interaction_mapping_fix.md",
+      "docs/reports/r70_shutter_ruler_interaction_mapping_fix.json"
+    ]
+  },
+  "validation": {
+    "json_parse": "passed",
+    "xcodebuild": "passed",
+    "true_device": "not_run"
+  },
+  "risks": [
+    "AVCaptureDevice may still round exposureDuration internally, so true-device logs should compare target, safe duration, and readback.",
+    "Some activeFormat ranges may still produce display labels that repeat, but internal duration identity is now preserved."
+  ]
+}

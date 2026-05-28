@@ -1,0 +1,44 @@
+{
+  "report_id": "r37_tint_white_balance_tint_integration",
+  "package": "第 16 包：TINT 色偏真实写入 / White Balance Tint 接入",
+  "scope": {
+    "included": [
+      "TINT 从 UI 骨架接入真实 runtime 写入",
+      "TINT 短竖向滚轮交互与 AUTO 恢复接入",
+      "WB 手动写入从固定 tint=0 调整为温度+tint 同步写入",
+      "TINT pending 与 runtime 回写收口",
+      "R37 报告与索引更新"
+    ],
+    "excluded": [
+      "Focus 逻辑改造",
+      "EV/ISO/Shutter 交互合同重构",
+      "白底链路与拍后流程改动",
+      "调色盘/滤镜/Tone 系统扩展"
+    ]
+  },
+  "runtime_contract": {
+    "bottom_primary_parameters": [
+      "exposureCompensation",
+      "whiteBalance",
+      "tint",
+      "iso",
+      "shutter"
+    ],
+    "tint_definition": "白平衡体系内绿/品红色偏（非滤镜、非 tone）",
+    "tint_write": "setWhiteBalanceTintDialValue(_:) -> applyWhiteBalanceManualValues(temperature,tint)",
+    "tint_auto": "TINT AUTO 复用 applyWhiteBalanceAuto() 恢复 Auto 白平衡",
+    "wb_write_update": "WB 手动写入不再固定 tint=0，改为保留并写入当前 tint"
+  },
+  "state_sync": {
+    "pending_tint": "CaptureScreen 新增 pendingTintWheelValue / timeout / runtime confirmed 回收",
+    "mode_mapping": "selectedWhiteBalancePreset == .auto -> tint mode auto; 其余 manual/disabled",
+    "display_mapping": "Auto 显示 A，Manual 显示 Gxx/Mxx"
+  },
+  "verification": {
+    "simulator_build": "pending",
+    "device_manual_validation": "not_executed_in_this_package"
+  },
+  "conclusion": "R37 完成 TINT 真实写入骨架闭环（滚轮、写入、AUTO、状态回收），并保持最小边界未扩展到其他参数系统。",
+  "next_step": "进入真机方向与手感闭环包，确认 TINT 上下滑方向、Auto 恢复、与 WB/EV/ISO/Shutter 交替操作一致性。"
+}
+

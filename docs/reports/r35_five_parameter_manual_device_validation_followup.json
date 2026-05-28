@@ -1,0 +1,57 @@
+{
+  "report_id": "r35_five_parameter_manual_device_validation_followup",
+  "package": "第 14 包：五参数人工真机闭环补验 + 最小问题修正",
+  "scope": {
+    "included": [
+      "FOCUS/EV/WB/ISO/Shutter 五参数人工真机闭环补验准备与执行链路验证",
+      "Simulator/Device 构建验证",
+      "真机安装与启动验证",
+      "五参数合同一致性复核",
+      "R35 报告与索引更新"
+    ],
+    "excluded": [
+      "新增参数功能",
+      "Focus 以外策略重构",
+      "白底处理链路改动",
+      "拍后流程改动",
+      "ISO+Shutter 完整手动曝光系统改造"
+    ]
+  },
+  "verification": {
+    "simulator_build": "passed",
+    "device_build": "passed",
+    "device_install": "passed",
+    "device_launch": "passed",
+    "manual_visual_haptic_interaction_on_device": "not_completed_in_cli_environment"
+  },
+  "contract_review": {
+    "focus": "setManualFocusLensPosition(_), restoreAutofocusMode(), L > M > A, L时禁用",
+    "ev": "setExposureBiasDialValue(_), resetExposureBias()",
+    "wb": "setWhiteBalanceDialValue(_), applyWhiteBalanceAuto()",
+    "iso": "setISODialValue(_), applyISOAuto()",
+    "shutter": "setShutterDialValue(_), applyShutterAuto()",
+    "iso_shutter_boundary": "ISO 非 Auto 时 Shutter LOCK 并禁用；ISO 回 Auto 后恢复可调"
+  },
+  "manual_checklist_status": {
+    "focus_direction_far_near": "not_confirmed",
+    "focus_m_a_l_transition": "not_confirmed",
+    "ev_brightness_direction": "not_confirmed",
+    "ev_reset_zero": "not_confirmed",
+    "wb_warm_cool_direction": "not_confirmed",
+    "wb_auto_restore": "not_confirmed",
+    "iso_up_down_direction": "not_confirmed",
+    "iso_auto_restore": "not_confirmed",
+    "shutter_fast_slow_direction": "not_confirmed",
+    "shutter_auto_restore": "not_confirmed",
+    "iso_manual_shutter_lock_visibility": "not_confirmed",
+    "tap_focus_and_long_press_lock_regression": "not_confirmed",
+    "five_parameter_cross_switch_consistency": "not_confirmed",
+    "capture_button_and_post_capture_flow": "not_confirmed"
+  },
+  "minimal_fix_applied": {
+    "applied": false,
+    "reason": "本轮未在 CLI 环境获得可替代的人眼/触觉证据，不做无证据方向改动，避免误修。"
+  },
+  "conclusion": "R35 已完成五参数包内可执行验证（构建/安装/启动）与合同复核，未完成人工真机滑动主观闭环。当前不能夸大为‘五参数真机体验已全部通过’。",
+  "next_step": "在可交互真机会话中按 R35 清单逐项人工验证，发现问题后仅做最小修正。"
+}

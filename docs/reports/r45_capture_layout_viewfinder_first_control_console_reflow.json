@@ -1,0 +1,69 @@
+{
+  "id": "r45_capture_layout_viewfinder_first_control_console_reflow",
+  "date": "2026-05-23",
+  "task": "Capture layout reflow for viewfinder-first low-position parameter console",
+  "scope": {
+    "bottom_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "focus_in_bottom_bar": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false,
+    "lens_system_changed": false
+  },
+  "layout_changes": {
+    "bottom_parameter_bar_height": {
+      "before_pt": 62,
+      "after_pt": 56
+    },
+    "expanded_console_height": {
+      "before_pt": 178,
+      "after_pt": 150
+    },
+    "parameter_entry_row_height": {
+      "before_pt": 48,
+      "after_pt": 42
+    },
+    "ruler_row_height": {
+      "before_pt": 82,
+      "after_pt": 68
+    },
+    "control_capsule": {
+      "width_before_pt": 68,
+      "width_after_pt": 60,
+      "height_before_pt": 30,
+      "height_after_pt": 28
+    },
+    "screen_vertical_spacing": "Reduced spacing around intent switcher, parameter console, and shutter action area to return more height to preview."
+  },
+  "viewfinder_protection": {
+    "strategy": "Keep the horizontal ruler in the bottom control flow and reduce its height instead of overlaying it over the product subject.",
+    "value_badge": "Kept inside the ruler strip with smaller padding and lower y position.",
+    "lens_entry": "No lens logic changes; lower console profile reduces overlap pressure.",
+    "shutter_button": "Bottom action bar remains visible and is not covered by the parameter console."
+  },
+  "contract_protection": {
+    "ev": "unchanged",
+    "wb": "unchanged; WB adjustment preserves TINT",
+    "tint": "unchanged; RESET only, no AUTO",
+    "iso": "unchanged",
+    "shutter": "unchanged; ISO manual keeps Shutter LOCK",
+    "focus": "not returned to bottom parameter bar"
+  },
+  "validation": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_run": "not_run",
+    "notes": "Build passed with the existing nested xcodeproj warning. Device visual validation remains required."
+  },
+  "risks": [
+    "Compressed ruler labels may need device screenshot validation for readability.",
+    "The low-position layout is code-level verified only until device screenshots confirm the final visual balance.",
+    "If the console still feels too tall on small screens, the next layout pass should further lower or conditionally collapse the expanded ruler."
+  ],
+  "next_recommended_package": "Independent Focus UI preflight after device screenshot confirmation of the low-position five-parameter console."
+}

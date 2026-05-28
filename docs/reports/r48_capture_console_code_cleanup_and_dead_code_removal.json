@@ -1,0 +1,131 @@
+{
+  "id": "r48_capture_console_code_cleanup_and_dead_code_removal",
+  "date": "2026-05-23",
+  "task": "第 28 包：拍摄页参数控制台代码清理收口 —— 删除无用残留、合并重复样式、降低维护风险",
+  "scope": {
+    "type": "code_cleanup",
+    "feature_additions": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "official_contract_preserved": {
+    "bottom_parameters": ["EV", "WB", "TINT", "ISO", "S"],
+    "focus_in_bottom_parameters": false,
+    "tint_contract": "RESET_NOT_AUTO",
+    "wb_tint_contract": "WB preserves TINT; TINT preserves WB Kelvin; WB AUTO clears TINT",
+    "iso_shutter_contract": "Shutter locked while ISO is manual",
+    "horizontal_ruler_console": true,
+    "bottom_overlay_console": true,
+    "lens_zoom_control": true,
+    "pinch_zoom": true
+  },
+  "files_checked": [
+    "SellerCamera/CaptureScreen.swift",
+    "SellerCamera/CaptureBottomParameterBar.swift",
+    "SellerCamera/CaptureProfessionalParameterPanel.swift",
+    "SellerCamera/CaptureLivePreviewView.swift",
+    "README.md"
+  ],
+  "files_modified": [
+    {
+      "path": "SellerCamera/CaptureBottomParameterBar.swift",
+      "purpose": "Deleted obsolete compact vertical wheel views and models."
+    },
+    {
+      "path": "SellerCamera/CaptureScreen.swift",
+      "purpose": "Deleted obsolete PARAMS overlay, focus wheel state/handlers, vertical wheel tick helpers, old panel handlers, and renamed ruler damping helpers."
+    },
+    {
+      "path": "SellerCamera/CaptureProfessionalParameterPanel.swift",
+      "purpose": "Deleted obsolete professional parameter panel UI views and removed unused panelStyle."
+    },
+    {
+      "path": "README.md",
+      "purpose": "Added R48 report index."
+    },
+    {
+      "path": "docs/reports/r48_capture_console_code_cleanup_and_dead_code_removal.md",
+      "purpose": "Formal cleanup report."
+    },
+    {
+      "path": "docs/reports/r48_capture_console_code_cleanup_and_dead_code_removal.json",
+      "purpose": "Structured cleanup record."
+    }
+  ],
+  "deleted_or_removed": {
+    "old_vertical_wheel": [
+      "CaptureWheelDisplayTick",
+      "CaptureCompactParameterWheelItem",
+      "CaptureCompactParameterWheelPanel",
+      "CaptureCompactVerticalWheelColumn",
+      "compactWheelItems",
+      "compactWheelItem(for:)",
+      "compactWheelTicks(for:)",
+      "wheelTicks(...)"
+    ],
+    "focus_bottom_parameter_residuals": [
+      "pendingFocusWheelPosition",
+      "pendingFocusUpdatedAt",
+      "lastDispatchedFocusPosition",
+      "focusPendingTimeout",
+      "stepFocusWheel(by:)",
+      "applyFocusAutoFromWheel()",
+      "focusWheelPositions()",
+      "nearestFocusWheelPosition(...)",
+      "logFocusWheel(...)"
+    ],
+    "old_params_panel": [
+      "CaptureFloatingParameterOverlay",
+      "CaptureFloatingLensZoomOverlay",
+      "CaptureProfessionalParameterEntryBar",
+      "CaptureProfessionalParameterPanelContainer",
+      "CaptureProfessionalDialPanel",
+      "CaptureProfessionalLinearPanel",
+      "CaptureProfessionalPlaceholderPanel",
+      "CaptureProfessionalPanelHeader",
+      "CaptureDialScaleControl",
+      "CaptureLinearScaleControl",
+      "handlePanelDialChange",
+      "handlePanelAuto",
+      "handlePanelReset",
+      "CaptureProfessionalParameterPanelStyle",
+      "panelStyle"
+    ],
+    "tint_auto_residuals": "Old PARAMS auto route removed; current TINT route remains RESET only."
+  },
+  "retained_with_reason": [
+    {
+      "item": "CaptureProfessionalParameterKind / Mode / State",
+      "reason": "Still used by current bottom parameter row and horizontal ruler state mapping."
+    },
+    {
+      "item": "parameterState(for: .focus)",
+      "reason": "Focus is not in the bottom five parameters, but the state remains useful for the future independent Focus system."
+    },
+    {
+      "item": "DEBUG logs for EV/WB/TINT/ISO/Shutter",
+      "reason": "Low-volume write and pending diagnostics gated by DEBUG; useful for device validation."
+    }
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed",
+      "note": "BUILD SUCCEEDED; existing nested project warning remains non-blocking."
+    },
+    "json_parse": {
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "R48 is a code cleanup package; no device install was attempted in this pass."
+    }
+  },
+  "residual_risks": [
+    "CaptureProfessionalParameterState still contains some legacy panel-era descriptive fields to avoid over-cleaning shared state.",
+    "CaptureScreen.swift remains dense because no architectural split was performed.",
+    "True device interaction was not revalidated in this package."
+  ],
+  "next_recommended_package": "第 29 包：独立 Focus 对焦系统 UI 方案与接入前置"
+}

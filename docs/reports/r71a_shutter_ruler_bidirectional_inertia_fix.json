@@ -1,0 +1,67 @@
+{
+  "id": "R71A",
+  "title": "Shutter Ruler Bidirectional Inertia Fix",
+  "scope": [
+    "Shutter ruler bidirectional drag",
+    "selected pending committed readback state separation",
+    "duplicate tick guard tightening",
+    "Shutter ruler tick spacing",
+    "light inertia final step",
+    "Debug logging"
+  ],
+  "changed_files": [
+    "SellerCamera/CaptureScreen.swift",
+    "SellerCamera/CaptureBottomParameterBar.swift",
+    "README.md",
+    "docs/reports/r71a_shutter_ruler_bidirectional_inertia_fix.md",
+    "docs/reports/r71a_shutter_ruler_bidirectional_inertia_fix.json"
+  ],
+  "runtime_contract_changes": {
+    "shutter_avfoundation_write_path": false,
+    "r66_safe_clamp": false,
+    "r68_exposure_triangle": false,
+    "r69_active_format_range": false,
+    "iso": false,
+    "ev": false,
+    "wb": false,
+    "mf": false,
+    "lens_zoom": false,
+    "white_background": false,
+    "post_capture": false
+  },
+  "implementation": {
+    "selected_state": "horizontalRulerSelectedIndex uses pending shutter duration first, then runtime.",
+    "pending_state": "pendingShutterWheelDurationSeconds plus lastDispatchedShutterTickIndex represent in-flight writes.",
+    "committed_state": "committedShutterDurationSeconds plus committedShutterTickIndex are set only after readback confirms pending.",
+    "readback_rule": "Readback logs but does not clear pending while isShutterRulerInteracting is true.",
+    "duplicate_guard_rule": "Skip only when no pending, not dragging, target tick equals committed tick, and duration delta is below epsilon.",
+    "tick_spacing": "Shutter ruler uses 18pt spacing; other parameters keep 24pt.",
+    "inertia": "predictedEndTranslation can submit a bounded final inertia step, maximum 5 ticks."
+  },
+  "debug_logs": [
+    "CaptureShutterGesture",
+    "CaptureShutterInertia",
+    "CaptureShutterWheel",
+    "CaptureShutterRange",
+    "CaptureExposureReadback"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -scheme SellerCamera -project SellerCamera.xcodeproj -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath /tmp/SellerCameraDerivedData CODE_SIGNING_ALLOWED=NO clean build",
+      "result": "passed"
+    },
+    "json": {
+      "command": "python3 -m json.tool docs/reports/r71a_shutter_ruler_bidirectional_inertia_fix.json",
+      "result": "passed"
+    },
+    "device": {
+      "ran": false,
+      "notes": "True-device validation is still required for bidirectional drag, inertia feel, haptic cadence, and write frequency."
+    }
+  },
+  "risks": [
+    "Inertia is intentionally lightweight and may need device-tuned strength adjustment.",
+    "True-device logs should verify readback does not clear pending during active drag.",
+    "Very fast repeated swipes should be checked for write frequency and haptic density."
+  ]
+}

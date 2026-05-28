@@ -1,0 +1,84 @@
+{
+  "report_id": "R61",
+  "title": "Parameter horizontal ruler drag boundary consumption closure",
+  "date": "2026-05-25",
+  "scope": {
+    "implemented": [
+      "Consume drag movement before cooldown/value-application checks",
+      "Prevent residual translation accumulation at min/max boundaries",
+      "Reset step cooldown when drag direction changes",
+      "Clear drag direction state when gestures end",
+      "Apply the fix to bottom parameter horizontal ruler",
+      "Apply the fix to Manual Focus ruler"
+    ],
+    "not_implemented": [
+      "new parameter features",
+      "focus peaking",
+      "magnifier",
+      "AI focus assist",
+      "camera runtime refactor",
+      "lens zoom runtime changes",
+      "white background pipeline changes",
+      "post-capture flow changes"
+    ]
+  },
+  "problem_cause": {
+    "summary": "Drag translation could remain unconsumed when cooldown or boundary conditions prevented a value change.",
+    "effects": [
+      "outward boundary drags left residual translation",
+      "reverse drags first had to offset stale residual",
+      "users felt they had to swipe the opposite direction before the original direction worked again"
+    ]
+  },
+  "fix": {
+    "consume_before_cooldown": true,
+    "consume_when_boundary_blocks_value_change": true,
+    "reset_cooldown_on_direction_change": true,
+    "reset_direction_on_gesture_end": true,
+    "comments_added": true
+  },
+  "covered_controls": [
+    "EV",
+    "WB",
+    "TINT",
+    "ISO",
+    "Shutter",
+    "Manual Focus ruler"
+  ],
+  "mf_ruler_protection": {
+    "tick_step": 0.025,
+    "drag_threshold_points": 40,
+    "cooldown_seconds": 0.12,
+    "max_step_per_consume": 1,
+    "zero_means": "near",
+    "one_means": "far",
+    "write_path_unchanged": "cameraRuntime.setManualFocusLensPosition(_:)",
+    "af_restore_path_unchanged": "cameraRuntime.restoreAutofocusMode()"
+  },
+  "runtime_contracts": {
+    "changes_ev_wb_tint_iso_shutter": false,
+    "changes_mf_af_lock": false,
+    "changes_lens_zoom": false,
+    "changes_tap_focus": false,
+    "changes_long_press_lock": false,
+    "changes_white_background_pipeline": false,
+    "changes_post_capture_flow": false
+  },
+  "validation": {
+    "xcodebuild": "passed",
+    "json_parse": "passed",
+    "device_run": "not_run"
+  },
+  "files_changed": [
+    "SellerCamera/CaptureBottomParameterBar.swift",
+    "SellerCamera/CaptureScreen.swift",
+    "README.md",
+    "docs/reports/r61_parameter_drag_boundary_consumption_closure.md",
+    "docs/reports/r61_parameter_drag_boundary_consumption_closure.json"
+  ],
+  "residual_risks": [
+    "Physical-device validation is still required for WB/TINT/EV/ISO/Shutter and MF boundary behavior.",
+    "Lens zoom ruler was not changed because it was outside this package's required coverage."
+  ],
+  "next_package": "R62 parameter drag boundary device recheck and minimal threshold tuning if needed"
+}

@@ -1,0 +1,95 @@
+{
+  "report_id": "R59",
+  "title": "Manual Focus low ruler lensPosition write closure",
+  "date": "2026-05-25",
+  "scope": {
+    "implemented": [
+      "MF mode low-position ruler",
+      "lensPosition write through cameraRuntime.setManualFocusLensPosition",
+      "AF restore through cameraRuntime.restoreAutofocusMode",
+      "manual focus pending confirmation and timeout cleanup",
+      "LOCK-state MF disable guard",
+      "control-layer mutual exclusion with parameters, lens zoom, and more panel"
+    ],
+    "not_implemented": [
+      "Focus in bottom five parameters",
+      "independent AF capsule restoration",
+      "AF/MF/LOCK large panel restoration",
+      "focus peaking",
+      "magnifier",
+      "depth-of-field indicator",
+      "AI focus assist"
+    ]
+  },
+  "manual_focus_ruler": {
+    "location": "low viewfinder area below the lens control strip",
+    "inside_bottom_five_parameters": false,
+    "range": {
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "step": 0.05
+    },
+    "labels": {
+      "left": "near",
+      "right": "far",
+      "display_format": "MF {percent}"
+    },
+    "major_ticks": [0, 25, 50, 75, 100]
+  },
+  "runtime_paths": {
+    "manual_focus_write": "cameraRuntime.setManualFocusLensPosition(_:)",
+    "autofocus_restore": "cameraRuntime.restoreAutofocusMode()",
+    "changes_ev_wb_tint_iso_shutter_contracts": false,
+    "changes_lens_zoom_runtime": false,
+    "changes_tap_focus": false,
+    "changes_long_press_lock": false,
+    "changes_pinch_zoom": false
+  },
+  "pending_strategy": {
+    "state": [
+      "pendingManualFocusPosition",
+      "pendingManualFocusUpdatedAt",
+      "lastDispatchedManualFocusPosition"
+    ],
+    "confirmation_tolerance": 0.02,
+    "timeout_seconds": 1.4,
+    "cleared_on_runtime_confirmation": true,
+    "cleared_on_timeout": true,
+    "cleared_on_af_restore": true,
+    "cleared_on_lock": true
+  },
+  "lock_policy": {
+    "lock_source": "cameraRuntime.isFocusExposureLocked",
+    "mf_entry_disabled_when_locked": true,
+    "ruler_hidden_when_locked": true,
+    "blocks_lens_position_write_when_locked": true,
+    "local_mf_mode_cleared_when_locked": true
+  },
+  "mutual_exclusion": {
+    "opening_mf_closes_bottom_parameters": true,
+    "opening_mf_closes_lens_zoom": true,
+    "opening_mf_closes_more_panel": true,
+    "opening_bottom_parameter_hides_mf_ruler": true,
+    "opening_lens_zoom_hides_mf_ruler": true,
+    "opening_more_panel_hides_mf_ruler": true,
+    "mf_mode_persists_until_mf_button_tapped_again": true
+  },
+  "validation": {
+    "xcodebuild": "passed",
+    "json_parse": "passed",
+    "device_run": "not_run",
+    "device_reason": "No physical-device run was performed in this package."
+  },
+  "files_changed": [
+    "SellerCamera/CaptureScreen.swift",
+    "README.md",
+    "docs/reports/r59_manual_focus_ruler_lens_position_write_closure.md",
+    "docs/reports/r59_manual_focus_ruler_lens_position_write_closure.json"
+  ],
+  "residual_risks": [
+    "Physical-device validation is still required to confirm whether lensPosition 0.0 near / 1.0 far feels correct on target hardware.",
+    "MF ruler step size may need tuning after device validation.",
+    "MF mode consumes preview taps to avoid AF overriding manual focus; this interaction requires device feel validation."
+  ],
+  "next_package": "R60 Focus device validation and MF feel/state minimal correction"
+}

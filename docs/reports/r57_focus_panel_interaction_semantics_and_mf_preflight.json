@@ -1,0 +1,134 @@
+{
+  "id": "r57_focus_panel_interaction_semantics_and_mf_preflight",
+  "round": "R57",
+  "date": "2026-05-24",
+  "package_name": "独立 Focus 面板交互完善 + Manual Focus 微调接入前置",
+  "scope": {
+    "area": "independent_focus_panel_semantics",
+    "focus_returned_to_bottom_bar": false,
+    "manual_focus_ruler_added": false,
+    "new_manual_focus_write_added": false,
+    "set_manual_focus_called_from_new_ui": false,
+    "restore_autofocus_changed": false,
+    "tap_focus_changed": false,
+    "long_press_lock_changed": false,
+    "pinch_zoom_changed": false,
+    "five_parameter_contract_changed": false,
+    "lens_runtime_changed": false,
+    "more_panel_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "focus_semantics": {
+    "priority": [
+      "LOCK",
+      "MF",
+      "AF"
+    ],
+    "lock_source": "cameraRuntime.isFocusExposureLocked",
+    "manual_source": "cameraRuntime.focusControlMode == .manual",
+    "auto_fallback": true,
+    "ae_l_only_maps_to_focus_lock": false,
+    "af": {
+      "current_state_badge": "当前",
+      "manual_state_badge": "恢复",
+      "locked_state_badge": "禁用",
+      "future_runtime_path": "cameraRuntime.restoreAutofocusMode()"
+    },
+    "mf": {
+      "current_state_badge": "当前",
+      "auto_state_badge": "微调",
+      "locked_state_badge": "禁用",
+      "unsupported_badge": "不可用",
+      "future_runtime_path": "cameraRuntime.setManualFocusLensPosition(_:)"
+    },
+    "lock": {
+      "current_state_badge": "当前",
+      "inactive_state_badge": "长按触发",
+      "runtime_path_changed": false
+    }
+  },
+  "mf_preflight": {
+    "recommended_entry": "Focus panel MF row",
+    "recommended_ui_location": "independent low-position Focus panel, not bottom five-parameter bar",
+    "recommended_control": "horizontal ruler matching five-parameter and lens ruler language",
+    "range": "0.0...1.0 lensPosition",
+    "left_label": "Near / 近",
+    "right_label": "Far / 远",
+    "display_examples": [
+      "MF 35",
+      "MF 0.35",
+      "35%"
+    ],
+    "pending_strategy": [
+      "pendingManualFocusPosition",
+      "confirm with currentManualFocusPosition",
+      "same-value dedupe",
+      "boundary dedupe",
+      "timeout cleanup",
+      "light haptic on tick changes"
+    ],
+    "locked_behavior": "MF ruler disabled; ask user to long-press preview to unlock first"
+  },
+  "mutual_exclusion": {
+    "opening_focus_closes_five_parameter_inline_controls": true,
+    "opening_focus_closes_lens_zoom_ruler": true,
+    "opening_focus_closes_more_panel": true,
+    "opening_five_parameter_inline_controls_closes_focus_panel": true,
+    "opening_lens_zoom_ruler_closes_focus_panel": true,
+    "opening_more_panel_closes_focus_panel": true,
+    "preview_tap_closes_focus_panel_first": true
+  },
+  "protected_contracts": {
+    "five_parameters": "EV / WB / TINT / ISO / S",
+    "ev_changed": false,
+    "wb_changed": false,
+    "tint_changed": false,
+    "iso_changed": false,
+    "shutter_changed": false,
+    "lens_zoom_changed": false,
+    "more_panel_changed": false,
+    "white_background_changed": false,
+    "post_capture_changed": false
+  },
+  "modified_files": [
+    "SellerCamera/CaptureScreen.swift",
+    "README.md",
+    "docs/reports/r57_focus_panel_interaction_semantics_and_mf_preflight.md",
+    "docs/reports/r57_focus_panel_interaction_semantics_and_mf_preflight.json"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r57_focus_panel_interaction_semantics_and_mf_preflight.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No physical device validation was run during this package."
+    }
+  },
+  "known_risks": [
+    "Focus panel semantics are still read-only and must be validated before adding MF writes.",
+    "AF restore should not bypass AE/AF Lock; unlock semantics need confirmation before implementation.",
+    "MF ruler location and label density need true-device validation."
+  ],
+  "next_package_recommendation": {
+    "name": "第 38 包：Manual Focus 低位微调 ruler 接入 —— MF 状态切换 + lensPosition 写入闭环",
+    "should_do": [
+      "Add independent low-position MF ruler.",
+      "Use setManualFocusLensPosition(_:) only after MF entry is selected.",
+      "Use restoreAutofocusMode() for AF recovery when not locked.",
+      "Disable MF writes under LOCK.",
+      "Add pending and runtime confirmation for lensPosition."
+    ],
+    "should_not_do": [
+      "Do not return Focus to the bottom five-parameter bar.",
+      "Do not rewrite tap focus or AE/AF Lock behavior.",
+      "Do not build a broad focus runtime architecture rewrite."
+    ]
+  }
+}

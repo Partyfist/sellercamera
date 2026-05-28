@@ -1,0 +1,122 @@
+{
+  "id": "r56_independent_focus_status_capsule_and_panel_skeleton",
+  "round": "R56",
+  "date": "2026-05-24",
+  "package_name": "独立 Focus 状态胶囊 + AF / MF / LOCK 最小 UI 骨架",
+  "scope": {
+    "area": "independent_focus_status_ui_skeleton",
+    "focus_returned_to_bottom_bar": false,
+    "focus_status_capsule_added": true,
+    "focus_panel_skeleton_added": true,
+    "manual_focus_ruler_added": false,
+    "new_manual_focus_write_added": false,
+    "restore_autofocus_changed": false,
+    "tap_focus_changed": false,
+    "long_press_lock_changed": false,
+    "pinch_zoom_changed": false,
+    "five_parameter_contract_changed": false,
+    "lens_runtime_changed": false,
+    "more_panel_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "focus_status_mapping": {
+    "priority": [
+      "LOCK",
+      "MF",
+      "AF"
+    ],
+    "lock_source": "cameraRuntime.isFocusExposureLocked",
+    "manual_source": "cameraRuntime.focusControlMode == .manual",
+    "auto_fallback": true,
+    "ae_l_only_maps_to_focus_lock": false
+  },
+  "ui": {
+    "capsule": {
+      "location": "viewfinder edge, lower-left biased above the lens strip",
+      "states": [
+        "AF",
+        "MF",
+        "LOCK"
+      ],
+      "style": "small dark translucent capsule with state accent",
+      "bottom_five_parameter_member": false
+    },
+    "panel": {
+      "type": "read_only_skeleton",
+      "title": "Focus",
+      "rows": [
+        "AF",
+        "MF",
+        "LOCK"
+      ],
+      "runtime_write": false,
+      "manual_focus_ruler": false
+    }
+  },
+  "mutual_exclusion": {
+    "opening_focus_closes_five_parameter_inline_controls": true,
+    "opening_focus_closes_lens_zoom_ruler": true,
+    "opening_focus_closes_more_panel": true,
+    "opening_five_parameter_inline_controls_closes_focus_panel": true,
+    "opening_lens_zoom_ruler_closes_focus_panel": true,
+    "opening_more_panel_closes_focus_panel": true
+  },
+  "gesture_contracts": {
+    "preview_tap_when_focus_panel_open": "dismiss_focus_panel_first_no_same_tap_focus",
+    "preview_tap_when_focus_panel_closed": "existing_tap_focus_behavior",
+    "long_press_preview": "unchanged_ae_af_lock",
+    "pinch_zoom": "unchanged_lens_zoom"
+  },
+  "protected_contracts": {
+    "five_parameters": "EV / WB / TINT / ISO / S",
+    "ev_contract_changed": false,
+    "wb_tint_contract_changed": false,
+    "tint_reset_not_auto": true,
+    "iso_shutter_lock_contract_changed": false,
+    "shutter_contract_changed": false,
+    "lens_zoom_changed": false,
+    "more_panel_changed": false,
+    "focus_runtime_write_changed": false,
+    "white_background_changed": false,
+    "post_capture_changed": false
+  },
+  "modified_files": [
+    "SellerCamera/CaptureScreen.swift",
+    "README.md",
+    "docs/reports/r56_independent_focus_status_capsule_and_panel_skeleton.md",
+    "docs/reports/r56_independent_focus_status_capsule_and_panel_skeleton.json"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r56_independent_focus_status_capsule_and_panel_skeleton.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No physical device validation was run during this package."
+    }
+  },
+  "known_risks": [
+    "The capsule position needs true-device visual validation to ensure it does not cover product subjects.",
+    "The panel is read-only in this package; future work must clarify AF / MF / LOCK interactions before adding manual focus writes.",
+    "LOCK state maps only to AE/AF Lock, not AE-L-only state."
+  ],
+  "next_package_recommendation": {
+    "name": "第 37 包：独立 Focus 面板交互完善 + Manual Focus 微调接入前置",
+    "should_do": [
+      "Define AF / MF / LOCK row interactions.",
+      "Design MF ruler behavior before implementation.",
+      "Clarify LOCK-state disabled behavior.",
+      "Clarify AF restore button semantics."
+    ],
+    "should_not_do": [
+      "Do not jump directly into broad focus runtime rewrites.",
+      "Do not return Focus to the bottom five-parameter bar."
+    ]
+  }
+}

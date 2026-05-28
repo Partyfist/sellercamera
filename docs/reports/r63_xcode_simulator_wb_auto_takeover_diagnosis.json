@@ -1,0 +1,52 @@
+{
+  "report": "r63_xcode_simulator_wb_auto_takeover_diagnosis",
+  "date": "2026-05-25",
+  "scope": "WB AUTO first-drag diagnosis and minimal takeover fix",
+  "simulator": {
+    "device": "iPhone 16e",
+    "runtime": "iOS 26.3",
+    "app_launched": true,
+    "camera_hardware_available": false,
+    "debug_fallback_used": true,
+    "drag_automation_completed": false,
+    "drag_automation_limitation": "Computer Use exposed click/type only; osascript accessibility was denied and CGEvent drag was not accepted by Simulator."
+  },
+  "diagnostics": {
+    "wb_ruler_drag_log": "[CaptureWBRulerDrag]",
+    "wb_wheel_log": "[CaptureWBWheel]",
+    "observed_root_cause": "AUTO boundary takeover could force-write the current boundary tick, so the first drag completed a dispatch path without a visible manual value change.",
+    "debug_only": true
+  },
+  "changes": {
+    "capture_screen": [
+      "Added DEBUG WB takeover diagnostics.",
+      "Added DEBUG simulator-only WB UI fallback for no-camera simulator diagnosis.",
+      "Changed AUTO boundary takeover to target an adjacent manual tick instead of the same boundary tick."
+    ],
+    "capture_bottom_parameter_bar": [
+      "Added DEBUG WB drag consumption diagnostics."
+    ],
+    "readme": "Updated report index."
+  },
+  "contracts": {
+    "ev": "unchanged",
+    "wb": "runtime contract unchanged; AUTO takeover target fixed",
+    "tint": "unchanged; RESET remains RESET",
+    "iso": "runtime contract unchanged",
+    "shutter": "runtime contract unchanged",
+    "mf": "unchanged",
+    "lens_zoom": "unchanged",
+    "white_background": "unchanged",
+    "post_capture": "unchanged"
+  },
+  "validation": {
+    "xcodebuild_generic_ios_simulator": "passed",
+    "xcodebuild_booted_simulator_debug": "passed",
+    "json_tool": "passed",
+    "real_device": "not_run"
+  },
+  "risks": [
+    "Real-device WB first right-drag still needs confirmation.",
+    "If runtime auto preset callbacks clear pending manual state, the new diagnostics should be used for a follow-up fix."
+  ]
+}

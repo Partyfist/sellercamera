@@ -1,0 +1,41 @@
+{
+  "report_id": "r40_capture_control_console_visual_motion_polish",
+  "package": "第 19 包：拍摄页专业控制台视觉质感 + 动效手感打磨",
+  "scope": {
+    "included": [
+      "底部五参数栏深色专业控制台视觉打磨",
+      "展开滚轮面板背景层级与描边阴影打磨",
+      "active 参数高亮与数值变化轻动效",
+      "AUTO/RESET/LOCK 控制按钮视觉语义区分",
+      "展开/收起与 active 切换轻动画",
+      "R40 报告与 README 索引更新"
+    ],
+    "excluded": [
+      "Focus 独立控件或 Focus 回到底部五参数",
+      "EV/WB/TINT/ISO/Shutter runtime 写入逻辑变更",
+      "WB/TINT 合同变更",
+      "ISO/Shutter LOCK 合同变更",
+      "白底处理和拍后流程改造",
+      "Tone/Style/滤镜/调色盘能力"
+    ]
+  },
+  "contracts_preserved": {
+    "primary_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "tint": "RESET-only semantics",
+    "wb_tint": "WB and TINT preserve each other during manual writes; WB AUTO clears TINT",
+    "iso_shutter": "Shutter remains LOCK when ISO is manual",
+    "focus": "Focus remains outside bottom five-parameter console"
+  },
+  "verification": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_visual_motion_validation": "not_executed_in_this_session"
+  },
+  "conclusion": "R40 完成拍摄页底部五参数控制台视觉与轻动效打磨，未改变功能合同，可进入真机主观确认或下一包独立 Focus 方案。"
+}
+

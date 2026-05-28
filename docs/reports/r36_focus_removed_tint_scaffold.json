@@ -1,0 +1,35 @@
+{
+  "report_id": "r36_focus_removed_tint_scaffold",
+  "package": "第 15 包：Focus 从五参数栏移出 + TINT 色偏参数接入骨架",
+  "scope": {
+    "included": [
+      "底部主参数集合从 FOCUS/EV/WB/ISO/S 调整为 EV/WB/TINT/ISO/S",
+      "TINT 参数显示与交互骨架接入（无真实写入）",
+      "Focus 运行时能力保留且不再由底部参数栏直接暴露",
+      "R36 文档与索引更新"
+    ],
+    "excluded": [
+      "TINT runtime 写入能力",
+      "Focus 点击对焦/AEAF 锁定逻辑重构",
+      "EV/WB/ISO/Shutter 写入行为重构",
+      "白底处理与拍后流程改动"
+    ]
+  },
+  "runtime_contract": {
+    "active_bottom_parameters": [
+      "exposureCompensation",
+      "whiteBalance",
+      "tint",
+      "iso",
+      "shutter"
+    ],
+    "focus": "保留 setManualFocusLensPosition(_)/restoreAutofocusMode() 能力，但从底部主参数集合移出",
+    "tint": "当前为 UI 骨架，AUTO 语义展示，滚轮交互与写入均未接入"
+  },
+  "verification": {
+    "simulator_build": "passed",
+    "device_manual_validation": "not_requested_in_this_package"
+  },
+  "conclusion": "R36 已完成底部参数口径收口：Focus 移出五参数主栏，TINT 以最小骨架接入，不扩展运行时写入。",
+  "next_step": "后续若进入 TINT 真实接入包，应先核查 runtime 是否已有 tint 支持并定义 Auto/Kelvin/Tint 的状态合同。"
+}

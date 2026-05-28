@@ -1,0 +1,74 @@
+{
+  "report": "R62 AUTO to MANUAL parameter takeover closure",
+  "created_at": "2026-05-25 22:24:33 CST",
+  "scope": {
+    "changed": [
+      "AUTO to MANUAL takeover target selection",
+      "pending manual UI state synchronization",
+      "R62 report and README index"
+    ],
+    "unchanged": [
+      "EV runtime contract",
+      "WB/TINT runtime contract",
+      "ISO runtime contract",
+      "Shutter runtime contract",
+      "Focus placement",
+      "Lens zoom runtime",
+      "White background pipeline",
+      "Post-capture flow",
+      "R61 drag consumption behavior"
+    ]
+  },
+  "files": {
+    "modified": [
+      "SellerCamera/CaptureScreen.swift",
+      "README.md"
+    ],
+    "added": [
+      "docs/reports/r62_auto_to_manual_parameter_takeover_closure.md",
+      "docs/reports/r62_auto_to_manual_parameter_takeover_closure.json"
+    ]
+  },
+  "problem_cause": [
+    "AUTO state first drag could hit boundary or duplicate guards before pending/manual state was established.",
+    "When the first target equaled the current AUTO runtime value, no manual runtime write was dispatched.",
+    "UI could remain in AUTO because pending manual state was never created."
+  ],
+  "implementation": {
+    "takeover_helper": "manualTakeoverTargetIndex(currentIndex:direction:valueCount:isAutoMode:)",
+    "force_write_behavior": "AUTO boundary takeover can dispatch current boundary tick to establish manual mode instead of returning false.",
+    "ui_sync": [
+      "WB pending value forces manual mode display.",
+      "ISO pending value forces manual mode display.",
+      "Shutter pending value forces manual mode display.",
+      "EV pending value forces manual mode display.",
+      "WB/ISO/Shutter AUTO controls remain usable during pending manual state."
+    ]
+  },
+  "covered_parameters": [
+    "EV",
+    "WB",
+    "ISO",
+    "Shutter"
+  ],
+  "checked_parameters": [
+    "TINT",
+    "MF"
+  ],
+  "drag_consumption_protection": {
+    "r61_logic_changed": false,
+    "boundary_consume_preserved": true,
+    "direction_reset_preserved": true,
+    "mf_ruler_changed": false
+  },
+  "validation": {
+    "json_parse": "passed",
+    "xcodebuild": "passed",
+    "device_validation": "not_run"
+  },
+  "risks": [
+    "If a camera reports an AUTO value at the exact edge of the supported range, the first outward drag may primarily establish manual mode with minimal visual change.",
+    "True-device validation is still required for WB AUTO first-drag behavior."
+  ],
+  "next_recommendation": "Run R63 true-device retest focused on AUTO first-drag takeover and R61 boundary behavior."
+}

@@ -1,0 +1,37 @@
+{
+  "report_id": "r30_shutter_wheel_write_integration",
+  "package": "第 9 包：Shutter 短竖向滚轮交互化 + Auto / Manual Shutter 写入接入",
+  "scope": {
+    "included": [
+      "Shutter 短滚轮真实交互",
+      "Shutter AUTO 真实恢复",
+      "Shutter pending/去重/超时回收",
+      "设备 install/launch 执行验证"
+    ],
+    "excluded": [
+      "Focus 写入",
+      "完整 ISO+Shutter 手动曝光系统",
+      "白底处理链路改动",
+      "拍后流程改动"
+    ]
+  },
+  "runtime_contract": {
+    "shutter_value_sources": [
+      "currentShutterDurationSeconds",
+      "currentManualShutterDurationSeconds",
+      "selectedShutterPreset"
+    ],
+    "manual_write_path": "setShutterDialValue(normalized) -> applyShutterPreset(.custom) -> setExposureModeCustom(duration, iso)",
+    "auto_path": "applyShutterAuto() -> applyShutterPreset(.auto) -> continuousAutoExposure",
+    "iso_coordination_policy": "沿用现有保守策略：ISO 非 Auto 时 Shutter 锁定，避免曝光状态耦合扩散。"
+  },
+  "verification": {
+    "simulator_build": "passed",
+    "device_build": "passed",
+    "device_install": "passed",
+    "device_launch": "passed_with_devicectl_console_session",
+    "manual_visual_verification_on_device": "not_completed_in_this_environment"
+  },
+  "conclusion": "Shutter 真实写入链路已接通，可进入第 10 包做四参数真机闭环验证。",
+  "next_step": "执行 EV/WB/ISO/Shutter 交替操作与主观手感真机闭环，并做最小显示修正。"
+}

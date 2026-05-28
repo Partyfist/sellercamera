@@ -1,0 +1,79 @@
+{
+  "report": "r66_exposure_iso_shutter_write_safety_clamp",
+  "date": "2026-05-26",
+  "scope": "ISO and shutter custom exposure write safety clamp",
+  "crash": {
+    "exception": "NSRangeException",
+    "api": "AVCaptureDevice.setExposureModeCustom(duration:iso:)",
+    "observed_problem": "An ISO value outside activeFormat.minISO ... activeFormat.maxISO was passed to AVCaptureDevice.",
+    "root_cause": "Custom exposure write paths did not all sanitize the final ISO and duration immediately before calling AVCaptureDevice; quantization or current device ISO could exceed the current activeFormat after lens or format changes."
+  },
+  "modified_files": [
+    "SellerCamera/CaptureLivePreviewView.swift",
+    "docs/reports/r66_exposure_iso_shutter_write_safety_clamp.md",
+    "docs/reports/r66_exposure_iso_shutter_write_safety_clamp.json",
+    "README.md"
+  ],
+  "custom_exposure_write_points": [
+    "applyISOPreset low/medium/high",
+    "applyISOPreset custom",
+    "applyShutterPreset fixed presets",
+    "applyShutterPreset custom",
+    "tap focus preserve manual shutter",
+    "tap focus preserve manual ISO"
+  ],
+  "runtime_safety": {
+    "iso_clamp": "Final write ISO is clamped with current device.activeFormat.minISO and maxISO.",
+    "invalid_iso": "NaN, infinite, or non-positive raw ISO falls back to current device.iso, then minISO if needed.",
+    "duration_clamp": "Final write duration is clamped with current activeFormat minExposureDuration and maxExposureDuration.",
+    "invalid_duration": "Invalid raw duration falls back to current device.exposureDuration, then minExposureDuration if needed.",
+    "invalid_range": "If activeFormat ISO or duration ranges are invalid, the custom exposure write is skipped with a Debug log."
+  },
+  "lens_switch_protection": {
+    "active_format_source": "Current AVCaptureDevice.activeFormat is read inside the sessionQueue immediately before each custom exposure write.",
+    "old_state_protection": "Old UI ticks, pending values, current device ISO, or published ranges cannot bypass the final runtime clamp."
+  },
+  "debug_logging": {
+    "enabled": "DEBUG only",
+    "prefix": "[CaptureExposureWrite]",
+    "fields": [
+      "context",
+      "rawISO",
+      "safeISO",
+      "minISO",
+      "maxISO",
+      "rawDuration",
+      "safeDuration",
+      "reason"
+    ],
+    "reasons": [
+      "normal",
+      "invalidISO",
+      "clampedISO",
+      "invalidDuration",
+      "clampedDuration",
+      "skippedInvalidISORange",
+      "skippedInvalidDurationRange"
+    ]
+  },
+  "contracts": {
+    "ev": "unchanged",
+    "wb": "unchanged",
+    "tint": "unchanged",
+    "iso": "UI and contract unchanged; runtime write safety added",
+    "shutter": "UI and contract unchanged; runtime write safety added",
+    "mf_af_lock": "unchanged",
+    "lens_zoom": "unchanged",
+    "white_background": "unchanged",
+    "post_capture": "unchanged"
+  },
+  "validation": {
+    "xcodebuild_generic_ios_simulator": "passed",
+    "json_tool": "passed",
+    "real_device": "not_run"
+  },
+  "risks": [
+    "Real-device stress testing is still needed for ISO/Shutter after lens switches.",
+    "If a device reports invalid activeFormat ranges during a transition, the current behavior skips the unsafe custom exposure write and logs the reason."
+  ]
+}

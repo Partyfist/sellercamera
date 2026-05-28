@@ -1,0 +1,71 @@
+{
+  "report_id": "r41_five_parameter_dial_damping_and_precision_tuning",
+  "package": "第 20 包：五参数滚轮阻尼与常用区精度修正",
+  "scope": {
+    "included": [
+      "EV/WB/TINT/ISO/Shutter per-parameter drag damping",
+      "per-parameter maximum wheel step count",
+      "WB Kelvin common-range tick refinement",
+      "TINT -50...+50 step-5 contract reinforcement",
+      "ISO common 1/3-stop tick list",
+      "R41 report and README index"
+    ],
+    "excluded": [
+      "Tone/Style/filter/palette features",
+      "Focus returning to bottom five-parameter console",
+      "runtime write path changes",
+      "WB/TINT contract changes",
+      "ISO/Shutter LOCK contract changes",
+      "white background processing changes",
+      "post-capture flow changes"
+    ]
+  },
+  "damping": {
+    "ev": {
+      "threshold_pt": 28,
+      "maximum_step_count": 2
+    },
+    "wb": {
+      "threshold_pt": 26,
+      "maximum_step_count": 3
+    },
+    "tint": {
+      "threshold_pt": 30,
+      "maximum_step_count": 2
+    },
+    "iso": {
+      "threshold_pt": 26,
+      "maximum_step_count": 3
+    },
+    "shutter": {
+      "threshold_pt": 28,
+      "maximum_step_count": 2
+    }
+  },
+  "ticks": {
+    "ev": "kept -2.0...+2.0 in one-third EV steps, device-clipped",
+    "wb": "2800K...8000K preferred list with denser common Kelvin range, device-clipped",
+    "tint": "-50...+50 step 5, device-clipped",
+    "iso": "preferred 1/3-stop list 25...3200, device-clipped",
+    "shutter": "kept 1/3-stop common shutter list, device-clipped"
+  },
+  "contracts_preserved": {
+    "primary_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "tint": "RESET-only semantics",
+    "wb_tint": "manual WB and TINT preserve each other; WB AUTO clears TINT",
+    "iso_shutter": "Shutter remains LOCK when ISO is manual",
+    "focus": "Focus remains outside bottom five-parameter console",
+    "runtime_write_paths": "unchanged"
+  },
+  "verification": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_damping_validation": "not_executed_in_this_session"
+  },
+  "conclusion": "R41 将五参数滚轮从全局快速跳档收口为按参数阻尼和常用区精度优先的短滑精调，不改变功能合同。"
+}

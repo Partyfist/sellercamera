@@ -1,0 +1,22 @@
+{
+  "report_id": "r28_ev_wb_device_validation_closure",
+  "package_type": "runtime_validation_and_minimal_fix",
+  "scope": [
+    "ev_wheel_interaction",
+    "wb_wheel_interaction",
+    "wb_auto_display_alignment"
+  ],
+  "changes": {
+    "wheel_direction": "up_increase_down_decrease",
+    "wb_auto_center_tick": "A_when_auto_and_no_pending"
+  },
+  "build_validation": {
+    "simulator_debug_build": "passed"
+  },
+  "device_validation": {
+    "device_build": "passed",
+    "device_app_visibility_check": "passed",
+    "interactive_device_launch": "blocked_by_coredevice_service_timeout"
+  },
+  "conclusion": "code_level_closure_done_runtime_subjective_verification_pending_due_environment"
+}

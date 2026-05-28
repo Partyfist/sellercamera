@@ -1,0 +1,39 @@
+{
+  "report_id": "r39_five_parameter_device_validation_precision_and_state_polish",
+  "package": "第 18 包：EV / WB / TINT / ISO / S 真机综合验证 + 参数精度与开关状态打磨",
+  "scope": {
+    "included": [
+      "保持 EV/WB/TINT/ISO/S 五参数合同",
+      "WB 滚轮刻度细化（常用 Kelvin 档 + 设备范围裁剪）",
+      "Shutter 滚轮刻度细化（更细 1/3 stop 候选 + 设备范围裁剪）",
+      "展开面板参数列整列点击激活热区增强",
+      "AUTO/RESET/LOCK 控制按钮视觉语义区分增强",
+      "R39 报告与 README 索引更新"
+    ],
+    "excluded": [
+      "Focus 接入或 Focus 回到底部五参数",
+      "WB/TINT 合同重定义",
+      "EV/ISO/Shutter runtime 重构",
+      "白底处理和拍后流程改造",
+      "Tone/Style/滤镜/调色盘能力扩展"
+    ]
+  },
+  "contracts": {
+    "primary_parameters": [
+      "exposureCompensation",
+      "whiteBalance",
+      "tint",
+      "iso",
+      "shutter"
+    ],
+    "tint": "RESET-only semantics (no AUTO)",
+    "wb_auto": "WB AUTO restores auto white balance and tint state back to 0",
+    "iso_shutter_boundary": "Shutter remains LOCK when ISO is manual; Shutter re-enabled after ISO AUTO"
+  },
+  "verification": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_manual_validation": "not_executed_in_this_session"
+  },
+  "conclusion": "R39 完成参数精度与状态识别最小打磨，并保持五参数合同稳定；真机综合主观验证仍需按清单补验。"
+}
+

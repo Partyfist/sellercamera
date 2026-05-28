@@ -708,6 +708,9 @@ struct CaptureWhiteBackgroundProcessor {
 
         return [
             "processor": "VNForegroundMask+EdgeRefineV2.4",
+            "segmentation_provider": "vision",
+            "segmentation_request": "VNGenerateForegroundInstanceMaskRequest",
+            "mainline_model_policy": "vision_only",
             "foreground_tone_preservation": "enabled",
             "r1_regression_fix": "enabled",
             "r1_decontam_profile": "tone-safe-background-outer-ring-only",

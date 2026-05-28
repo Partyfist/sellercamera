@@ -1,0 +1,60 @@
+{
+  "report": "r66_capture_ui_alignment_lens_control_spacing",
+  "date": "2026-05-26",
+  "scope": "Capture page top ratio alignment and lens control spacing polish",
+  "changes": {
+    "capture_screen": [
+      "Moved the ratio/pixel menu next to the flash button to form a left-aligned top tool group.",
+      "Separated AE-L, lens focal buttons, and MF into auxiliary/main/auxiliary visual groups.",
+      "Added dense sizing for four-or-more focal controls without changing behavior."
+    ],
+    "readme": "Updated report index."
+  },
+  "top_bar": {
+    "before": "flash / spacer / ratio-pixel / spacer / camera / more",
+    "after": "flash / ratio-pixel / spacer / camera / more",
+    "safe_area_changed": false,
+    "behavior_changed": false
+  },
+  "lens_control": {
+    "layout": "AE-L + focal group + MF",
+    "dense_mode_trigger": "availableCapabilities.count >= 4",
+    "dense_mode": {
+      "auxiliary_min_width": 42,
+      "focal_min_width": 50,
+      "focal_spacing": 5,
+      "accessory_spacing": 10
+    },
+    "normal_mode": {
+      "auxiliary_min_width": 48,
+      "focal_min_width": 58,
+      "focal_spacing": 7,
+      "accessory_spacing": 14
+    },
+    "device_capability_driven_focals": true
+  },
+  "contracts": {
+    "ev": "unchanged",
+    "wb": "unchanged; R65 takeover fix not touched",
+    "tint": "unchanged",
+    "iso": "unchanged",
+    "shutter": "unchanged",
+    "mf": "runtime unchanged",
+    "ae_l": "runtime unchanged",
+    "lens_zoom": "unchanged",
+    "white_background": "unchanged",
+    "post_capture": "unchanged"
+  },
+  "validation": {
+    "xcodebuild_generic_ios_simulator": "passed",
+    "json_tool": "passed",
+    "simulator": "clean_derived_data_build_installed_and_screenshot_captured",
+    "simulator_screenshot": "Reference/R66/r66_capture_ui_alignment_simulator_clean.png",
+    "simulator_observation": "Top ratio/pixel button is now adjacent to flash. Simulator has no real lens capabilities, so the lens control strip shows AE-L / unavailable focal segment / MF with separated auxiliary controls.",
+    "real_device": "not_run"
+  },
+  "risks": [
+    "Dense mode spacing still needs real-device visual confirmation on narrow screens.",
+    "If four-focal devices still feel crowded, a follow-up can more strongly separate AE-L/MF from the centered focal group."
+  ]
+}

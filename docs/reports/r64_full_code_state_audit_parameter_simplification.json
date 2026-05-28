@@ -1,0 +1,82 @@
+{
+  "report": "r64_full_code_state_audit_parameter_simplification",
+  "date": "2026-05-25",
+  "scope": "Full capture-page state audit and minimal parameter state-priority closure",
+  "audit": {
+    "files_reviewed": [
+      "SellerCamera/CaptureScreen.swift",
+      "SellerCamera/CaptureBottomParameterBar.swift",
+      "SellerCamera/CaptureLivePreviewView.swift",
+      "SellerCamera/CaptureProfessionalParameterPanel.swift",
+      "White-background and post-capture entry points"
+    ],
+    "necessary_state": [
+      "runtime preset/current values",
+      "local pending manual values",
+      "last dispatched values",
+      "inline overlay presentation state",
+      "MF/AF/LOCK state",
+      "DEBUG simulator-only WB fallback"
+    ],
+    "conflicting_state": [
+      "runtime AUTO preset callbacks cleared pending manual values while manual device writes were still in flight",
+      "WB was most exposed because white-balance gains are confirmed asynchronously after device configuration"
+    ],
+    "temporary_patches_reviewed": [
+      "R61 drag consumption helper retained",
+      "R62/R63 manual takeover target logic retained",
+      "R63 DEBUG WB diagnostics retained",
+      "R63 DEBUG simulator fallback retained and confirmed DEBUG/simulator-only"
+    ]
+  },
+  "root_cause": {
+    "wb_first_drag": "A manual WB drag established pendingWhiteBalanceWheelValue, but selectedWhiteBalancePreset could still emit or remain .auto before the async device write confirmed .custom. The previous onChange handler cleared pending immediately on .auto, allowing UI to fall back to AUTO and making the first drag appear swallowed.",
+    "category": "state-priority conflict between pending manual UI state and runtime AUTO echo"
+  },
+  "changes": {
+    "capture_screen": [
+      "Do not clear WB pending manual state when runtime AUTO is observed while pendingWhiteBalanceWheelValue exists.",
+      "Do not clear ISO pending manual state when runtime AUTO is observed while pendingISOWheelValue exists.",
+      "Do not clear Shutter pending manual state when runtime AUTO is observed while pendingShutterWheelDurationSeconds exists.",
+      "Explicit AUTO button paths still clear pending before calling runtime AUTO."
+    ],
+    "deleted_code": [],
+    "merged_code": [],
+    "retained_code": [
+      "R61 drag boundary consumption",
+      "R62/R63 manual takeover target helper",
+      "DEBUG-only WB diagnostics",
+      "DEBUG simulator-only WB fallback"
+    ]
+  },
+  "parameter_priority": [
+    "pending manual value",
+    "confirmed manual runtime value",
+    "runtime current value",
+    "AUTO fallback display",
+    "default preset value"
+  ],
+  "contracts": {
+    "ev": "unchanged",
+    "wb": "runtime contract unchanged; pending manual now outranks runtime AUTO echo",
+    "tint": "unchanged; RESET remains RESET and explicit WB AUTO still clears Tint",
+    "iso": "runtime contract unchanged; pending manual now outranks runtime AUTO echo",
+    "shutter": "runtime contract unchanged; pending manual now outranks runtime AUTO echo",
+    "mf": "unchanged",
+    "lens_zoom": "unchanged",
+    "white_background": "unchanged",
+    "post_capture": "unchanged"
+  },
+  "validation": {
+    "xcodebuild_generic_ios_simulator": "passed",
+    "xcodebuild_note": "Xcode emitted an existing IDEFileReferenceDebug warning but ended with BUILD SUCCEEDED.",
+    "json_tool": "passed",
+    "simulator": "not_run_after_r64",
+    "real_device": "not_run"
+  },
+  "risks": [
+    "WB first right-drag still requires real-device validation.",
+    "If the issue persists, inspect DEBUG WB logs for timeout or another state callback clearing pending.",
+    "manualTakeoverTargetIndex remains somewhat complex but was not rewritten to avoid broad behavior changes."
+  ]
+}

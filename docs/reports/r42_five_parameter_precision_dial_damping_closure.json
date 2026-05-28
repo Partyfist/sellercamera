@@ -1,0 +1,67 @@
+{
+  "report_id": "r42_five_parameter_precision_dial_damping_closure",
+  "package": "第 22 包：五参数滚轮精密阻尼二次收口 —— 取消快速跨档 + 提高触发阈值 + 常用区慢速微调",
+  "scope": {
+    "included": [
+      "Raised drag thresholds for EV/WB/TINT/ISO/Shutter",
+      "Removed all three-step wheel jumps",
+      "Limited EV/TINT/Shutter to one step per drag event",
+      "Limited WB/ISO to two steps for explicit large drags",
+      "Added short wheel step cooldown",
+      "R42 report and README index"
+    ],
+    "excluded": [
+      "runtime write path changes",
+      "WB/TINT contract changes",
+      "TINT RESET contract changes",
+      "ISO/Shutter LOCK contract changes",
+      "Focus control",
+      "Tone/Style/filter/palette features",
+      "white background processing changes",
+      "post-capture flow changes"
+    ]
+  },
+  "damping": {
+    "ev": {
+      "threshold_pt": 42,
+      "maximum_step_count": 1
+    },
+    "wb": {
+      "threshold_pt": 40,
+      "maximum_step_count": 2
+    },
+    "tint": {
+      "threshold_pt": 44,
+      "maximum_step_count": 1
+    },
+    "iso": {
+      "threshold_pt": 40,
+      "maximum_step_count": 2
+    },
+    "shutter": {
+      "threshold_pt": 44,
+      "maximum_step_count": 1
+    },
+    "step_cooldown_seconds": 0.08,
+    "three_step_jump_removed": true
+  },
+  "contracts_preserved": {
+    "primary_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "focus": "Focus remains outside bottom five-parameter console",
+    "tint": "RESET-only semantics",
+    "wb_tint": "manual WB and TINT preserve each other; WB AUTO clears TINT",
+    "iso_shutter": "Shutter remains LOCK when ISO is manual",
+    "runtime_write_paths": "unchanged"
+  },
+  "verification": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_damping_validation": "not_executed_in_this_session"
+  },
+  "conclusion": "R42 将五参数滚轮进一步收口到精密微调：提高阈值、取消 3 档跨越，并加入短冷却以降低连续快速触发。"
+}

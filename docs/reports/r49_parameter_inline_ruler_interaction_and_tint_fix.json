@@ -1,0 +1,64 @@
+{
+  "id": "r49_parameter_inline_ruler_interaction_and_tint_fix",
+  "round": "R49",
+  "date": "2026-05-23",
+  "package_name": "五参数控制台贴合式展开与交互修正",
+  "scope": {
+    "parameters": ["EV", "WB", "TINT", "ISO", "Shutter"],
+    "focus_returned_to_bottom_bar": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false,
+    "lens_runtime_changed": false
+  },
+  "changes": {
+    "parameter_entry_visual": [
+      "removed prominent collapsed bar background",
+      "removed prominent outer stroke and grid-like borders",
+      "kept lightweight active highlight with accent text, subtle fill, underline and glow",
+      "kept non-active items transparent and readable"
+    ],
+    "inline_ruler": [
+      "kept parameter row fixed during active changes",
+      "added active anchor under the selected parameter",
+      "changed ruler insertion to top-down move plus opacity",
+      "kept value badge, center pointer, major/minor ticks and AUTO/RESET/LOCK controls"
+    ],
+    "outside_dismiss": [
+      "preview tap dismisses inline controls",
+      "top status tap dismisses inline controls",
+      "intent switcher tap dismisses inline controls",
+      "parameter taps switch or collapse without triggering runtime writes"
+    ]
+  },
+  "tint_fix": {
+    "root_cause": "TINT UI ticks used values finer than the runtime 5-step tint quantization, causing values like +/-2 to be rounded back by runtime and appear unadjustable.",
+    "fix": "Aligned tintWheelValues to runtime-confirmable 5-step ticks and quantized the appended runtime value to the same step.",
+    "tint_reset_contract": "RESET only; does not call applyWhiteBalanceAuto.",
+    "wb_tint_contract_preserved": true
+  },
+  "haptics": {
+    "tick_change_feedback": "light feedback only when a real tick change is applied",
+    "reset_auto_feedback": "single light feedback",
+    "disabled_or_boundary_feedback": "no repeated feedback"
+  },
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r49_parameter_inline_ruler_interaction_and_tint_fix.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No device execution was performed in this package."
+    }
+  },
+  "known_risks": [
+    "TINT visual color direction still requires real-device color validation.",
+    "Some lower empty-area outside-dismiss cases may need a future transparent hit layer if found on device.",
+    "R49 numbering overlaps with the independent Focus preflight report; this package uses a separate filename and does not overwrite it."
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "id": "r46_bottom_action_overlay_and_lens_ruler_control",
+  "date": "2026-05-23",
+  "task": "Bottom action overlay reflow and lens zoom control integration",
+  "scope": {
+    "bottom_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "focus_in_bottom_bar": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false,
+    "lens_runtime_changed": false,
+    "pinch_zoom_changed": false
+  },
+  "bottom_action_reflow": {
+    "shutter_visual_outer_diameter_pt": 70,
+    "shutter_hit_frame_pt": 86,
+    "side_button_visual_size_pt": "64x58",
+    "bottom_action_bar_height_pt": 86,
+    "normal_state": "Five parameter entry row plus compact latest/shutter/gallery action row.",
+    "overlay_state": "Parameter or lens control panel covers the bottom action layer."
+  },
+  "parameter_overlay": {
+    "presentation": "Opaque low-position control layer over the bottom action deck",
+    "viewfinder_push_reduced": true,
+    "keeps_parameter_contract": true,
+    "background_opacity": "Raised consoleFillTop/Bottom opacity for clearer covering over hidden action buttons"
+  },
+  "lens_control": {
+    "focal_buttons": "Continue to use device-driven semantic focal capabilities.",
+    "selected_focal_tap": "Toggles lens zoom panel.",
+    "non_selected_focal_tap": "Switches focal and opens lens zoom panel.",
+    "zoom_write_path": "cameraRuntime.setLensZoomDialValue",
+    "pinch_zoom_path": "Unchanged CaptureLivePreviewView MagnificationGesture -> setLensZoomMultiplier",
+    "mutual_exclusion": "Lens panel and parameter panel do not appear at the same time."
+  },
+  "gesture_policy": {
+    "parameter_vs_lens": "Mutually exclusive bottom overlay states.",
+    "preview_tap": "Dismisses current bottom overlay.",
+    "shutter_when_overlay_open": "Hidden/covered and not hit-testable while parameter or lens overlay is open.",
+    "pinch_zoom": "Not modified."
+  },
+  "validation": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_run": "not_run",
+    "notes": "Build passed with the existing nested xcodeproj warning. True-device visual and gesture validation remains required."
+  },
+  "risks": [
+    "Lens zoom panel is style-aligned with the bottom overlay but still reuses the existing zoom dial rather than the full five-parameter ruler tick renderer.",
+    "Overlay hides the shutter button while active; this is intentional for R46 but should be validated against shooting workflow expectations.",
+    "Device screenshot validation is still required for safe-area and low-position spacing."
+  ],
+  "next_recommended_package": "Device screenshot and gesture validation for R46, then independent Focus UI preflight."
+}

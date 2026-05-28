@@ -1,0 +1,74 @@
+{
+  "report_id": "r43_five_parameter_tick_precision_refinement",
+  "package": "第 23 包：五参数档位精细化二次收口 —— 保持慢速阻尼，提升可调精度",
+  "scope": {
+    "included": [
+      "WB common Kelvin range refined to 100K steps",
+      "TINT common range refined to step 2",
+      "ISO extended to 4000/5000/6400 preferred ticks",
+      "Shutter extended with 1/8000, 1/6400, 1/5000, 1/13, 1/5 and 1/3",
+      "R43 report and README index"
+    ],
+    "excluded": [
+      "runtime write path changes",
+      "R42 damping rollback",
+      "WB/TINT contract changes",
+      "TINT RESET contract changes",
+      "ISO/Shutter LOCK contract changes",
+      "Focus control",
+      "Tone/Style/filter/palette features",
+      "white background processing changes",
+      "post-capture flow changes"
+    ]
+  },
+  "ticks": {
+    "ev": "unchanged -2.0...+2.0 one-third EV steps",
+    "wb": "2800/3000 then 3200...6500 in 100K steps, then 6700/7000/7500/8000, device-clipped",
+    "tint": "step 5 at extremes, step 2 from -30...+30, device-clipped",
+    "iso": "preferred 1/3-stop list extended to 6400, device-clipped",
+    "shutter": "common 1/3-stop shutter list extended at fast and slow ends, device-clipped"
+  },
+  "r42_damping_preserved": {
+    "ev": {
+      "threshold_pt": 42,
+      "maximum_step_count": 1
+    },
+    "wb": {
+      "threshold_pt": 40,
+      "maximum_step_count": 2
+    },
+    "tint": {
+      "threshold_pt": 44,
+      "maximum_step_count": 1
+    },
+    "iso": {
+      "threshold_pt": 40,
+      "maximum_step_count": 2
+    },
+    "shutter": {
+      "threshold_pt": 44,
+      "maximum_step_count": 1
+    },
+    "three_step_jump_removed": true,
+    "step_cooldown_seconds": 0.08
+  },
+  "contracts_preserved": {
+    "primary_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "focus": "Focus remains outside bottom five-parameter console",
+    "tint": "RESET-only semantics",
+    "wb_tint": "manual WB and TINT preserve each other; WB AUTO clears TINT",
+    "iso_shutter": "Shutter remains LOCK when ISO is manual",
+    "runtime_write_paths": "unchanged"
+  },
+  "verification": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_tick_precision_validation": "not_executed_in_this_session"
+  },
+  "conclusion": "R43 保留 R42 慢速阻尼，仅细化 WB/TINT/ISO/Shutter 档位，提升常用区可调精度，不改变功能合同。"
+}

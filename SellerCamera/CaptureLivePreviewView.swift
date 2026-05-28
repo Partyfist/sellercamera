@@ -443,6 +443,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private static let whiteBalanceMinimumTemperature: Float = 2800
     private static let whiteBalanceMaximumTemperature: Float = 7500
     private static let whiteBalanceDialStep: Float = 50
+    private static let whiteBalanceMinimumTint: Float = -50
+    private static let whiteBalanceMaximumTint: Float = 50
+    private static let whiteBalanceTintDialStep: Float = 5
     private static let isoDialNormalizedStep: Double = 0.01
     private static let shutterDialNormalizedStep: Double = 0.01
     private static let derived48PreferredLongEdge = 7600
@@ -492,6 +495,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var isWhiteBalancePresetSupported = false
     @Published var selectedWhiteBalancePreset: CaptureWhiteBalancePreset = .auto
     @Published var currentWhiteBalanceTemperature: Float = 5000
+    @Published var currentWhiteBalanceTint: Float = 0
     @Published var isISOAutoSupported = false
     @Published var isISOPresetSupported = false
     @Published var selectedISOPreset: CaptureISOPreset = .auto
@@ -705,6 +709,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = "当前摄像头不支持 EV 调节"
             return
         }
+        guard !isManualExposurePresetActive else {
+            captureHintText = manualExposureEVLockHintText
+            logExposureTriangle("EV cycle blocked isoMode=\(selectedISOPreset == .auto ? "auto" : "manual") shutterMode=\(selectedShutterPreset == .auto ? "auto" : "manual") evState=locked")
+            return
+        }
         guard !isFocusExposureLocked else {
             captureHintText = "AE/AF 锁定中，先解锁后再调 EV"
             return
@@ -737,6 +746,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = "当前摄像头不支持 EV 调节"
             return
         }
+        guard !isManualExposurePresetActive else {
+            captureHintText = manualExposureEVLockHintText
+            logExposureTriangle("EV dial blocked isoMode=\(selectedISOPreset == .auto ? "auto" : "manual") shutterMode=\(selectedShutterPreset == .auto ? "auto" : "manual") evState=locked")
+            return
+        }
         guard !isFocusExposureLocked else {
             captureHintText = "AE/AF 锁定中，先解锁后再调 EV"
             return
@@ -755,6 +769,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func applyExposureBiasAuto() {
+        guard !isManualExposurePresetActive else {
+            captureHintText = manualExposureEVLockHintText
+            logExposureTriangle("EV auto reset blocked isoMode=\(selectedISOPreset == .auto ? "auto" : "manual") shutterMode=\(selectedShutterPreset == .auto ? "auto" : "manual") evState=locked")
+            return
+        }
         setExposureBias(0, switchesToManual: false)
     }
 
@@ -831,8 +850,18 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func setWhiteBalanceDialValue(_ requestedValue: Double) {
-        applyWhiteBalanceManualTemperature(
-            Float(requestedValue),
+        applyWhiteBalanceManualValues(
+            requestedTemperature: Float(requestedValue),
+            requestedTint: currentWhiteBalanceTint,
+            semanticPreset: .custom,
+            shouldShowHint: true
+        )
+    }
+
+    func setWhiteBalanceTintDialValue(_ requestedValue: Double) {
+        applyWhiteBalanceManualValues(
+            requestedTemperature: currentWhiteBalanceTemperature,
+            requestedTint: Float(requestedValue),
             semanticPreset: .custom,
             shouldShowHint: true
         )
@@ -846,6 +875,30 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         applyWhiteBalancePreset(.auto, shouldShowHint: true)
     }
 
+    func resetWhiteBalanceTint() {
+        guard !isPreviewInteractionTemporarilyRestricted else {
+            captureHintText = previewInteractionRestrictedHintText
+            return
+        }
+        guard isWhiteBalancePresetSupported || isWhiteBalanceAutoSupported else {
+            captureHintText = "当前摄像头不支持色偏调节"
+            return
+        }
+
+        if selectedWhiteBalancePreset == .auto {
+            currentWhiteBalanceTint = 0
+            captureHintText = "色偏：0"
+            return
+        }
+
+        applyWhiteBalanceManualValues(
+            requestedTemperature: currentWhiteBalanceTemperature,
+            requestedTint: 0,
+            semanticPreset: .custom,
+            shouldShowHint: true
+        )
+    }
+
     var whiteBalanceDialValue: Double {
         Double(currentWhiteBalanceTemperature)
     }
@@ -856,6 +909,18 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     var whiteBalanceDialStepValue: Double {
         Double(Self.whiteBalanceDialStep)
+    }
+
+    var whiteBalanceTintDialValue: Double {
+        Double(currentWhiteBalanceTint)
+    }
+
+    var whiteBalanceTintDialRange: ClosedRange<Double> {
+        Double(Self.whiteBalanceMinimumTint)...Double(Self.whiteBalanceMaximumTint)
+    }
+
+    var whiteBalanceTintDialStepValue: Double {
+        Double(Self.whiteBalanceTintDialStep)
     }
 
     var whiteBalanceDisplayText: String {
@@ -882,8 +947,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             let targetTemperature: Float = preset == .custom
                 ? currentWhiteBalanceTemperature
                 : preset.temperature
-            applyWhiteBalanceManualTemperature(
-                targetTemperature,
+            let targetTint: Float = preset == .custom ? currentWhiteBalanceTint : 0
+            applyWhiteBalanceManualValues(
+                requestedTemperature: targetTemperature,
+                requestedTint: targetTint,
                 semanticPreset: preset,
                 shouldShowHint: shouldShowHint
             )
@@ -903,11 +970,13 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     return
                 }
                 device.whiteBalanceMode = .continuousAutoWhiteBalance
-                let autoTemp = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).temperature
+                let autoTempTint = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains)
                 device.unlockForConfiguration()
                 DispatchQueue.main.async {
                     self.selectedWhiteBalancePreset = .auto
-                    self.currentWhiteBalanceTemperature = self.clampedWhiteBalanceTemperature(autoTemp)
+                    self.currentWhiteBalanceTemperature = self.clampedWhiteBalanceTemperature(autoTempTint.temperature)
+                    // TINT 合同：WB Auto 统一回收为 0，避免用户误解自动状态下仍存在手动色偏。
+                    self.currentWhiteBalanceTint = 0
                     if shouldShowHint {
                         self.captureHintText = "白平衡：Auto"
                     }
@@ -920,8 +989,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
     }
 
-    private func applyWhiteBalanceManualTemperature(
-        _ requestedTemperature: Float,
+    private func applyWhiteBalanceManualValues(
+        requestedTemperature: Float,
+        requestedTint: Float,
         semanticPreset: CaptureWhiteBalancePreset,
         shouldShowHint: Bool
     ) {
@@ -936,6 +1006,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
         let clampedTemperature = clampedWhiteBalanceTemperature(requestedTemperature)
         let quantizedTemperature = (clampedTemperature / Self.whiteBalanceDialStep).rounded() * Self.whiteBalanceDialStep
+        let clampedTint = clampedWhiteBalanceTint(requestedTint)
+        let quantizedTint = (clampedTint / Self.whiteBalanceTintDialStep).rounded() * Self.whiteBalanceTintDialStep
 
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -951,7 +1023,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 }
                 let tempTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(
                     temperature: quantizedTemperature,
-                    tint: 0
+                    tint: quantizedTint
                 )
                 let rawGains = device.deviceWhiteBalanceGains(for: tempTint)
                 let safeGains = self.normalizedWhiteBalanceGains(rawGains, for: device)
@@ -960,9 +1032,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
                 DispatchQueue.main.async {
                     self.currentWhiteBalanceTemperature = quantizedTemperature
+                    self.currentWhiteBalanceTint = quantizedTint
                     self.selectedWhiteBalancePreset = semanticPreset == .auto ? .custom : semanticPreset
                     if shouldShowHint {
-                        self.captureHintText = "白平衡：\(Int(quantizedTemperature.rounded()))K"
+                        let tintDisplayText = self.formattedWhiteBalanceTintText(quantizedTint)
+                        self.captureHintText = "白平衡：\(Int(quantizedTemperature.rounded()))K · \(tintDisplayText)"
                     }
                 }
             } catch {
@@ -1043,10 +1117,6 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = "AE-L 已开启，先关闭后再调 ISO"
             return
         }
-        guard selectedShutterPreset == .auto else {
-            captureHintText = "手动快门生效中，先将快门设为 Auto 后再调 ISO"
-            return
-        }
 
         switch preset {
         case .auto:
@@ -1088,8 +1158,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     }
                     let targetISO = self.targetISOValue(for: preset, device: device)
                     let quantizedISO = self.quantizedISOValue(targetISO)
-                    device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: quantizedISO)
-                    appliedISO = quantizedISO
+                    guard let exposureWrite = self.sanitizedCustomExposureWrite(
+                        rawDuration: AVCaptureDevice.currentExposureDuration,
+                        rawISO: quantizedISO,
+                        device: device,
+                        context: "isoPreset"
+                    ) else {
+                        device.unlockForConfiguration()
+                        DispatchQueue.main.async {
+                            self.captureHintText = "当前摄像头曝光能力异常，ISO 调整已跳过"
+                        }
+                        return
+                    }
+                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    appliedISO = exposureWrite.iso
                 case .custom:
                     guard device.isExposureModeSupported(.custom) else {
                         device.unlockForConfiguration()
@@ -1100,8 +1182,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     }
                     let targetISO = self.clampedISOValue(self.currentManualISOValue, device: device)
                     let quantizedISO = self.quantizedISOValue(targetISO)
-                    device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: quantizedISO)
-                    appliedISO = quantizedISO
+                    guard let exposureWrite = self.sanitizedCustomExposureWrite(
+                        rawDuration: AVCaptureDevice.currentExposureDuration,
+                        rawISO: quantizedISO,
+                        device: device,
+                        context: "isoCustom"
+                    ) else {
+                        device.unlockForConfiguration()
+                        DispatchQueue.main.async {
+                            self.captureHintText = "当前摄像头曝光能力异常，ISO 调整已跳过"
+                        }
+                        return
+                    }
+                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    appliedISO = exposureWrite.iso
                 }
                 let updatedShutterSeconds = CMTimeGetSeconds(device.exposureDuration)
                 device.unlockForConfiguration()
@@ -1275,10 +1369,6 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = "AE-L 已开启，先关闭后再调快门"
             return
         }
-        if preset != .auto, selectedISOPreset != .auto {
-            captureHintText = "固定 ISO 生效中，先将 ISO 设为 Auto 后再调快门"
-            return
-        }
 
         switch preset {
         case .auto:
@@ -1320,10 +1410,22 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         return
                     }
                     let targetDuration = self.clampedShutterDuration(for: preset, device: device)
-                    let quantizedDuration = self.quantizedShutterDuration(targetDuration)
+                    let quantizedDuration = self.quantizedShutterDuration(targetDuration, device: device)
                     let isoForWrite = device.iso
-                    device.setExposureModeCustom(duration: quantizedDuration, iso: isoForWrite)
-                    appliedDuration = quantizedDuration
+                    guard let exposureWrite = self.sanitizedCustomExposureWrite(
+                        rawDuration: quantizedDuration,
+                        rawISO: isoForWrite,
+                        device: device,
+                        context: "shutterPreset"
+                    ) else {
+                        device.unlockForConfiguration()
+                        DispatchQueue.main.async {
+                            self.captureHintText = "当前摄像头曝光能力异常，快门调整已跳过"
+                        }
+                        return
+                    }
+                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    appliedDuration = exposureWrite.duration
                 case .custom:
                     guard device.isExposureModeSupported(.custom) else {
                         device.unlockForConfiguration()
@@ -1337,10 +1439,22 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         preferredTimescale: 1_000_000_000
                     )
                     let targetDuration = self.clampedShutterDuration(requestedDuration, device: device)
-                    let quantizedDuration = self.quantizedShutterDuration(targetDuration)
+                    let quantizedDuration = self.quantizedShutterDuration(targetDuration, device: device)
                     let isoForWrite = device.iso
-                    device.setExposureModeCustom(duration: quantizedDuration, iso: isoForWrite)
-                    appliedDuration = quantizedDuration
+                    guard let exposureWrite = self.sanitizedCustomExposureWrite(
+                        rawDuration: quantizedDuration,
+                        rawISO: isoForWrite,
+                        device: device,
+                        context: "shutterCustom"
+                    ) else {
+                        device.unlockForConfiguration()
+                        DispatchQueue.main.async {
+                            self.captureHintText = "当前摄像头曝光能力异常，快门调整已跳过"
+                        }
+                        return
+                    }
+                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    appliedDuration = exposureWrite.duration
                 }
                 device.unlockForConfiguration()
 
@@ -1474,11 +1588,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     var manualFocusZoneText: String {
         switch currentManualFocusPosition {
         case ..<0.34:
-            return "远距"
+            return "近距"
         case 0.34..<0.67:
             return "中距"
         default:
-            return "近距"
+            return "远距"
         }
     }
 
@@ -2632,8 +2746,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private func updateWhiteBalanceCapabilityState(with device: AVCaptureDevice) {
         isWhiteBalanceAutoSupported = device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance)
         isWhiteBalancePresetSupported = device.isLockingWhiteBalanceWithCustomDeviceGainsSupported
-        let currentTemperature = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).temperature
-        currentWhiteBalanceTemperature = clampedWhiteBalanceTemperature(currentTemperature)
+        let tempTint = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains)
+        currentWhiteBalanceTemperature = clampedWhiteBalanceTemperature(tempTint.temperature)
+        currentWhiteBalanceTint = clampedWhiteBalanceTint(tempTint.tint)
 
         if !isWhiteBalancePresetSupported {
             selectedWhiteBalancePreset = .auto
@@ -2642,8 +2757,12 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         if !isWhiteBalanceAutoSupported, selectedWhiteBalancePreset == .auto {
             selectedWhiteBalancePreset = .neutral
             currentWhiteBalanceTemperature = clampedWhiteBalanceTemperature(CaptureWhiteBalancePreset.neutral.temperature)
+            currentWhiteBalanceTint = 0
         } else if selectedWhiteBalancePreset != .auto && selectedWhiteBalancePreset != .custom {
             currentWhiteBalanceTemperature = clampedWhiteBalanceTemperature(selectedWhiteBalancePreset.temperature)
+            currentWhiteBalanceTint = 0
+        } else if selectedWhiteBalancePreset == .auto {
+            currentWhiteBalanceTint = 0
         }
     }
 
@@ -2713,6 +2832,135 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         return max(minISO, min(maxISO, requestedISO))
     }
 
+    private struct SanitizedCustomExposureWrite {
+        let duration: CMTime
+        let iso: Float
+    }
+
+    private func sanitizedCustomExposureWrite(
+        rawDuration: CMTime,
+        rawISO: Float,
+        device: AVCaptureDevice,
+        context: String
+    ) -> SanitizedCustomExposureWrite? {
+        let minISO = device.activeFormat.minISO
+        let maxISO = device.activeFormat.maxISO
+        guard minISO.isFinite, maxISO.isFinite, minISO > 0, maxISO >= minISO else {
+            logCustomExposureWrite(
+                context: context,
+                rawISO: rawISO,
+                safeISO: nil,
+                minISO: minISO,
+                maxISO: maxISO,
+                rawDuration: rawDuration,
+                safeDuration: nil,
+                reason: "skippedInvalidISORange"
+            )
+            return nil
+        }
+
+        var reasons: [String] = []
+        let fallbackISO = device.iso.isFinite && device.iso > 0 ? device.iso : minISO
+        let finiteISO: Float
+        if rawISO.isFinite, rawISO > 0 {
+            finiteISO = rawISO
+        } else {
+            finiteISO = fallbackISO
+            reasons.append("invalidISO")
+        }
+        let safeISO = max(minISO, min(maxISO, finiteISO))
+        if safeISO != rawISO {
+            reasons.append("clampedISO")
+        }
+
+        let minDuration = device.activeFormat.minExposureDuration
+        let maxDuration = device.activeFormat.maxExposureDuration
+        guard isValidExposureDuration(minDuration),
+              isValidExposureDuration(maxDuration),
+              CMTimeCompare(maxDuration, minDuration) >= 0 else {
+            logCustomExposureWrite(
+                context: context,
+                rawISO: rawISO,
+                safeISO: safeISO,
+                minISO: minISO,
+                maxISO: maxISO,
+                rawDuration: rawDuration,
+                safeDuration: nil,
+                reason: "skippedInvalidDurationRange"
+            )
+            return nil
+        }
+
+        let fallbackDuration = isValidExposureDuration(device.exposureDuration)
+            ? device.exposureDuration
+            : minDuration
+        var safeDuration: CMTime
+        if isValidExposureDuration(rawDuration) {
+            safeDuration = rawDuration
+        } else {
+            safeDuration = fallbackDuration
+            reasons.append("invalidDuration")
+        }
+        if CMTimeCompare(safeDuration, minDuration) < 0 {
+            safeDuration = minDuration
+            reasons.append("clampedDuration")
+        } else if CMTimeCompare(safeDuration, maxDuration) > 0 {
+            safeDuration = maxDuration
+            reasons.append("clampedDuration")
+        }
+
+        logCustomExposureWrite(
+            context: context,
+            rawISO: rawISO,
+            safeISO: safeISO,
+            minISO: minISO,
+            maxISO: maxISO,
+            rawDuration: rawDuration,
+            safeDuration: safeDuration,
+            reason: reasons.isEmpty ? "normal" : reasons.joined(separator: "+")
+        )
+
+        return SanitizedCustomExposureWrite(duration: safeDuration, iso: safeISO)
+    }
+
+    private func isValidExposureDuration(_ duration: CMTime) -> Bool {
+        let seconds = CMTimeGetSeconds(duration)
+        return duration.isValid && seconds.isFinite && seconds > 0
+    }
+
+    private func logCustomExposureWrite(
+        context: String,
+        rawISO: Float,
+        safeISO: Float?,
+        minISO: Float,
+        maxISO: Float,
+        rawDuration: CMTime,
+        safeDuration: CMTime?,
+        reason: String
+    ) {
+        #if DEBUG
+        let rawDurationSeconds = CMTimeGetSeconds(rawDuration)
+        let safeDurationSeconds = safeDuration.map(CMTimeGetSeconds)
+        let safeISOText = safeISO.map { String(format: "%.3f", Double($0)) } ?? "nil"
+        let safeDurationText = safeDurationSeconds.map { String(format: "%.8f", $0) } ?? "nil"
+        print(
+            "[CaptureExposureWrite] context=\(context) rawISO=\(String(format: "%.3f", Double(rawISO))) safeISO=\(safeISOText) minISO=\(String(format: "%.3f", Double(minISO))) maxISO=\(String(format: "%.3f", Double(maxISO))) rawDuration=\(String(format: "%.8f", rawDurationSeconds)) safeDuration=\(safeDurationText) reason=\(reason)"
+        )
+        #endif
+    }
+
+    private func logExposureTriangle(_ message: String) {
+        #if DEBUG
+        print("[CaptureExposureTriangle] \(message)")
+        #endif
+    }
+
+    private func logShutterRange(_ message: String) {
+        #if DEBUG
+        print("[CaptureShutterRange] \(message)")
+        #endif
+    }
+
     private func quantizedISOValue(_ value: Float) -> Float {
         let step: Float = 1
         return max(1, (value / step).rounded() * step)
@@ -2775,12 +3023,22 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         return clampedShutterDuration(target, device: device)
     }
 
-    private func quantizedShutterDuration(_ duration: CMTime) -> CMTime {
+    private func quantizedShutterDuration(_ duration: CMTime, device: AVCaptureDevice) -> CMTime {
         let seconds = CMTimeGetSeconds(duration)
-        guard seconds.isFinite, seconds > 0 else { return duration }
-        let step = 1.0 / 10_000.0
-        let quantizedSeconds = max(step, (seconds / step).rounded() * step)
-        return CMTime(seconds: quantizedSeconds, preferredTimescale: 1_000_000_000)
+        guard seconds.isFinite, seconds > 0 else { return clampedShutterDuration(duration, device: device) }
+
+        let clampedDuration = clampedShutterDuration(duration, device: device)
+        let clampedSeconds = CMTimeGetSeconds(clampedDuration)
+        guard clampedSeconds.isFinite, clampedSeconds > 0 else { return clampedDuration }
+
+        let quantized = CMTime(seconds: clampedSeconds, preferredTimescale: 1_000_000_000)
+        logShutterRange(
+            "min=\(formattedShutterDurationText(seconds: CMTimeGetSeconds(device.activeFormat.minExposureDuration)) ?? "--") " +
+            "max=\(formattedShutterDurationText(seconds: CMTimeGetSeconds(device.activeFormat.maxExposureDuration)) ?? "--") " +
+            "duration=\(formattedShutterDurationText(seconds: seconds) ?? "--") " +
+            "quantized=\(formattedShutterDurationText(seconds: CMTimeGetSeconds(quantized)) ?? "--")"
+        )
+        return quantized
     }
 
     private func formattedShutterDurationText(seconds: Double) -> String? {
@@ -2801,6 +3059,17 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     private func clampedWhiteBalanceTemperature(_ value: Float) -> Float {
         max(Self.whiteBalanceMinimumTemperature, min(Self.whiteBalanceMaximumTemperature, value))
+    }
+
+    private func clampedWhiteBalanceTint(_ value: Float) -> Float {
+        max(Self.whiteBalanceMinimumTint, min(Self.whiteBalanceMaximumTint, value))
+    }
+
+    private func formattedWhiteBalanceTintText(_ value: Float) -> String {
+        let rounded = Int(value.rounded())
+        if rounded == 0 { return "T0" }
+        if rounded > 0 { return "M\(rounded)" }
+        return "G\(abs(rounded))"
     }
 
     private func refreshLensProfiles(
@@ -3280,6 +3549,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     private func setExposureBias(_ requestedBias: Float, switchesToManual: Bool) {
+        guard !isManualExposurePresetActive else {
+            captureHintText = manualExposureEVLockHintText
+            logExposureTriangle("EV write blocked isoMode=\(selectedISOPreset == .auto ? "auto" : "manual") shutterMode=\(selectedShutterPreset == .auto ? "auto" : "manual") evState=locked")
+            return
+        }
         sessionQueue.async { [weak self] in
             guard let self else { return }
             guard let device = self.currentVideoInput?.device else { return }
@@ -3411,11 +3685,35 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         )
                     }
                     let isoForWrite = device.iso
-                    device.setExposureModeCustom(duration: targetDuration, iso: isoForWrite)
+                    guard let exposureWrite = self.sanitizedCustomExposureWrite(
+                        rawDuration: targetDuration,
+                        rawISO: isoForWrite,
+                        device: device,
+                        context: "tapFocusPreserveShutter"
+                    ) else {
+                        device.unlockForConfiguration()
+                        DispatchQueue.main.async {
+                            self.captureHintText = "当前摄像头曝光能力异常，已跳过手动曝光保持"
+                        }
+                        return
+                    }
+                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
                     didApplyAny = true
                 } else if shouldPreserveManualISO, device.isExposureModeSupported(.custom) {
                     let currentISO = device.iso
-                    device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: currentISO)
+                    guard let exposureWrite = self.sanitizedCustomExposureWrite(
+                        rawDuration: AVCaptureDevice.currentExposureDuration,
+                        rawISO: currentISO,
+                        device: device,
+                        context: "tapFocusPreserveISO"
+                    ) else {
+                        device.unlockForConfiguration()
+                        DispatchQueue.main.async {
+                            self.captureHintText = "当前摄像头曝光能力异常，已跳过手动 ISO 保持"
+                        }
+                        return
+                    }
+                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
                     didApplyAny = true
                 } else if device.isExposureModeSupported(.continuousAutoExposure) {
                     device.exposureMode = .continuousAutoExposure
@@ -3528,6 +3826,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         isSwitchingCamera || countdownSecondsRemaining != nil || isBurstCapturing || quickPreviewImage != nil
     }
 
+    private var isManualExposurePresetActive: Bool {
+        selectedISOPreset != .auto || selectedShutterPreset != .auto
+    }
+
+    private var manualExposureEVLockHintText: String {
+        if selectedISOPreset != .auto {
+            return "手动 ISO 生效中，先恢复 ISO Auto 后再调 EV"
+        }
+        if selectedShutterPreset != .auto {
+            return "手动快门生效中，先恢复快门 Auto 后再调 EV"
+        }
+        return "手动曝光生效中，先恢复 ISO / 快门 Auto 后再调 EV"
+    }
+
     private var previewInteractionRestrictedHintText: String {
         if isSwitchingCamera {
             return "切换摄像头中，请稍候"
@@ -3623,6 +3935,7 @@ private extension UIImage {
 
 struct CaptureLivePreviewView: View {
     @ObservedObject var cameraRuntime: CaptureCameraRuntime
+    var onTapPreviewBeforeFocus: (() -> Bool)? = nil
     @State private var pinchBaselineLensZoomMultiplier: CGFloat?
 
     var body: some View {
@@ -3631,6 +3944,9 @@ struct CaptureLivePreviewView: View {
                 CameraPreviewLayerView(
                     session: cameraRuntime.session,
                     onTapPreview: { devicePoint, normalizedPoint in
+                        if onTapPreviewBeforeFocus?() == true {
+                            return
+                        }
                         cameraRuntime.handlePreviewTap(devicePoint: devicePoint, normalizedPoint: normalizedPoint)
                     },
                     onLongPressPreview: { devicePoint, normalizedPoint in
@@ -3760,7 +4076,7 @@ private struct CaptureAspectRatioGuideOverlay: View {
                 )
 
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .stroke(.white.opacity(0.34), lineWidth: 0.8)
+                    .stroke(.white.opacity(0.07), lineWidth: 0.6)
                     .frame(width: targetFrame.width, height: targetFrame.height)
                     .position(x: targetFrame.midX, y: targetFrame.midY)
             }

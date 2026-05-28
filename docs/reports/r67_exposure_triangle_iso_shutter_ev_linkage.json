@@ -1,0 +1,104 @@
+{
+  "report": "r67_exposure_triangle_iso_shutter_ev_linkage",
+  "task": "R67 ISO / Shutter / EV exposure triangle linkage closure",
+  "scope": {
+    "implemented": [
+      "EV locks when ISO is manual or pending manual",
+      "EV locks when Shutter is manual or pending manual",
+      "EV unlocks when ISO and Shutter return to Auto",
+      "Runtime EV write paths reject exposure-bias writes during manual ISO/Shutter exposure",
+      "Debug-only exposure triangle logs"
+    ],
+    "not_implemented": [
+      "No M/A/S/P exposure mode system",
+      "No UI layout change",
+      "No WB/TINT changes",
+      "No Focus/MF changes",
+      "No lens zoom changes",
+      "No white-background or post-capture changes"
+    ]
+  },
+  "state_audit": {
+    "necessary_states": [
+      "selectedISOPreset",
+      "selectedShutterPreset",
+      "pendingISOWheelValue",
+      "pendingShutterWheelDurationSeconds",
+      "pendingExposureBiasWheelValue",
+      "isExposureBiasAutoMode"
+    ],
+    "derived_state_added": "isExposureCompensationLimitedByManualExposure",
+    "manual_exposure_sources": [
+      "pendingISOWheelValue",
+      "pendingShutterWheelDurationSeconds",
+      "cameraRuntime.selectedISOPreset != .auto",
+      "cameraRuntime.selectedShutterPreset != .auto"
+    ]
+  },
+  "linkage_rules": [
+    {
+      "iso": "auto",
+      "shutter": "auto",
+      "ev": "enabled"
+    },
+    {
+      "iso": "manual_or_pending",
+      "shutter": "auto",
+      "ev": "locked"
+    },
+    {
+      "iso": "auto",
+      "shutter": "manual_or_pending",
+      "ev": "locked"
+    },
+    {
+      "iso": "manual",
+      "shutter": "manual_or_locked_by_existing_contract",
+      "ev": "locked"
+    }
+  ],
+  "ev_lock_behavior": {
+    "bottom_value": "LOCK",
+    "selection": "blocked_with_hint",
+    "ruler_drag": "blocked_without_pending_or_runtime_write",
+    "reset_auto_control": "blocked",
+    "runtime_setExposureTargetBias": "blocked_while_manual_iso_or_shutter"
+  },
+  "runtime_write_protection": {
+    "guarded_methods": [
+      "cycleExposureBias",
+      "setExposureBiasDialValue",
+      "applyExposureBiasAuto",
+      "setExposureBias"
+    ],
+    "runtime_contract_changed": false
+  },
+  "r66_clamp_regression": {
+    "sanitizedCustomExposureWrite_modified": false,
+    "custom_exposure_write_paths_changed": false
+  },
+  "debug_logging": {
+    "tag": "[CaptureExposureTriangle]",
+    "release_behavior": "no_output_due_to_DEBUG_guard"
+  },
+  "files": {
+    "modified": [
+      "SellerCamera/CaptureScreen.swift",
+      "SellerCamera/CaptureLivePreviewView.swift",
+      "README.md"
+    ],
+    "added": [
+      "docs/reports/r67_exposure_triangle_iso_shutter_ev_linkage.md",
+      "docs/reports/r67_exposure_triangle_iso_shutter_ev_linkage.json"
+    ]
+  },
+  "validation": {
+    "json_parse": "passed",
+    "xcodebuild": "passed",
+    "true_device": "not_run"
+  },
+  "risks": [
+    "True-device validation is still needed to confirm EV LOCK copy and visual clarity during manual ISO/Shutter operation.",
+    "If a future semi-auto exposure mode is desired, it should be introduced explicitly rather than silently allowing EV during custom exposure."
+  ]
+}

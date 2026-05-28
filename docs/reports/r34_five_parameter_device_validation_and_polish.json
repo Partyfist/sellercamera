@@ -1,0 +1,65 @@
+{
+  "report_id": "r34_five_parameter_device_validation_and_polish",
+  "package": "第 13 包：五参数综合真机验证闭环 + 专业手感最小打磨",
+  "scope": {
+    "included": [
+      "FOCUS/EV/WB/ISO/Shutter 五参数综合验证收口",
+      "构建、设备安装、设备启动链路验证",
+      "五参数状态合同与显示语义一致性核查",
+      "R34 验证报告与索引更新"
+    ],
+    "excluded": [
+      "新增参数能力",
+      "相机 runtime 架构重构",
+      "白底处理链路改动",
+      "拍后流程改动",
+      "Focus 以外参数行为策略调整"
+    ]
+  },
+  "runtime_contract": {
+    "focus": "setManualFocusLensPosition(_), restoreAutofocusMode(), state priority L > M > A",
+    "ev": "setExposureBiasDialValue(_), resetExposureBias()",
+    "wb": "setWhiteBalanceDialValue(_), applyWhiteBalanceAuto()",
+    "iso": "setISODialValue(_), applyISOAuto()",
+    "shutter": "setShutterDialValue(_), applyShutterAuto()",
+    "iso_shutter_boundary": "ISO 非 Auto 时 Shutter 显示 LOCK 并禁用；ISO 回到 Auto 后 Shutter 恢复可调。"
+  },
+  "verification": {
+    "simulator_build": "passed",
+    "device_build": "passed",
+    "device_install": "passed",
+    "device_launch": "passed",
+    "manual_visual_and_haptic_validation_on_device": "not_completed_in_cli_environment"
+  },
+  "status_matrix": {
+    "focus": {
+      "manual_write_path": "confirmed_by_code_and_build",
+      "auto_restore_path": "confirmed_by_code_and_build",
+      "lock_disable_contract": "confirmed_by_code_and_build",
+      "real_device_visual_focus_shift": "not_confirmed"
+    },
+    "ev": {
+      "write_path": "confirmed_by_code_and_build",
+      "reset_path": "confirmed_by_code_and_build",
+      "device_brightness_perception": "not_confirmed"
+    },
+    "wb": {
+      "manual_kelvin_write_path": "confirmed_by_code_and_build",
+      "auto_restore_path": "confirmed_by_code_and_build",
+      "device_warm_cool_perception": "not_confirmed"
+    },
+    "iso": {
+      "manual_write_path": "confirmed_by_code_and_build",
+      "auto_restore_path": "confirmed_by_code_and_build",
+      "device_noise_exposure_perception": "not_confirmed"
+    },
+    "shutter": {
+      "manual_write_path": "confirmed_by_code_and_build",
+      "auto_restore_path": "confirmed_by_code_and_build",
+      "iso_lock_boundary": "confirmed_by_code_and_build",
+      "device_motion_exposure_perception": "not_confirmed"
+    }
+  },
+  "conclusion": "R34 已完成五参数综合闭环包内可执行验证与语义核查；代码与设备安装/启动链路可用。真机人工滑动观察与触觉主观闭环未在当前 CLI 环境完成，不能夸大为全项真机通过。",
+  "next_step": "在可交互真机会话中按 R34 清单执行人工操作，补齐五参数方向、视觉变化、触觉手感与拍后链路主观确认。"
+}

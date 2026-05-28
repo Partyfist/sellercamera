@@ -1,0 +1,23 @@
+{
+  "report_id": "r27_mainline_vision_convergence_cleanup",
+  "package_type": "mainline_cleanup",
+  "base_commit": "d6b013d6cf4821edb67c965f221c42fbd2203b2c",
+  "mainline_policy": {
+    "device_segmentation_provider": "vision",
+    "device_segmentation_request": "VNGenerateForegroundInstanceMaskRequest",
+    "multimodel_experiment_in_mainline": false
+  },
+  "archive_branch": "archive/experiment-multimodel-r25-20260424",
+  "residual_audit": {
+    "experiment_model_switch_entry_found": false,
+    "multi_provider_runtime_route_found": false,
+    "birefnet_or_onnx_route_found": false
+  },
+  "actions": [
+    "add_mainline_vision_metadata_keys",
+    "add_mainline_vision_scope_document",
+    "add_r27_cleanup_report",
+    "add_readme_status_index"
+  ],
+  "conclusion": "mainline_device_path_converged_to_vision_only"
+}

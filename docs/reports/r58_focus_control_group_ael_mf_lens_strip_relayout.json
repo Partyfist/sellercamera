@@ -1,0 +1,93 @@
+{
+  "report_id": "R58",
+  "title": "Focus control group relayout with AE-L and MF around lens strip",
+  "date": "2026-05-25",
+  "scope": {
+    "implemented": [
+      "Moved Focus entry model from independent AF/MF/LOCK panel to lens control group",
+      "Added AE-L capsule on the left side of lens focal controls",
+      "Added MF capsule on the right side of lens focal controls",
+      "Disabled independent Focus status capsule as a main entry",
+      "Disabled independent AF/MF/LOCK Focus panel as a main entry",
+      "Added MF single-button local mode toggle",
+      "Restored AF by calling cameraRuntime.restoreAutofocusMode() when leaving MF",
+      "Disabled MF under AE/AF Lock",
+      "Kept EV/WB/TINT/ISO/S unchanged"
+    ],
+    "not_implemented": [
+      "Manual Focus low-position ruler",
+      "lensPosition write loop",
+      "pending manual focus writeback system",
+      "new AE-L runtime contract",
+      "Focus returned to bottom five-parameter bar",
+      "white background pipeline changes",
+      "post-capture flow changes"
+    ]
+  },
+  "layout": {
+    "control_group": "AE-L / device-driven focal buttons / MF",
+    "lens_focal_buttons": "cameraRuntime.availableSemanticFocalCapabilities",
+    "focus_bottom_parameter_bar": false,
+    "independent_af_capsule": "removed from UI mainline",
+    "independent_focus_panel": "removed from UI mainline"
+  },
+  "mf_behavior": {
+    "default_state": "AF; MF capsule inactive",
+    "tap_mf_when_unlocked": "enter local MF mode and highlight MF",
+    "tap_mf_when_active": "exit MF, call restoreAutofocusMode(), unhighlight MF",
+    "tap_mf_when_locked": "blocked with hint",
+    "calls_setManualFocusLensPosition": false,
+    "calls_restoreAutofocusMode": "only when exiting MF"
+  },
+  "ae_l_behavior": {
+    "position": "left of lens focal controls",
+    "runtime": "reuses existing cameraRuntime.toggleExposureLock",
+    "active_state": "cameraRuntime.isExposureLocked || cameraRuntime.isFocusExposureLocked",
+    "new_runtime_contract": false
+  },
+  "mutual_exclusion": {
+    "enter_mf_closes_five_parameter_inline_controls": true,
+    "enter_mf_closes_lens_zoom_ruler": true,
+    "enter_mf_closes_more_panel": true,
+    "five_parameter_tap_keeps_mf_mode": true,
+    "lens_tap_keeps_mf_mode": true,
+    "more_panel_keeps_mf_mode": true
+  },
+  "gesture_policy": {
+    "tap_focus_af_mode": "unchanged",
+    "tap_preview_in_mf_mode": "consumed with hint to avoid AF overriding MF mode",
+    "long_press_ae_af_lock": "unchanged",
+    "pinch_zoom": "unchanged"
+  },
+  "contracts_protected": {
+    "five_parameters": "EV / WB / TINT / ISO / S unchanged",
+    "tint_reset_contract": "unchanged",
+    "wb_tint_contract": "unchanged",
+    "iso_shutter_lock_contract": "unchanged",
+    "lens_zoom_runtime": "unchanged",
+    "more_panel_persistent_interaction": "unchanged",
+    "white_background_pipeline": "unchanged",
+    "post_capture_flow": "unchanged"
+  },
+  "modified_files": [
+    "SellerCamera/CaptureScreen.swift",
+    "README.md",
+    "docs/reports/r58_focus_control_group_ael_mf_lens_strip_relayout.md",
+    "docs/reports/r58_focus_control_group_ael_mf_lens_strip_relayout.json"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": "passed",
+    "device_run": "not_run"
+  },
+  "risks": [
+    "Lens strip may be tight on small screens with AE-L and MF capsules.",
+    "MF is currently a local mode toggle and does not write lensPosition.",
+    "AE-L reuses the existing exposure lock path and is not a new independent runtime contract.",
+    "MF tap-preview consumption policy should be validated on device."
+  ],
+  "next_recommended_package": "R59 Manual Focus low-position ruler integration with lensPosition write loop"
+}

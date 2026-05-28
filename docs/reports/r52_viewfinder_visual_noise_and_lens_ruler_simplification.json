@@ -1,0 +1,89 @@
+{
+  "id": "r52_viewfinder_visual_noise_and_lens_ruler_simplification",
+  "round": "R52",
+  "date": "2026-05-24",
+  "package_name": "取景区与镜头刻度视觉减法",
+  "scope": {
+    "area": "capture_viewfinder_and_lens_ruler_visual_simplification",
+    "runtime_contract_changed": false,
+    "five_parameter_contract_changed": false,
+    "lens_runtime_changed": false,
+    "focus_returned_to_bottom_bar": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "device_feedback": [
+    "The viewfinder top-left EV status was visually noisy.",
+    "The preview area had a visible white frame.",
+    "The lens ruler panel still had a title and visible borders.",
+    "Lens ruler should keep only the necessary tick area, value badge, and center pointer."
+  ],
+  "changes": {
+    "viewfinder_ev_status": {
+      "removed": true,
+      "implementation": "Removed CaptureRuntimeBadge from CapturePreviewContainer and deleted the unused private view.",
+      "bottom_ev_entry_preserved": true,
+      "ev_runtime_changed": false
+    },
+    "preview_frame": {
+      "workspace_stroke_removed": true,
+      "aspect_guide_stroke_opacity": 0.07,
+      "aspect_guide_line_width": 0.6,
+      "preview_size_changed": false
+    },
+    "lens_ruler_simplification": {
+      "title_removed": true,
+      "outer_border_removed": true,
+      "inner_ruler_border_removed": true,
+      "value_badge_preserved": true,
+      "center_pointer_preserved": true,
+      "major_minor_ticks_preserved": true,
+      "pending_zoom_preserved": true,
+      "selected_tick_offset_preserved": true
+    }
+  },
+  "protected_interactions": {
+    "lens_horizontal_drag": true,
+    "lens_zoom_ui_sync": true,
+    "pinch_zoom": true,
+    "preview_tap_dismiss": true,
+    "tap_focus_changed": false,
+    "ae_af_lock_changed": false,
+    "five_parameter_controls_changed": false
+  },
+  "protected_contracts": {
+    "five_parameters": "EV / WB / TINT / ISO / S",
+    "tint_reset_not_auto": true,
+    "wb_tint_preserved": true,
+    "iso_shutter_lock_preserved": true,
+    "focus_not_in_bottom_bar": true,
+    "white_background_changed": false,
+    "post_capture_changed": false
+  },
+  "modified_files": [
+    "SellerCamera/CaptureScreen.swift",
+    "SellerCamera/CaptureLivePreviewView.swift",
+    "README.md",
+    "docs/reports/r52_viewfinder_visual_noise_and_lens_ruler_simplification.md",
+    "docs/reports/r52_viewfinder_visual_noise_and_lens_ruler_simplification.json"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r52_viewfinder_visual_noise_and_lens_ruler_simplification.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No physical device execution was performed in this package."
+    }
+  },
+  "known_risks": [
+    "The aspect ratio guide still keeps a very low-opacity line; real-device screenshots should confirm whether this is still too visible.",
+    "The lens ruler keeps a lightweight dark backing for readability; final visual weight needs device confirmation.",
+    "No device run was performed, so visual-noise reduction remains build-verified but not device-confirmed."
+  ]
+}

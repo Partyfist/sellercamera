@@ -1,0 +1,104 @@
+{
+  "id": "r51_lens_ruler_zoom_ui_sync_and_overlap_fix",
+  "round": "R51",
+  "date": "2026-05-24",
+  "package_name": "镜头焦段调节 UI 同步修正",
+  "scope": {
+    "area": "lens_zoom_ruler_ui",
+    "parameters_changed": false,
+    "focus_returned_to_bottom_bar": false,
+    "runtime_contract_changed": false,
+    "lens_runtime_rewritten": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "device_feedback": [
+    "Lens zoom runtime changes during horizontal drag.",
+    "Lens ruler UI did not visually follow the zoom change.",
+    "Current value badge, center pointer, and tick labels overlapped."
+  ],
+  "root_cause": {
+    "summary": "The previous lens ruler mapped drag position directly to zoom writes but did not maintain pending zoom, selected tick, or moving tick offset state.",
+    "details": [
+      "Current value depended primarily on runtime write-back, so it could stay visually stale while runtime was changing.",
+      "Tick layout was static progress-based, so the ruler appeared not to move during drag.",
+      "Selected tick did not snap under a fixed center pointer.",
+      "Top value text, center badge, pointer, and tick labels were too dense vertically."
+    ]
+  },
+  "changes": {
+    "pending_zoom": {
+      "added": true,
+      "display_priority": ["pendingLensZoomValue", "cameraRuntime.lensZoomDialValue"],
+      "timeout_seconds": 1.0
+    },
+    "tick_mapping": {
+      "uses_lens_range": true,
+      "includes_current_display_value": true,
+      "deduplicates_and_sorts": true,
+      "selected_index": "nearest tick to pending/runtime display zoom"
+    },
+    "offset_alignment": {
+      "model": "selected tick + drag offset",
+      "offset_formula": "centerX - selectedIndex * tickSpacing - tickSpacing / 2 + dragOffset",
+      "snap_on_end": true
+    },
+    "overlap_fix": {
+      "removed_duplicate_top_right_value": true,
+      "value_badge_text": "short zoom value only, e.g. 1.0x",
+      "major_labels_only": true,
+      "minor_labels_hidden": true,
+      "short_center_pointer": true
+    }
+  },
+  "interaction": {
+    "horizontal_drag_changes_zoom": true,
+    "ui_updates_pending_immediately": true,
+    "same_value_write_deduped": true,
+    "boundary_rewrite_avoided": true,
+    "haptic_on_actual_step_only": true,
+    "step_cooldown_seconds": 0.08,
+    "max_step_per_event": 2
+  },
+  "pinch_zoom_sync": {
+    "runtime_path_changed": false,
+    "strategy": "When no lens pending zoom exists, the overlay reads cameraRuntime.lensZoomDialValue. Continuous pinch zoom values are inserted into the tick list for display and nearest-index alignment.",
+    "does_not_force_runtime_to_tick": true
+  },
+  "protected_contracts": {
+    "five_parameters": "EV / WB / TINT / ISO / S",
+    "tint_reset_not_auto": true,
+    "wb_tint_preserved": true,
+    "iso_shutter_lock_preserved": true,
+    "focus_not_in_bottom_bar": true,
+    "tap_focus_changed": false,
+    "ae_af_lock_changed": false,
+    "white_background_changed": false,
+    "post_capture_changed": false
+  },
+  "modified_files": [
+    "SellerCamera/CaptureScreen.swift",
+    "README.md",
+    "docs/reports/r51_lens_ruler_zoom_ui_sync_and_overlap_fix.md",
+    "docs/reports/r51_lens_ruler_zoom_ui_sync_and_overlap_fix.json"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r51_lens_ruler_zoom_ui_sync_and_overlap_fix.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No physical device execution was performed in this package."
+    }
+  },
+  "known_risks": [
+    "Lens ruler UI sync still needs real-device visual confirmation because the original issue was observed on device.",
+    "Extreme device zoom ranges may require an additional label-density pass after screenshot review.",
+    "The ruler remains discrete; continuous pinch zoom is displayed but not forced into runtime tick values."
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "task": "hurricane_camera_ui_ux_research",
+  "date": "2026-05-23",
+  "method": "iPhone Mirroring public UI observation via Mac",
+  "scope": {
+    "reverse_engineering": false,
+    "network_capture": false,
+    "private_data_access": false,
+    "public_ui_only": true
+  },
+  "execution": {
+    "iphone_mirroring_opened": true,
+    "hurricane_camera_opened": true,
+    "local_screenshot_files_saved": false,
+    "screen_recording_saved": false,
+    "reference_directory": "Reference/HurricaneCamera/",
+    "screenshot_limitation": "screencapture returned 'could not create image from display'; Computer Use screenshots were observable but not persisted to local files",
+    "device_runtime_limitation": "iPhone Mirroring displayed system alerts that Mac cannot use iPhone camera/microphone, so real camera preview changes and haptics were not validated"
+  },
+  "observations": {
+    "page_structure": {
+      "top": "Compact status row with mode tabs and small utility icons",
+      "viewfinder": "Dark viewfinder with grid, compact histogram/exposure reference, and low-profile lens/focal-length chips",
+      "bottom": "Centered shutter button, left preview/material entry, right latest thumbnail, parameter strip above shutter"
+    },
+    "parameters": {
+      "white_balance": "Horizontal low-profile scale with floating Kelvin value and right-side Auto toggle",
+      "iso": "Horizontal scale with floating numeric value and right-side Auto toggle",
+      "shutter": "Horizontal scale with floating shutter value and right-side Auto toggle",
+      "ev": "Large arc/radial dial around lower-right shutter area with floating EV value",
+      "tint": "No independent TINT entry observed in the public shooting page during this pass"
+    },
+    "state_expression": {
+      "auto": "Right-side capsule switch; highlighted when enabled, grey when disabled",
+      "reset": "Not clearly observed as a main parameter control",
+      "lock": "Not clearly observed in this pass",
+      "active": "Active parameter uses icon highlight/glow and focused control overlay"
+    },
+    "motion_and_haptics": {
+      "visual_motion": "Parameter controls replace/expand in place at the bottom without page navigation",
+      "haptics": "Not validated through iPhone Mirroring",
+      "real_camera_effects": "Not validated through iPhone Mirroring"
+    }
+  },
+  "seller_camera_recommendations": [
+    "Add a stronger active value anchor or floating value badge to the existing five-column short vertical dial panel.",
+    "Keep Seller Camera's five-parameter simultaneous visibility instead of switching wholesale to one horizontal ruler.",
+    "Unify AUTO / RESET / LOCK visual states so they are not just text labels.",
+    "Refine active parameter glow/highlight without increasing panel size.",
+    "Keep future exposure/color assistance small, non-blocking, and viewfinder-first."
+  ],
+  "do_not_copy": [
+    "Do not directly copy icons, brand elements, or the large EV radial dial.",
+    "Do not turn Seller Camera into a video-first dense pro camera UI.",
+    "Do not replace the five-column control console with full horizontal controls unless a later product decision explicitly changes direction."
+  ],
+  "next_package_suggestion": "Current-value anchor and AUTO/RESET/LOCK visual state polish for Seller Camera's existing EV/WB/TINT/ISO/S console."
+}

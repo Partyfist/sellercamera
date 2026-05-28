@@ -1,0 +1,59 @@
+{
+  "id": "r47_control_console_visual_unification_and_bottom_action_lowering",
+  "date": "2026-05-23",
+  "task": "Bottom console visual unification, lens ruler alignment, and bottom action lowering",
+  "scope": {
+    "bottom_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "focus_in_bottom_bar": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false,
+    "lens_runtime_changed": false,
+    "pinch_zoom_changed": false
+  },
+  "visual_unification": {
+    "parameter_bar_grid_removed": true,
+    "strong_vertical_separators_removed": true,
+    "outer_stroke_opacity_reduced": true,
+    "active_item_style": "Seller Camera teal accent fill, stroke, and subtle glow",
+    "non_active_item_style": "Transparent item background with no heavy cell border"
+  },
+  "lens_style_alignment": {
+    "focal_entry_accent_aligned": true,
+    "zoom_panel_uses_value_badge": true,
+    "zoom_panel_uses_center_pointer": true,
+    "zoom_panel_uses_major_minor_ticks": true,
+    "zoom_write_path": "cameraRuntime.setLensZoomDialValue",
+    "device_driven_focal_capabilities_preserved": true
+  },
+  "bottom_action_lowering": {
+    "bottom_control_deck_height_pt": 150,
+    "bottom_padding_pt": 4,
+    "overlay_strategy_preserved": true,
+    "normal_action_buttons_restore_after_dismiss": true
+  },
+  "gesture_and_contract_protection": {
+    "parameter_vs_lens_mutual_exclusion": "preserved",
+    "pinch_zoom_path": "unchanged CaptureLivePreviewView zoom gesture/runtime path",
+    "tap_focus_and_ae_af_lock": "not modified",
+    "white_background_pipeline": "not modified",
+    "post_capture_flow": "not modified"
+  },
+  "validation": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_run": "not_run",
+    "notes": "Build passed with the existing nested xcodeproj warning. True-device screenshot and gesture validation remains required."
+  },
+  "risks": [
+    "Lens zoom ruler is visually aligned but remains a lens-specific lightweight component rather than the exact five-parameter renderer.",
+    "Bottom lowering is conservative and should be validated against real safe-area spacing.",
+    "No true-device screenshot or pinch-zoom validation was performed in this package."
+  ],
+  "next_recommended_package": "Independent Focus focusing system UI preflight without returning Focus to the bottom five-parameter bar."
+}

@@ -1,0 +1,44 @@
+{
+  "report_id": "r31_ev_wb_iso_shutter_device_validation_closure",
+  "package": "第 10 包：EV / WB / ISO / Shutter 真机验证闭环 + 最小显示修正",
+  "scope": {
+    "included": [
+      "EV/WB/ISO/Shutter 四参数构建与设备链路验证",
+      "ISO 非 Auto 时 Shutter 锁定显示语义最小修正",
+      "R31 验证报告与索引更新"
+    ],
+    "excluded": [
+      "Focus 真实写入",
+      "ISO+Shutter 完整手动曝光系统",
+      "白底处理链路改动",
+      "拍后流程改动"
+    ]
+  },
+  "runtime_contract": {
+    "ev": "setExposureBiasDialValue(_), resetExposureBias()",
+    "wb": "setWhiteBalanceDialValue(_), applyWhiteBalanceAuto()",
+    "iso": "setISODialValue(_), applyISOAuto()",
+    "shutter": "setShutterDialValue(_), applyShutterAuto()",
+    "iso_shutter_boundary": "ISO 非 Auto 时，Shutter 锁定且不触发手动写入；ISO 回到 Auto 后，Shutter 恢复可调。"
+  },
+  "verification": {
+    "simulator_build": "passed",
+    "device_build": "passed",
+    "device_install": "passed",
+    "device_launch": "partial_pass_with_signal9_session_end",
+    "manual_visual_and_haptic_validation_on_device": "not_completed_in_cli_environment"
+  },
+  "minimal_fix": {
+    "files": [
+      "SellerCamera/CaptureScreen.swift",
+      "SellerCamera/CaptureBottomParameterBar.swift"
+    ],
+    "changes": [
+      "Shutter 锁定态底部值显示 LOCK",
+      "Shutter 锁定态滚轮中心显示 LOCK",
+      "Shutter 锁定态控制按钮显示 LOCK 并禁用"
+    ]
+  },
+  "conclusion": "R31 已完成四参数验证包内可执行验证与最小显示修正；真机主观视觉/触觉闭环仍需人工操作补齐后再进入 Focus 包。",
+  "next_step": "在可交互真机环境执行 EV/WB/ISO/Shutter 人工闭环清单，确认方向、AUTO/RESET、交替一致性与触觉手感。"
+}

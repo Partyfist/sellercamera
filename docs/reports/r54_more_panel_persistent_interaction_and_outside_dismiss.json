@@ -1,0 +1,86 @@
+{
+  "id": "r54_more_panel_persistent_interaction_and_outside_dismiss",
+  "round": "R54",
+  "date": "2026-05-24",
+  "package_name": "右上角更多面板内部操作保持打开与外部点击关闭",
+  "scope": {
+    "area": "capture_top_more_options_panel_interaction",
+    "new_feature_added": false,
+    "focus_added": false,
+    "five_parameter_contract_changed": false,
+    "lens_runtime_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "device_feedback": [
+    "Changing options in the top-right More menu automatically closes the menu.",
+    "The requested behavior is to keep the More panel open during internal changes and close only on outside taps."
+  ],
+  "root_cause": {
+    "component": "SwiftUI Menu",
+    "reason": "System Menu automatically dismisses after selecting an item, which conflicts with persistent low-frequency settings adjustment."
+  },
+  "changes": {
+    "more_panel": {
+      "replaced_system_menu": true,
+      "new_overlay_panel": "CaptureMoreOptionsPanel",
+      "internal_taps_keep_open": true,
+      "internal_blank_taps_consumed": true,
+      "outside_tap_dismiss_layer": true
+    },
+    "actions_preserved": {
+      "toggle_grid": true,
+      "toggle_level_indicator": true,
+      "cycle_timer": true,
+      "cycle_burst": true,
+      "import_photo_entry": true
+    },
+    "mutual_exclusion": {
+      "opening_more_closes_parameter_inline_controls": true,
+      "opening_more_closes_lens_inline_controls": true,
+      "opening_parameter_inline_controls_closes_more": true,
+      "opening_lens_inline_controls_closes_more": true
+    },
+    "preview_tap_behavior": {
+      "more_panel_open_first_tap_closes_panel": true,
+      "tap_focus_changed": false
+    }
+  },
+  "protected_contracts": {
+    "five_parameters": "EV / WB / TINT / ISO / S",
+    "ev_contract_changed": false,
+    "wb_tint_contract_changed": false,
+    "tint_reset_not_auto": true,
+    "iso_shutter_lock_contract_changed": false,
+    "shutter_contract_changed": false,
+    "lens_zoom_changed": false,
+    "focus_returned_to_bottom_bar": false,
+    "white_background_changed": false,
+    "post_capture_changed": false
+  },
+  "modified_files": [
+    "SellerCamera/CaptureScreen.swift",
+    "README.md",
+    "docs/reports/r54_more_panel_persistent_interaction_and_outside_dismiss.md",
+    "docs/reports/r54_more_panel_persistent_interaction_and_outside_dismiss.json"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r54_more_panel_persistent_interaction_and_outside_dismiss.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No physical device execution was performed during report creation."
+    }
+  },
+  "known_risks": [
+    "The custom More overlay needs true-device validation for panel placement and outside-tap behavior.",
+    "When the More panel is open, tapping the shutter area closes the panel first instead of immediately capturing, to reduce accidental capture risk.",
+    "The import photo action opens the system photo picker; whether to close the More panel after import tap remains a product interaction decision."
+  ]
+}

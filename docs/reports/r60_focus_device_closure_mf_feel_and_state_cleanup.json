@@ -1,0 +1,74 @@
+{
+  "report_id": "R60",
+  "title": "Focus device closure, MF feel tuning, and state expression cleanup",
+  "date": "2026-05-25",
+  "scope": {
+    "implemented": [
+      "Confirmed MF remains independent from bottom five parameters",
+      "Corrected manual focus zone text so 0.0 maps to near and 1.0 maps to far",
+      "Refined MF ruler tick step from 0.05 to 0.025",
+      "Increased MF ruler drag threshold to 40pt",
+      "Increased MF ruler step cooldown to 0.12s",
+      "Updated MF entry hint to clarify left-near and right-far semantics"
+    ],
+    "not_implemented": [
+      "focus peaking",
+      "magnifier",
+      "AI focus assist",
+      "bottom parameter Focus re-entry",
+      "large Focus panel",
+      "camera runtime refactor"
+    ]
+  },
+  "manual_focus_semantics": {
+    "zero": "near",
+    "one": "far",
+    "display_bands": {
+      "0.0_to_0.34": "near",
+      "0.34_to_0.67": "middle",
+      "0.67_to_1.0": "far"
+    },
+    "ruler_left_label": "near",
+    "ruler_right_label": "far"
+  },
+  "ruler_feel": {
+    "range": {
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "previous_step": 0.05,
+    "new_step": 0.025,
+    "drag_threshold_points": 40,
+    "step_cooldown_seconds": 0.12,
+    "maximum_step_per_trigger": 1
+  },
+  "runtime_contracts": {
+    "uses_setManualFocusLensPosition": true,
+    "uses_restoreAutofocusMode": true,
+    "changes_ev_wb_tint_iso_shutter": false,
+    "changes_lens_zoom": false,
+    "changes_tap_focus": false,
+    "changes_long_press_lock": false,
+    "changes_white_background_pipeline": false,
+    "changes_post_capture_flow": false
+  },
+  "validation": {
+    "xcodebuild": "passed",
+    "json_parse": "passed",
+    "device_run": "not_run_in_this_package",
+    "known_device_feedback": "R59 MF device validation was reported normal by the user."
+  },
+  "files_changed": [
+    "SellerCamera/CaptureScreen.swift",
+    "SellerCamera/CaptureLivePreviewView.swift",
+    "README.md",
+    "docs/reports/r60_focus_device_closure_mf_feel_and_state_cleanup.md",
+    "docs/reports/r60_focus_device_closure_mf_feel_and_state_cleanup.json"
+  ],
+  "residual_risks": [
+    "MF tick density may need per-device tuning after more physical-device validation.",
+    "Without peaking or magnifier, users still judge focus through the live preview.",
+    "MF mode tap-focus suppression should remain under observation for user comprehension."
+  ],
+  "next_package": "R61 Focus device recheck and MF low-ruler small-screen/lens-difference minimal corrections"
+}

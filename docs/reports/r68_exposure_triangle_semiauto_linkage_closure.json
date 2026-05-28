@@ -1,0 +1,104 @@
+{
+  "report": "r68_exposure_triangle_semiauto_linkage_closure",
+  "task": "R68 Exposure triangle semi-auto linkage closure",
+  "scope": {
+    "implemented": [
+      "Removed UI-level ISO lock caused by manual Shutter",
+      "Removed UI-level Shutter lock caused by manual ISO",
+      "Removed runtime guard that blocked ISO writes while Shutter was manual",
+      "Removed runtime guard that blocked manual Shutter writes while ISO was manual",
+      "Kept EV locked when ISO or Shutter is manual",
+      "Kept R66 custom exposure clamp protection",
+      "Added Debug-only exposure triangle logs for ISO/Shutter actions"
+    ],
+    "not_implemented": [
+      "No M/A/S/P exposure mode system",
+      "No exposure mode picker",
+      "No UI layout change",
+      "No WB/TINT changes",
+      "No Focus/MF changes",
+      "No lens zoom changes",
+      "No white-background or post-capture changes"
+    ]
+  },
+  "r67_overlock_cause": [
+    "CaptureScreen derived isoBlockedByShutter and shutterBlockedByISO, then used them to mark ISO or Shutter as locked.",
+    "CaptureLivePreviewView rejected ISO writes when Shutter was not Auto and rejected manual Shutter writes when ISO was not Auto."
+  ],
+  "semiauto_rules": [
+    {
+      "iso": "auto",
+      "shutter": "auto",
+      "ev": "enabled"
+    },
+    {
+      "iso": "manual_or_pending",
+      "shutter": "auto",
+      "ev": "locked"
+    },
+    {
+      "iso": "auto",
+      "shutter": "manual_or_pending",
+      "ev": "locked"
+    },
+    {
+      "iso": "manual_or_pending",
+      "shutter": "manual_or_pending",
+      "ev": "locked"
+    }
+  ],
+  "ev_lock": {
+    "condition": "ISO or Shutter manual/pending manual",
+    "runtime_setExposureTargetBias": "blocked",
+    "ui": "EV displays LOCK and does not open the ruler"
+  },
+  "iso_behavior": {
+    "locked_by_shutter_manual": false,
+    "locked_by_exposure_lock": true,
+    "can_enter_manual_when_shutter_manual": true
+  },
+  "shutter_behavior": {
+    "locked_by_iso_manual": false,
+    "locked_by_exposure_lock": true,
+    "can_enter_manual_when_iso_manual": true
+  },
+  "debug_logging": {
+    "tag": "[CaptureExposureTriangle]",
+    "events": [
+      "isoDrag",
+      "isoAuto",
+      "shutterDrag",
+      "shutterAuto",
+      "ev blocked events retained from R67"
+    ],
+    "release_behavior": "no_output_due_to_DEBUG_guard"
+  },
+  "regression_protection": {
+    "r65_wb_auto_first_drag_modified": false,
+    "r66_sanitized_custom_exposure_write_modified": false,
+    "mf_modified": false,
+    "lens_zoom_modified": false,
+    "white_background_modified": false,
+    "post_capture_modified": false
+  },
+  "files": {
+    "modified": [
+      "SellerCamera/CaptureScreen.swift",
+      "SellerCamera/CaptureLivePreviewView.swift",
+      "README.md"
+    ],
+    "added": [
+      "docs/reports/r68_exposure_triangle_semiauto_linkage_closure.md",
+      "docs/reports/r68_exposure_triangle_semiauto_linkage_closure.json"
+    ]
+  },
+  "validation": {
+    "json_parse": "passed",
+    "xcodebuild": "passed",
+    "true_device": "not_run"
+  },
+  "risks": [
+    "AVFoundation custom exposure writes accept both duration and ISO together, so true independent semi-auto behavior may still be constrained by hardware/runtime behavior.",
+    "True-device validation is required to confirm that the user-facing ISO/S semi-auto controls match observed exposure behavior."
+  ]
+}

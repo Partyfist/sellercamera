@@ -1,0 +1,64 @@
+{
+  "id": "r44_seller_camera_original_control_console_and_horizontal_ruler",
+  "date": "2026-05-23",
+  "task": "Seller Camera original professional control console and horizontal ruler",
+  "scope": {
+    "bottom_parameters": [
+      "EV",
+      "WB",
+      "TINT",
+      "ISO",
+      "S"
+    ],
+    "focus_in_bottom_bar": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false,
+    "third_party_assets_copied": false
+  },
+  "design_system": {
+    "background": "dark translucent console with subtle material, stroke, and shadow",
+    "accent": "Seller Camera teal-green for active state, value badge, and center pointer",
+    "secondary_accent": "amber for RESET action buttons",
+    "typography": "monospaced digits for parameter values and ruler labels",
+    "icon_language": "original SwiftUI-drawn parameter glyphs built from primitive shapes"
+  },
+  "components": {
+    "added": [
+      "CaptureHorizontalParameterRulerItem",
+      "CaptureRulerControlKind",
+      "CaptureHorizontalParameterRulerPanel",
+      "CaptureHorizontalParameterRuler",
+      "CaptureRulerParameterEntry",
+      "CaptureRulerControlCapsule",
+      "CaptureParameterGlyph"
+    ],
+    "replaced_expanded_console": "Expanded control area now shows one active horizontal ruler instead of five simultaneous compact vertical wheels"
+  },
+  "interaction": {
+    "active_parameter_switch": "Switches visible ruler only; does not dispatch runtime writes",
+    "ruler_drag": "Horizontal drag dispatches existing onWheelStep callback with bounded step count",
+    "snap_behavior": "UI recenters to selected tick after drag using existing selected/pending value mapping",
+    "control_tap": "Reuses existing AUTO / RESET routes",
+    "lock_behavior": "LOCK is displayed as disabled and does not trigger writes"
+  },
+  "contract_protection": {
+    "ev": "unchanged",
+    "wb": "unchanged; WB adjustment preserves TINT",
+    "tint": "unchanged; RESET only, no AUTO",
+    "iso": "unchanged",
+    "shutter": "unchanged; ISO manual keeps Shutter LOCK",
+    "focus": "not returned to bottom parameter bar"
+  },
+  "validation": {
+    "xcodebuild_debug_simulator": "passed",
+    "device_run": "not_run",
+    "notes": "Build passed. True-device interaction and visual polish still require manual device validation."
+  },
+  "risks": [
+    "Horizontal ruler hand feel is not yet validated on device.",
+    "Small-screen density for ruler labels and value badge needs screenshot review.",
+    "WB/TINT/Shutter long tick lists may need further visual sampling after device testing."
+  ],
+  "next_recommended_package": "Device UI validation and small-screen polish for the horizontal five-parameter console before Focus UI preflight."
+}

@@ -1,0 +1,61 @@
+{
+  "id": "r50_inline_ruler_dismiss_animation_and_tick_alignment",
+  "round": "R50",
+  "date": "2026-05-24",
+  "package_name": "五参数贴合式刻度层真机修正",
+  "scope": {
+    "parameters": ["EV", "WB", "TINT", "ISO", "Shutter"],
+    "focus_returned_to_bottom_bar": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false,
+    "lens_runtime_changed": false
+  },
+  "fixes": {
+    "preview_tap_dismiss": {
+      "implemented": true,
+      "strategy": "When inline controls are expanded, the first preview tap dismisses controls and is consumed before tap focus. When controls are closed, preview tap continues to focus/meter.",
+      "files": ["CaptureScreen.swift", "CaptureLivePreviewView.swift"]
+    },
+    "expand_animation": {
+      "implemented": true,
+      "transition": "top move + opacity + top scale",
+      "duration_seconds": 0.20,
+      "parameter_entry_position_fixed": true
+    },
+    "pointer_and_tick_alignment": {
+      "implemented": true,
+      "offset_fix": "selected tick offset subtracts tickSpacing / 2 so the tick center aligns with the fixed center pointer",
+      "pointer_line_height_pt": 30,
+      "pointer_triangle_size_pt": "8x5",
+      "selected_tick_height_pt": 21,
+      "major_tick_height_pt": 16,
+      "minor_tick_height_pt": 9
+    }
+  },
+  "tint_protection": {
+    "tint_still_adjustable": true,
+    "tint_step": "runtime-confirmable 5-step ticks retained",
+    "tint_reset_contract": "RESET only; does not call applyWhiteBalanceAuto",
+    "wb_tint_contract_preserved": true
+  },
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r50_inline_ruler_dismiss_animation_and_tick_alignment.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No device execution was performed in this package."
+    }
+  },
+  "known_risks": [
+    "Preview tap dismissal needs real-device confirmation because the original failure was observed on device.",
+    "Pointer and tick geometry is fixed in code, but final visual micro-alignment may still require a device screenshot pass.",
+    "Ruler label density was only lightly tuned, not redesigned."
+  ]
+}

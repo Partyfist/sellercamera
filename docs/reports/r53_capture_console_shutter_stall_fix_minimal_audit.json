@@ -1,0 +1,92 @@
+{
+  "id": "r53_capture_console_shutter_stall_fix_minimal_audit",
+  "round": "R53",
+  "date": "2026-05-24",
+  "package_name": "Shutter 调参后参数按钮无反应修复 + 最小性能体检",
+  "scope": {
+    "area": "capture_parameter_console_interaction_stability",
+    "focus_added": false,
+    "focus_returned_to_bottom_bar": false,
+    "runtime_architecture_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false,
+    "five_parameter_contract_changed": false
+  },
+  "device_feedback": [
+    "Shutter horizontal adjustment changes the live preview, so runtime shutter write is effective.",
+    "After Shutter adjustment, tapping EV / WB / TINT / ISO / S appears unresponsive or blocked."
+  ],
+  "root_cause_assessment": {
+    "confirmed_by_code": [
+      "Shutter writes are heavier than other parameters because they configure AVCaptureDevice exposure.",
+      "The horizontal ruler and its parent panel previously relied mainly on DragGesture.onEnded to release drag state.",
+      "If SwiftUI rebuilds the active ruler during Shutter runtime callbacks, stale dragging state could remain in the parent panel."
+    ],
+    "not_overclaimed": [
+      "No physical device run was completed in this package, so the exact true-device runtime timing remains to be verified.",
+      "No evidence required a full overlay zIndex rewrite or runtime architecture rewrite."
+    ]
+  },
+  "changes": {
+    "drag_state_release": {
+      "ruler_on_disappear_resets_drag": true,
+      "panel_active_kind_change_resets_drag": true,
+      "panel_on_disappear_resets_drag": true,
+      "parameter_entry_tap_resets_drag_tracking_before_select": true
+    },
+    "shutter_write_throttle": {
+      "generic_ruler_step_cooldown_seconds": 0.08,
+      "shutter_ruler_step_cooldown_seconds": 0.16,
+      "runtime_path_changed": false,
+      "same_value_dedup_preserved": true,
+      "boundary_dedup_preserved": true
+    },
+    "overlay_hit_test": {
+      "bottom_action_bar_hidden_hit_testing_false_when_overlay_present": true,
+      "z_index_rewrite": false,
+      "external_dismiss_path_changed": false
+    },
+    "code_cleanup": {
+      "large_dead_code_deletion": false,
+      "reason": "This re-execution package prioritized the Shutter stall fix and avoided broad cleanup beyond the directly related drag state safeguards."
+    }
+  },
+  "protected_contracts": {
+    "five_parameters": "EV / WB / TINT / ISO / S",
+    "ev_contract_changed": false,
+    "wb_tint_contract_changed": false,
+    "tint_reset_not_auto": true,
+    "iso_shutter_lock_contract_changed": false,
+    "shutter_runtime_contract_changed": false,
+    "lens_zoom_changed": false,
+    "tap_focus_changed": false,
+    "ae_af_lock_changed": false,
+    "white_background_changed": false,
+    "post_capture_changed": false
+  },
+  "modified_files": [
+    "SellerCamera/CaptureBottomParameterBar.swift",
+    "README.md",
+    "docs/reports/r53_capture_console_shutter_stall_fix_minimal_audit.md",
+    "docs/reports/r53_capture_console_shutter_stall_fix_minimal_audit.json"
+  ],
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r53_capture_console_shutter_stall_fix_minimal_audit.json",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "No physical device execution was performed during report creation."
+    }
+  },
+  "known_risks": [
+    "True-device validation is still required to confirm that Shutter adjustment no longer leaves the parameter console unresponsive.",
+    "If stalls persist, the next narrow investigation should inspect actual Shutter write frequency and AVCaptureDevice configuration latency on device.",
+    "This package intentionally did not perform broad CaptureScreen or runtime refactoring."
+  ]
+}

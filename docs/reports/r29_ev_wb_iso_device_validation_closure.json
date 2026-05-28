@@ -1,0 +1,34 @@
+{
+  "report_id": "r29_ev_wb_iso_device_validation_closure",
+  "package": "第 8 包：EV / WB / ISO 真机验证闭环 + 最小显示修正",
+  "scope": {
+    "included": [
+      "EV 真机闭环验证",
+      "WB 真机闭环验证",
+      "ISO 真机闭环验证",
+      "最小显示修正（ISO AUTO 语义对齐）"
+    ],
+    "excluded": [
+      "Shutter 写入接入",
+      "Focus 写入接入",
+      "白底处理链路改动",
+      "拍后流程改动",
+      "runtime 架构重构"
+    ]
+  },
+  "code_changes": [
+    {
+      "file": "SellerCamera/CaptureScreen.swift",
+      "change": "ISO 在 AUTO 模式下底部栏显示改为 A（无 pending 时）"
+    }
+  ],
+  "verification": {
+    "simulator_build": "passed",
+    "device_build": "passed",
+    "device_visibility": "passed",
+    "device_install_launch": "blocked_by_coredevice"
+  },
+  "blocked_reason": "CoreDeviceService 初始化超时/连接失效，无法在当前环境完成 install/launch 交互验证。",
+  "conclusion": "本包完成最小修正并完成可执行层验证；真机交互闭环仍待在可用 CoreDevice 环境补测。",
+  "next_step": "在可用真机环境补做 EV/WB/ISO 手工交互闭环并记录结果。"
+}

@@ -1,0 +1,144 @@
+{
+  "id": "r49_independent_focus_system_preflight",
+  "date": "2026-05-23",
+  "task": "第 29 包：独立 Focus 对焦系统 UI 方案与接入前置",
+  "scope": {
+    "type": "preflight_design_and_code_path_audit",
+    "swift_behavior_changed": false,
+    "new_focus_ui_added": false,
+    "manual_focus_ruler_added": false,
+    "runtime_contract_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "official_bottom_parameters": ["EV", "WB", "TINT", "ISO", "S"],
+  "focus_in_bottom_parameters": false,
+  "files_checked": [
+    "SellerCamera/CaptureLivePreviewView.swift",
+    "SellerCamera/CaptureScreen.swift",
+    "SellerCamera/CaptureBottomParameterBar.swift",
+    "SellerCamera/CaptureProfessionalParameterPanel.swift"
+  ],
+  "files_modified": [
+    {
+      "path": "README.md",
+      "purpose": "Added R49 report index."
+    },
+    {
+      "path": "docs/reports/r49_independent_focus_system_preflight.md",
+      "purpose": "Formal Focus preflight report."
+    },
+    {
+      "path": "docs/reports/r49_independent_focus_system_preflight.json",
+      "purpose": "Structured Focus preflight record."
+    }
+  ],
+  "runtime_findings": {
+    "focus_state": [
+      "CaptureFocusControlMode.auto",
+      "CaptureFocusControlMode.manual",
+      "isManualFocusSupported",
+      "focusControlMode",
+      "currentManualFocusPosition",
+      "focusMarker",
+      "isFocusExposureLocked",
+      "isExposureLocked"
+    ],
+    "manual_focus_write": {
+      "function": "setManualFocusLensPosition(_:)",
+      "device_api": "AVCaptureDevice.setFocusModeLocked(lensPosition:)",
+      "capability": "isLockingFocusWithCustomLensPositionSupported",
+      "uses_lock_for_configuration": true
+    },
+    "autofocus_restore": {
+      "function": "restoreAutofocusMode()",
+      "modes": ["continuousAutoFocus", "autoFocus"]
+    },
+    "tap_focus": {
+      "entry": "CameraPreviewLayerView.handleTap(_:) -> CaptureCameraRuntime.handlePreviewTap(devicePoint:normalizedPoint:)",
+      "does_focus_and_exposure": true,
+      "manual_focus_behavior": "Tap does not exit MF; it shows MF active feedback and does not change focus.",
+      "locked_behavior": "Tap does not change focus while AE/AF is locked."
+    },
+    "long_press_lock": {
+      "entry": "CameraPreviewLayerView.handleLongPress(_:) -> CaptureCameraRuntime.handlePreviewLongPress(devicePoint:normalizedPoint:)",
+      "minimum_press_duration_seconds": 0.6,
+      "locks_focus_and_exposure": true,
+      "manual_focus_behavior": "Long press is blocked in MF and asks user to return to AF.",
+      "unlock_behavior": "Long press while locked clears AE/AF lock and reapplies focus/exposure."
+    },
+    "pinch_zoom": {
+      "entry": "CaptureLivePreviewView MagnificationGesture",
+      "runtime_path": "setLensZoomMultiplier(_:)"
+    }
+  },
+  "focus_semantics": {
+    "priority": ["LOCK", "MF", "AF"],
+    "af": "Automatic focus state; tap focus and metering are available.",
+    "mf": "Manual Focus state driven by setManualFocusLensPosition(_:).",
+    "lock": "AE/AF lock state entered by long press; higher priority than MF/AF."
+  },
+  "ui_options": [
+    {
+      "id": "A",
+      "name": "Viewfinder edge Focus status capsule",
+      "recommendation": "primary",
+      "reason": "Focus belongs to the viewfinder, stays out of the bottom five parameters, and can show AF/MF/AEAF-L persistently without occupying the bottom console."
+    },
+    {
+      "id": "B",
+      "name": "Top toolbar Focus capsule",
+      "recommendation": "not_primary",
+      "reason": "Too far from the focusing action and risks crowding the top tool row."
+    },
+    {
+      "id": "C",
+      "name": "Contextual mini layer near focus marker",
+      "recommendation": "future_enhancement",
+      "reason": "Strong context but higher collision and implementation risk; better after a persistent capsule exists."
+    }
+  ],
+  "recommended_next_package": {
+    "name": "第 30 包：独立 Focus 状态入口 + AF / MF / LOCK 最小 UI 骨架",
+    "should_do": [
+      "Add a small independent Focus status capsule at the viewfinder edge.",
+      "Show AF / MF / AE/AF-L accurately.",
+      "Add a small skeleton panel for AF / MF / LOCK status only.",
+      "Make Focus panel mutually exclusive with bottom parameter and lens panels."
+    ],
+    "should_not_do": [
+      "Do not add a new manual focus ruler.",
+      "Do not change tap focus behavior.",
+      "Do not change long press AE/AF Lock behavior.",
+      "Do not add Focus back to EV/WB/TINT/ISO/S."
+    ]
+  },
+  "contracts_preserved": {
+    "ev": true,
+    "wb": true,
+    "tint_reset_not_auto": true,
+    "iso": true,
+    "shutter_lock_when_iso_manual": true,
+    "lens_zoom": true,
+    "pinch_zoom": true,
+    "tap_focus": true,
+    "long_press_ae_af_lock": true,
+    "white_background": true,
+    "post_capture": true
+  },
+  "validation": {
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed",
+      "note": "BUILD SUCCEEDED; existing nested project warning remains non-blocking."
+    },
+    "json_parse": {
+      "result": "passed"
+    }
+  },
+  "risks": [
+    "Focus capsule placement needs real-device visual validation to avoid covering the product subject.",
+    "Existing preview tap may both dismiss overlays and invoke tap focus; next package should preserve the current contract unless explicitly changed.",
+    "MF currently blocks tap focus and long-press AE/AF Lock; changing that should be a separate product decision."
+  ]
+}

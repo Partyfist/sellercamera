@@ -1,0 +1,38 @@
+{
+  "report_id": "r38_tint_reset_contract_and_wb_tint_validation",
+  "package": "第 17 包：TINT 合同修正为 RESET + WB/TINT 真机色彩验证",
+  "scope": {
+    "included": [
+      "TINT 控制文案由 AUTO 修正为 RESET",
+      "TINT reset 行为从调用白平衡 Auto 改为色偏归零合同",
+      "WB Auto 后 TINT 状态统一回收为 0",
+      "WB Kelvin 与 TINT 组合写入合同保留并确认未回退",
+      "R38 报告与 README 索引更新"
+    ],
+    "excluded": [
+      "Tone/Style/滤镜/调色盘能力",
+      "EV/ISO/Shutter/Focus 逻辑改造",
+      "白底链路与拍后流程改动",
+      "相机 runtime 大重构"
+    ]
+  },
+  "contract": {
+    "tint_semantics": "TINT 是白平衡绿/品红手动修正量，不提供 AUTO 语义",
+    "tint_range": "-50...+50",
+    "tint_step": 5,
+    "tint_default": 0,
+    "tint_reset": {
+      "wb_auto_mode": "保持 WB Auto，仅清 TINT 状态为 0，不强制二次调用 applyWhiteBalanceAuto()",
+      "wb_manual_mode": "写入 currentKelvin + tint 0"
+    },
+    "wb_auto": "applyWhiteBalanceAuto() 后 TINT 统一归零",
+    "wb_manual_write": "setWhiteBalanceDialValue 保留 currentTint",
+    "tint_manual_write": "setWhiteBalanceTintDialValue 保留 currentTemperature"
+  },
+  "verification": {
+    "simulator_build": "passed",
+    "device_color_direction_validation": "not_executed_in_this_package"
+  },
+  "conclusion": "R38 已完成 TINT 合同从 AUTO 到 RESET 的语义修正，并保持 WB/TINT 组合写入链路稳定，为下一步真机色彩方向补验建立清晰合同。"
+}
+

@@ -1,0 +1,162 @@
+{
+  "id": "r55_independent_focus_system_preflight",
+  "round": "R55",
+  "date": "2026-05-24",
+  "package_name": "独立 Focus 对焦系统 UI 方案与接入前置",
+  "scope": {
+    "area": "independent_focus_system_preflight",
+    "documentation_only": true,
+    "swift_behavior_changed": false,
+    "focus_ui_added": false,
+    "manual_focus_ruler_added": false,
+    "new_focus_runtime_write_added": false,
+    "five_parameter_contract_changed": false,
+    "lens_runtime_changed": false,
+    "more_panel_changed": false,
+    "white_background_pipeline_changed": false,
+    "post_capture_flow_changed": false
+  },
+  "current_formal_parameters": [
+    "EV",
+    "WB",
+    "TINT",
+    "ISO",
+    "S"
+  ],
+  "focus_runtime_audit": {
+    "runtime_type": "CaptureCameraRuntime",
+    "focus_mode_state": "focusControlMode",
+    "manual_focus_position_state": "currentManualFocusPosition",
+    "manual_focus_supported_state": "isManualFocusSupported",
+    "manual_focus_capability": "AVCaptureDevice.isLockingFocusWithCustomLensPositionSupported",
+    "manual_focus_write_path": "setManualFocusLensPosition(_:)",
+    "manual_focus_write_api": "AVCaptureDevice.setFocusModeLocked(lensPosition:)",
+    "autofocus_restore_path": "restoreAutofocusMode()",
+    "autofocus_restore_modes": [
+      "continuousAutoFocus",
+      "autoFocus"
+    ],
+    "focus_marker_state": "focusMarker",
+    "focus_exposure_lock_state": "isFocusExposureLocked",
+    "exposure_lock_state": "isExposureLocked",
+    "lens_position_readback": true
+  },
+  "gesture_paths": {
+    "tap_focus": [
+      "PreviewContainerUIView.handleTap(_:)",
+      "CameraPreviewLayerView.onTapPreview",
+      "CaptureLivePreviewView.onTapPreviewBeforeFocus",
+      "CaptureCameraRuntime.handlePreviewTap(devicePoint:normalizedPoint:)",
+      "CaptureCameraRuntime.applyFocusExposure(lockAfterFocus:false, source:.tap)"
+    ],
+    "long_press_lock": [
+      "PreviewContainerUIView.handleLongPress(_:)",
+      "CameraPreviewLayerView.onLongPressPreview",
+      "CaptureCameraRuntime.handlePreviewLongPress(devicePoint:normalizedPoint:)",
+      "CaptureCameraRuntime.applyFocusExposure(lockAfterFocus:true, source:.longPress)"
+    ],
+    "pinch_zoom": [
+      "CaptureLivePreviewView.MagnificationGesture",
+      "CaptureCameraRuntime.setLensZoomMultiplier(_:)"
+    ]
+  },
+  "focus_semantics": {
+    "af": "Default autofocus state.",
+    "tap_focus": "Tap preview to set focus and metering point.",
+    "mf": "Manual focus state driven by lensPosition, not implemented as new UI in this package.",
+    "lock": "AE/AF Lock state entered by long press.",
+    "priority": [
+      "LOCK",
+      "MF",
+      "AF"
+    ]
+  },
+  "ui_candidates": {
+    "A_viewfinder_edge_capsule": {
+      "description": "Small AF / MF / LOCK capsule at the viewfinder edge.",
+      "recommended": true,
+      "reason": "Focus is tied to the viewfinder subject and should not return to the bottom five-parameter bar."
+    },
+    "B_top_toolbar_entry": {
+      "description": "Focus status entry in the top toolbar.",
+      "recommended": false,
+      "reason": "Good for status but too far from thumb-level manual focus interaction."
+    },
+    "C_contextual_focus_marker_panel": {
+      "description": "Small panel near the tap-focus marker.",
+      "recommended": false,
+      "reason": "Strong context but too much occlusion and placement complexity for the first implementation."
+    },
+    "D_bottom_focus_panel": {
+      "description": "Independent bottom low-position Focus panel triggered by the Focus capsule.",
+      "recommended": true,
+      "reason": "Useful for a later MF control while keeping Focus outside EV / WB / TINT / ISO / S."
+    }
+  },
+  "recommended_plan": {
+    "strategy": "A + D",
+    "summary": "Use a viewfinder-edge Focus status capsule as the entry, then expand an independent low-position Focus panel later.",
+    "next_package": "R56 独立 Focus 状态胶囊 + AF / MF / LOCK 最小 UI 骨架",
+    "next_package_should_do": [
+      "Add a small Focus status capsule at the viewfinder edge.",
+      "Show AF / MF / LOCK based on current runtime states.",
+      "Open a lightweight Focus panel skeleton on capsule tap.",
+      "Close five-parameter, lens, and More overlays when Focus panel opens.",
+      "Close Focus panel on preview tap."
+    ],
+    "next_package_should_not_do": [
+      "Do not add Manual Focus ruler.",
+      "Do not add new lensPosition writes.",
+      "Do not change tap focus.",
+      "Do not change long-press AE/AF Lock.",
+      "Do not return Focus to the bottom five-parameter bar."
+    ]
+  },
+  "interaction_boundaries": {
+    "with_five_parameter_console": "Mutually exclusive. Focus panel closes EV / WB / TINT / ISO / S inline controls and vice versa.",
+    "with_lens_zoom_ruler": "Mutually exclusive. Lens writes zoom only; Focus writes focus/lensPosition only in future packages.",
+    "with_more_panel": "Mutually exclusive. More panel persistent interaction remains unchanged.",
+    "with_preview_tap": "If a panel is open, first tap closes the panel; tap focus runs after the panel is closed.",
+    "with_long_press": "Long press remains AE/AF Lock and should not be intercepted by Focus UI.",
+    "with_pinch_zoom": "Pinch remains zoom and must not be confused with future MF adjustment."
+  },
+  "protected_contracts": {
+    "five_parameters": "EV / WB / TINT / ISO / S",
+    "focus_returned_to_bottom_bar": false,
+    "tint_reset_not_auto": true,
+    "wb_tint_contract_changed": false,
+    "iso_shutter_lock_contract_changed": false,
+    "ev_contract_changed": false,
+    "shutter_contract_changed": false,
+    "lens_zoom_changed": false,
+    "more_panel_changed": false,
+    "tap_focus_changed": false,
+    "long_press_lock_changed": false,
+    "white_background_changed": false,
+    "post_capture_changed": false
+  },
+  "modified_files": [
+    "README.md",
+    "docs/reports/r55_independent_focus_system_preflight.md",
+    "docs/reports/r55_independent_focus_system_preflight.json"
+  ],
+  "validation": {
+    "json_parse": {
+      "command": "python3 -m json.tool /Users/sungning/Projects/SellerCamera/docs/reports/r55_independent_focus_system_preflight.json",
+      "result": "passed"
+    },
+    "xcodebuild": {
+      "command": "xcodebuild -project /Users/sungning/Projects/SellerCamera/SellerCamera.xcodeproj -scheme SellerCamera -configuration Debug -destination \"generic/platform=iOS Simulator\" CODE_SIGNING_ALLOWED=NO build",
+      "result": "passed"
+    },
+    "device_run": {
+      "result": "not_run",
+      "reason": "This package is documentation and preflight only."
+    }
+  },
+  "known_risks": [
+    "The future Focus capsule location must be validated on device to avoid covering product subjects.",
+    "MF and AE/AF Lock already have runtime guard rules; the future UI must not make those states appear simultaneously editable.",
+    "The existing focus parameter state mapping remains in CaptureScreen for reference but must not be reconnected to the bottom five-parameter bar."
+  ]
+}

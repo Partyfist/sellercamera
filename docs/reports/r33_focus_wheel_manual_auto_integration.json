@@ -1,0 +1,30 @@
+{
+  "report_id": "r33_focus_wheel_manual_auto_integration",
+  "package": "第 12 包：Focus 短竖向滚轮交互化 + Auto / Manual Focus 写入接入",
+  "scope": {
+    "included": [
+      "Focus 滚轮交互接入",
+      "Focus Manual 写入接入",
+      "Focus AUTO 恢复 AF 接入",
+      "Focus pending 收口与去重",
+      "构建验证与报告更新"
+    ],
+    "excluded": [
+      "点击对焦行为改写",
+      "长按 AE/AF Lock 行为改写",
+      "ISO/Shutter 联动重构",
+      "白底与拍后链路改动"
+    ]
+  },
+  "runtime_contract": {
+    "state_priority": "L > M > A > --",
+    "manual_path": "setManualFocusLensPosition(_)",
+    "auto_path": "restoreAutofocusMode()",
+    "locked_behavior": "Focus wheel disabled, control title LOCK"
+  },
+  "verification": {
+    "simulator_build": "passed",
+    "device_manual_validation": "not_completed_in_this_cli_turn"
+  },
+  "conclusion": "Focus 已完成最小真实接入，可进入 Focus 真机手感闭环与最小显示修正轮。"
+}

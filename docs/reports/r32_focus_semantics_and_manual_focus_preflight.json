@@ -1,0 +1,32 @@
+{
+  "report_id": "r32_focus_semantics_and_manual_focus_preflight",
+  "package": "第 11 包：Focus 参数语义设计与手动 Focus 接入前置方案",
+  "scope": {
+    "included": [
+      "Focus/AE/AF 路径核查",
+      "点击对焦与长按锁定优先级收口",
+      "Focus A/M/L/-- 状态语义定稿",
+      "下一包 Focus 接入边界与最小改动拆解"
+    ],
+    "excluded": [
+      "Focus 真实滚轮写入",
+      "点击对焦行为改写",
+      "长按 AE/AF 锁定行为改写",
+      "EV/WB/ISO/Shutter 行为改动"
+    ]
+  },
+  "key_findings": {
+    "tap_path": "handlePreviewTap -> applyFocusExposure(lockAfterFocus: false), manual/locked 下会被拦截",
+    "long_press_path": "handlePreviewLongPress -> lock/unlock AEAF, manual 下禁止进入 AEAF lock",
+    "manual_focus_capability": "setManualFocusLensPosition / restoreAutofocusMode 已存在，设备能力通过 isLockingFocusWithCustomLensPositionSupported 判断",
+    "focus_state_mapping": "A=auto, M=manual, L=locked, --=disabled"
+  },
+  "recommended_contract": {
+    "state_priority": "L > M > A",
+    "tap_behavior_when_manual": "保持点按不改对焦（不退出 M）",
+    "focus_auto_button": "仅恢复 AF，不隐式清 AE/AF lock",
+    "focus_wheel_when_locked": "禁用"
+  },
+  "next_package_ready": true,
+  "next_package_name": "Focus 短竖向滚轮交互化 + Auto / Manual Focus 写入接入"
+}
