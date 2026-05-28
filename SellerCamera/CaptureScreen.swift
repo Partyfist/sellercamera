@@ -1067,9 +1067,10 @@ private struct CaptureManualFocusRulerPanel: View {
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
-        if lift > 90 { return 0.12 }
-        if lift > 40 { return 0.35 }
-        return 1.0
+        // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
+        if lift > 90 { return 0.35 }
+        if lift > 40 { return 0.70 }
+        return 2.0
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
@@ -1989,9 +1990,10 @@ private struct CaptureZoomDialView: View {
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
-        if lift > 90 { return 0.12 }
-        if lift > 40 { return 0.35 }
-        return 1.0
+        // Normal drag covers more zoom range; lifted drags keep the R73 fine-control path.
+        if lift > 90 { return 0.35 }
+        if lift > 40 { return 0.75 }
+        return 2.2
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {

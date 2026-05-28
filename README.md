@@ -64,3 +64,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R70 Shutter ruler 交互映射与常用快门锚点修复报告：`docs/reports/r70_shutter_ruler_interaction_mapping_fix.md`
 - R71A Shutter ruler 双向拖拽与惯性修复报告：`docs/reports/r71a_shutter_ruler_bidirectional_inertia_fix.md`
 - R73 参数表盘真机体验验收与收口修复报告：`docs/reports/r73_parameter_ruler_real_device_acceptance_and_closure.md`
+- R73A 参数表盘拖动灵敏度加速修复报告：`docs/reports/r73a_parameter_ruler_drag_sensitivity_acceleration.md`

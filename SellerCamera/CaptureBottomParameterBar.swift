@@ -598,9 +598,10 @@ private struct CaptureHorizontalParameterRuler: View {
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
-        if lift > 90 { return 0.12 }
-        if lift > 40 { return 0.35 }
-        return 1.0
+        // Normal mode is intentionally faster; lifting the finger restores precise fine scrubbing.
+        if lift > 90 { return 0.35 }
+        if lift > 40 { return 0.75 }
+        return 1.8
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
