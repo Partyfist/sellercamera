@@ -107,11 +107,17 @@ struct CaptureScreen: View {
     }
 
     private var manualFocusDisplayPosition: Double {
-        Double(pendingManualFocusPosition ?? cameraRuntime.currentManualFocusPosition)
+        if let pendingManualFocusPosition {
+            return Double(pendingManualFocusPosition)
+        }
+        guard cameraRuntime.focusControlMode == .manual else {
+            return 0.5
+        }
+        return Double(cameraRuntime.currentManualFocusPosition)
     }
 
     private var manualFocusRulerValues: [Double] {
-        stride(from: 0.0, through: 1.0001, by: 0.01).map { min(1.0, max(0.0, ($0 * 1000).rounded() / 1000)) }
+        stride(from: 0.0, through: 1.0001, by: 0.005).map { min(1.0, max(0.0, ($0 * 1000).rounded() / 1000)) }
     }
 
     private var selectedManualFocusRulerIndex: Int {
@@ -895,6 +901,7 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var isDragInProgress = false
     @State private var lastStepAppliedAt: Date = .distantPast
     @State private var lastDragDirection: Int = 0
+    @State private var lastScrubSensitivity: CGFloat = 1
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
@@ -949,12 +956,20 @@ private struct CaptureManualFocusRulerPanel: View {
                         dragOffset = value.translation.width - lastDragStepTranslation
                         handleDrag(value.translation)
                     }
-                    .onEnded { _ in
-                        finishDrag(animateOffset: true)
+                    .onEnded { value in
+                        finishDrag(
+                            translationWidth: value.translation.width,
+                            predictedEndTranslationWidth: value.predictedEndTranslation.width,
+                            animateOffset: true
+                        )
                     }
             )
             .onDisappear {
-                finishDrag(animateOffset: false)
+                finishDrag(
+                    translationWidth: nil,
+                    predictedEndTranslationWidth: nil,
+                    animateOffset: false
+                )
             }
         }
         .frame(height: 76)
@@ -1028,7 +1043,9 @@ private struct CaptureManualFocusRulerPanel: View {
         isDragInProgress = true
 
         let threshold: CGFloat = 40
-        let effectiveThreshold = threshold / scrubSensitivity(for: translation.height)
+        let sensitivity = scrubSensitivity(for: translation.height)
+        lastScrubSensitivity = sensitivity
+        let effectiveThreshold = threshold / sensitivity
         let translationWidth = translation.width
         let delta = translationWidth - lastDragStepTranslation
         let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
@@ -1052,16 +1069,39 @@ private struct CaptureManualFocusRulerPanel: View {
         triggerGearHapticIfNeeded(step: clampedStepCount, at: now)
     }
 
-    private func finishDrag(animateOffset: Bool) {
+    private func finishDrag(
+        translationWidth: CGFloat?,
+        predictedEndTranslationWidth: CGFloat?,
+        animateOffset: Bool
+    ) {
+        if isEnabled, let translationWidth, let predictedEndTranslationWidth {
+            applyInertiaStep(
+                translationWidth: translationWidth,
+                predictedEndTranslationWidth: predictedEndTranslationWidth
+            )
+        }
         isDragInProgress = false
         lastDragStepTranslation = 0
         lastDragDirection = 0
+        lastScrubSensitivity = 1
         if animateOffset {
             withAnimation(.easeOut(duration: 0.12)) {
                 dragOffset = 0
             }
         } else {
             dragOffset = 0
+        }
+    }
+
+    private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
+        guard lastScrubSensitivity >= 1 else { return }
+        let predictedDelta = predictedEndTranslationWidth - translationWidth
+        let rawStepCount = Int(((predictedDelta * 0.28) / 40).rounded(.towardZero))
+        let inertiaStepCount = max(-1, min(1, -rawStepCount))
+        guard inertiaStepCount != 0 else { return }
+        let didApply = onStep(inertiaStepCount)
+        if didApply {
+            triggerGearHapticIfNeeded(step: inertiaStepCount, at: Date())
         }
     }
 
@@ -1815,6 +1855,7 @@ private struct CaptureZoomDialView: View {
     @State private var isDragInProgress = false
     @State private var lastStepAppliedAt: Date = .distantPast
     @State private var lastDragDirection: Int = 0
+    @State private var lastScrubSensitivity: CGFloat = 1
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.20, green: 0.88, blue: 0.76)
@@ -1849,12 +1890,20 @@ private struct CaptureZoomDialView: View {
                         dragOffset = value.translation.width - lastDragStepTranslation
                         handleDrag(value.translation)
                     }
-                    .onEnded { _ in
-                        finishDrag(animateOffset: true)
+                    .onEnded { value in
+                        finishDrag(
+                            translationWidth: value.translation.width,
+                            predictedEndTranslationWidth: value.predictedEndTranslation.width,
+                            animateOffset: true
+                        )
                     }
             )
             .onDisappear {
-                finishDrag(animateOffset: false)
+                finishDrag(
+                    translationWidth: nil,
+                    predictedEndTranslationWidth: nil,
+                    animateOffset: false
+                )
             }
         }
         .frame(height: 70)
@@ -1951,7 +2000,9 @@ private struct CaptureZoomDialView: View {
         isDragInProgress = true
 
         let threshold: CGFloat = 30
-        let effectiveThreshold = threshold / scrubSensitivity(for: translation.height)
+        let sensitivity = scrubSensitivity(for: translation.height)
+        lastScrubSensitivity = sensitivity
+        let effectiveThreshold = threshold / sensitivity
         let translationWidth = translation.width
         let delta = translationWidth - lastDragStepTranslation
         let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
@@ -1975,16 +2026,39 @@ private struct CaptureZoomDialView: View {
         triggerGearHapticIfNeeded(step: clampedStepCount, at: now)
     }
 
-    private func finishDrag(animateOffset: Bool) {
+    private func finishDrag(
+        translationWidth: CGFloat?,
+        predictedEndTranslationWidth: CGFloat?,
+        animateOffset: Bool
+    ) {
+        if isEnabled, let translationWidth, let predictedEndTranslationWidth {
+            applyInertiaStep(
+                translationWidth: translationWidth,
+                predictedEndTranslationWidth: predictedEndTranslationWidth
+            )
+        }
         isDragInProgress = false
         lastDragStepTranslation = 0
         lastDragDirection = 0
+        lastScrubSensitivity = 1
         if animateOffset {
             withAnimation(.easeOut(duration: 0.12)) {
                 dragOffset = 0
             }
         } else {
             dragOffset = 0
+        }
+    }
+
+    private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
+        guard lastScrubSensitivity >= 1 else { return }
+        let predictedDelta = predictedEndTranslationWidth - translationWidth
+        let rawStepCount = Int(((predictedDelta * 0.38) / 30).rounded(.towardZero))
+        let inertiaStepCount = max(-2, min(2, -rawStepCount))
+        guard inertiaStepCount != 0 else { return }
+        let didApply = onStep(inertiaStepCount)
+        if didApply {
+            triggerGearHapticIfNeeded(step: inertiaStepCount, at: Date())
         }
     }
 
@@ -2073,7 +2147,7 @@ private extension CaptureScreen {
             dragThreshold: rulerDragThreshold(for: state.kind),
             maximumStepCount: rulerMaximumStepCount(for: state.kind),
             tickSpacing: rulerTickSpacing(for: state.kind),
-            supportsInertia: state.kind == .shutter
+            supportsInertia: state.isAdjustable
         )
     }
 

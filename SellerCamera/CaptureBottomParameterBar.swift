@@ -324,6 +324,7 @@ private struct CaptureHorizontalParameterRuler: View {
     @State private var lastRulerStepAppliedAt: Date = .distantPast
     @State private var lastRulerDragDirection: Int = 0
     @State private var isInertiaInProgress = false
+    @State private var lastScrubSensitivity: CGFloat = 1
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
 
@@ -501,7 +502,9 @@ private struct CaptureHorizontalParameterRuler: View {
 
         let threshold = max(18, item.dragThreshold)
         let maximumStepCount = max(1, item.maximumStepCount)
-        let effectiveThreshold = threshold / scrubSensitivity(for: translation.height)
+        let sensitivity = scrubSensitivity(for: translation.height)
+        lastScrubSensitivity = sensitivity
+        let effectiveThreshold = threshold / sensitivity
         let translationWidth = translation.width
         let delta = translationWidth - lastDragStepTranslation
         let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
@@ -563,6 +566,7 @@ private struct CaptureHorizontalParameterRuler: View {
         }
         isDragInProgress = false
         isInertiaInProgress = false
+        lastScrubSensitivity = 1
         lastDragStepTranslation = 0
         lastRulerDragDirection = 0
         if animateOffset {
@@ -575,12 +579,14 @@ private struct CaptureHorizontalParameterRuler: View {
     }
 
     private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
+        guard lastScrubSensitivity >= 1 else { return }
         let threshold = max(18, item.dragThreshold)
         let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let rawStepCount = Int((predictedDelta / threshold).rounded(.towardZero))
+        let rawStepCount = Int(((predictedDelta * inertiaScale) / threshold).rounded(.towardZero))
         guard rawStepCount != 0 else { return }
 
-        let inertiaStepCount = max(-5, min(5, -rawStepCount))
+        let maximumStepCount = inertiaMaximumStepCount
+        let inertiaStepCount = max(-maximumStepCount, min(maximumStepCount, -rawStepCount))
         guard inertiaStepCount != 0 else { return }
 
         isInertiaInProgress = true
@@ -593,6 +599,36 @@ private struct CaptureHorizontalParameterRuler: View {
         let didApply = onWheelStep(item.parameter.kind, inertiaStepCount)
         if didApply {
             triggerGearHapticIfNeeded(step: inertiaStepCount, at: Date())
+        }
+    }
+
+    private var inertiaScale: CGFloat {
+        switch item.parameter.kind {
+        case .shutter:
+            return 1.0
+        case .whiteBalance, .iso:
+            return 0.75
+        case .tint:
+            return 0.55
+        case .exposureCompensation:
+            return 0.42
+        default:
+            return 0.5
+        }
+    }
+
+    private var inertiaMaximumStepCount: Int {
+        switch item.parameter.kind {
+        case .shutter:
+            return 5
+        case .whiteBalance, .iso:
+            return 3
+        case .tint:
+            return 2
+        case .exposureCompensation:
+            return 1
+        default:
+            return 2
         }
     }
 
