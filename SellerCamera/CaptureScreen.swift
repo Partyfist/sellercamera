@@ -991,8 +991,8 @@ private struct CaptureManualFocusRulerPanel: View {
                         .frame(width: isSelected ? 1.6 : 0.9, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
                         .shadow(color: isSelected ? accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
 
-                    Text(isMajor ? focusTickLabel(value) : "")
-                        .font(.system(size: isSelected ? 8.5 : 7, weight: isSelected ? .semibold : .medium))
+                    Text(isMajor && !isSelected ? focusTickLabel(value) : "")
+                        .font(.system(size: 7, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(tickLabelColor(isSelected: isSelected))
                         .lineLimit(1)
@@ -1538,7 +1538,9 @@ private struct CapturePreviewContainer: View {
                 workspaceRect.midY + 62,
                 min(hintPreferredY, workspaceRect.maxY - 52)
             )
-            let nonPersistentHint = isLensSwitchHint(captureHintText) ? "" : captureHintText
+            let nonPersistentHint = (isLensSwitchHint(captureHintText) || isManualFocusHint(captureHintText))
+                ? ""
+                : captureHintText
             let displayHintText = transientLensFeedback ?? nonPersistentHint
 
             ZStack {
@@ -1654,6 +1656,10 @@ private struct CapturePreviewContainer: View {
 
     private func isLensSwitchHint(_ text: String) -> Bool {
         text.hasPrefix("已切换")
+    }
+
+    private func isManualFocusHint(_ text: String) -> Bool {
+        isManualFocusRulerPresented && text.hasPrefix("MF ")
     }
 
     private func handleHintUpdate(_ text: String) {
