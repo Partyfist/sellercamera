@@ -68,3 +68,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R73B 参数表盘惯性统一与 MF 精细化收口报告：`docs/reports/r73b_parameter_ruler_inertia_and_mf_density_closure.md`
 - R73C MF Ruler 重复数值显示清理报告：`docs/reports/r73c_mf_ruler_duplicate_value_cleanup.md`
 - R73D MF Ruler 重复显示真因定位与最小修复报告：`docs/reports/r73d_mf_ruler_duplicate_display_root_cause.md`
+- R73E MF Ruler 刻度间距减半与拖动覆盖增强报告：`docs/reports/r73e_mf_ruler_tick_spacing_halved_and_drag_range.md`

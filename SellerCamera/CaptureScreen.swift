@@ -905,7 +905,8 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
-    private let tickSpacing: CGFloat = 28
+    private let tickSpacing: CGFloat = 14
+    private let dragStepThreshold: CGFloat = 20
 
     var body: some View {
         GeometryReader { geometry in
@@ -1042,7 +1043,7 @@ private struct CaptureManualFocusRulerPanel: View {
         guard isEnabled else { return }
         isDragInProgress = true
 
-        let threshold: CGFloat = 40
+        let threshold = dragStepThreshold
         let sensitivity = scrubSensitivity(for: translation.height)
         lastScrubSensitivity = sensitivity
         let effectiveThreshold = threshold / sensitivity
@@ -1096,7 +1097,7 @@ private struct CaptureManualFocusRulerPanel: View {
     private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
         guard lastScrubSensitivity >= 1 else { return }
         let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let rawStepCount = Int(((predictedDelta * 0.28) / 40).rounded(.towardZero))
+        let rawStepCount = Int(((predictedDelta * 0.28) / dragStepThreshold).rounded(.towardZero))
         let inertiaStepCount = max(-1, min(1, -rawStepCount))
         guard inertiaStepCount != 0 else { return }
         let didApply = onStep(inertiaStepCount)
@@ -1135,8 +1136,8 @@ private struct CaptureManualFocusRulerPanel: View {
         guard isMajorTick(value) else { return false }
         guard values.indices.contains(selectedIndex) else { return true }
         let selectedValue = values[selectedIndex]
-        let isNearSelectedIndex = abs(index - selectedIndex) <= 4
-        let isNearSelectedValue = abs(value - selectedValue) <= 0.0201
+        let isNearSelectedIndex = abs(index - selectedIndex) <= 8
+        let isNearSelectedValue = abs(value - selectedValue) <= 0.0401
         return !(isNearSelectedIndex || isNearSelectedValue)
     }
 
