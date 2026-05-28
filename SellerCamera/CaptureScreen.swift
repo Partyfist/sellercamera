@@ -991,7 +991,7 @@ private struct CaptureManualFocusRulerPanel: View {
                         .frame(width: isSelected ? 1.6 : 0.9, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
                         .shadow(color: isSelected ? accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
 
-                    Text(isMajor && !isSelected ? focusTickLabel(value) : "")
+                    Text(shouldShowFocusTickLabel(index: index, value: value) ? focusTickLabel(value) : "")
                         .font(.system(size: 7, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(tickLabelColor(isSelected: isSelected))
@@ -1129,6 +1129,15 @@ private struct CaptureManualFocusRulerPanel: View {
 
     private func focusTickLabel(_ value: Double) -> String {
         "\(Int((value * 100).rounded()))"
+    }
+
+    private func shouldShowFocusTickLabel(index: Int, value: Double) -> Bool {
+        guard isMajorTick(value) else { return false }
+        guard values.indices.contains(selectedIndex) else { return true }
+        let selectedValue = values[selectedIndex]
+        let isNearSelectedIndex = abs(index - selectedIndex) <= 4
+        let isNearSelectedValue = abs(value - selectedValue) <= 0.0201
+        return !(isNearSelectedIndex || isNearSelectedValue)
     }
 
     private func tickHeight(isSelected: Bool, isMajor: Bool) -> CGFloat {
@@ -1659,7 +1668,11 @@ private struct CapturePreviewContainer: View {
     }
 
     private func isManualFocusHint(_ text: String) -> Bool {
-        isManualFocusRulerPresented && text.hasPrefix("MF ")
+        guard isManualFocusRulerPresented else { return false }
+        return text.hasPrefix("MF")
+            || text.contains("手动对焦")
+            || text.contains("MF 模式")
+            || text.contains("MF 生效")
     }
 
     private func handleHintUpdate(_ text: String) {
