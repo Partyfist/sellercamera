@@ -2367,6 +2367,9 @@ private extension CaptureScreen {
         case .exposureCompensation:
             guard state.mode != .disabled else { return "--" }
             guard state.mode != .locked else { return "LOCK" }
+            if state.mode == .auto, cameraRuntime.productAutoExposureAppliedBias != nil {
+                return "A\(formattedEVTick(Double(cameraRuntime.currentExposureBias)))"
+            }
             return formattedEVTick(pendingExposureBiasWheelValue ?? Double(cameraRuntime.currentExposureBias))
         case .whiteBalance:
             guard state.mode != .disabled else { return "--" }
@@ -3539,7 +3542,7 @@ private extension CaptureScreen {
     private func exposureEntryValueText(mode: CaptureProfessionalParameterMode) -> String {
         switch mode {
         case .auto:
-            return "Auto"
+            return cameraRuntime.productAutoExposureDisplayText
         case .manual:
             return cameraRuntime.exposureBiasDisplayText
         case .locked:
@@ -3686,7 +3689,7 @@ private extension CaptureScreen {
     ) -> String {
         switch mode {
         case .auto:
-            return "当前 EV 为 0.00，拖动圆盘可连续做亮度微调。"
+            return "商品 Auto 会根据预览亮度轻量优化 EV，拖动后进入手动接管。"
         case .manual:
             return "当前 EV 补偿已生效，可继续细调或快速恢复 Auto(0.00)。"
         case .locked:

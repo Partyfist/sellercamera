@@ -525,6 +525,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var isExposureBiasAutoMode = true
     @Published var minimumExposureBias: Float = 0
     @Published var maximumExposureBias: Float = 0
+    @Published var productAutoExposureStatusText = "商品 Auto 待机"
+    @Published var productAutoExposureAppliedBias: Float?
     @Published var currentISOValue: Float = 0
     @Published var currentShutterDurationSeconds: Double = 0
     @Published var focusControlMode: CaptureFocusControlMode = .auto
@@ -548,6 +550,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private let sessionQueue = DispatchQueue(label: "seller.camera.session.queue")
     private var currentVideoInput: AVCaptureDeviceInput?
     private let photoOutput = AVCapturePhotoOutput()
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let videoAnalysisQueue = DispatchQueue(label: "seller.camera.video.analysis.queue")
     private var isSessionConfigured = false
     private var pendingCaptureDelegates: [UUID: CapturePhotoDelegateProxy] = [:]
     private var countdownTask: Task<Void, Never>?
@@ -558,6 +562,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var tele77LastWriteTimestamp: TimeInterval = 0
     private var tele77PendingMultiplier: CGFloat?
     private var tele77StabilizationToken = UUID()
+    private let productAutoExposureOptimizer = ProductAutoExposureOptimizer()
+    private var lastProductAutoExposureAnalysisAt: CFTimeInterval = 0
+    private var lastProductAutoExposureWriteAt = Date.distantPast
+    private let productAutoExposureAnalysisInterval: CFTimeInterval = 0.35
+    private let productAutoExposureWriteInterval: TimeInterval = 0.35
 
     private let motionManager = CMMotionManager()
     private var levelMotionStarted = false
@@ -566,6 +575,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         countdownTask?.cancel()
         burstTask?.cancel()
         quickPreviewHideTask?.cancel()
+        videoOutput.setSampleBufferDelegate(nil, queue: nil)
         motionManager.stopDeviceMotionUpdates()
     }
 
@@ -774,6 +784,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             logExposureTriangle("EV auto reset blocked isoMode=\(selectedISOPreset == .auto ? "auto" : "manual") shutterMode=\(selectedShutterPreset == .auto ? "auto" : "manual") evState=locked")
             return
         }
+        productAutoExposureOptimizer.reset()
+        productAutoExposureAppliedBias = nil
+        productAutoExposureStatusText = "商品 Auto 恢复"
         setExposureBias(0, switchesToManual: false)
     }
 
@@ -1569,6 +1582,13 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     var exposureBiasDisplayText: String {
         String(format: "%+.2f", currentExposureBias)
+    }
+
+    var productAutoExposureDisplayText: String {
+        if isExposureBiasAutoMode, let productAutoExposureAppliedBias {
+            return "商品Auto \(String(format: "%+.1f", productAutoExposureAppliedBias))"
+        }
+        return productAutoExposureStatusText
     }
 
     var lockStatusBadgeText: String {
@@ -2520,6 +2540,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.session.addInput(input)
                 self.session.addOutput(self.photoOutput)
                 self.photoOutput.maxPhotoQualityPrioritization = .quality
+                self.configureProductAutoExposureVideoOutputIfPossible()
                 self.currentVideoInput = input
                 self.isSessionConfigured = true
 
@@ -2564,6 +2585,16 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.session.startRunning()
             }
         }
+    }
+
+    private func configureProductAutoExposureVideoOutputIfPossible() {
+        guard !session.outputs.contains(where: { $0 === videoOutput }), session.canAddOutput(videoOutput) else { return }
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        videoOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ]
+        videoOutput.setSampleBufferDelegate(self, queue: videoAnalysisQueue)
+        session.addOutput(videoOutput)
     }
 
     private func switchToCamera(
@@ -2665,6 +2696,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         isExposureBiasSupported = minimumExposureBias < maximumExposureBias
         isExposureLockSupported = device.isExposureModeSupported(.locked)
         isExposureLocked = false
+        productAutoExposureOptimizer.reset()
+        productAutoExposureAppliedBias = nil
+        productAutoExposureStatusText = isExposureBiasSupported ? "商品 Auto 待机" : "商品 Auto 不可用"
     }
 
     private func updateISOCapabilityState(with device: AVCaptureDevice) {
@@ -3548,11 +3582,28 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
     }
 
-    private func setExposureBias(_ requestedBias: Float, switchesToManual: Bool) {
+    private enum ExposureBiasWriteSource {
+        case user
+        case productAuto
+    }
+
+    private func setExposureBias(
+        _ requestedBias: Float,
+        switchesToManual: Bool,
+        source: ExposureBiasWriteSource = .user
+    ) {
         guard !isManualExposurePresetActive else {
+            if source == .productAuto {
+                productAutoExposureStatusText = "商品 Auto 暂停 · 手动曝光"
+            }
             captureHintText = manualExposureEVLockHintText
             logExposureTriangle("EV write blocked isoMode=\(selectedISOPreset == .auto ? "auto" : "manual") shutterMode=\(selectedShutterPreset == .auto ? "auto" : "manual") evState=locked")
             return
+        }
+        if source == .user, switchesToManual {
+            productAutoExposureOptimizer.reset()
+            productAutoExposureStatusText = "商品 Auto 暂停 · 手动EV"
+            productAutoExposureAppliedBias = nil
         }
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -3574,9 +3625,15 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         self.currentShutterDurationSeconds = seconds.isFinite ? seconds : 0
                         self.selectedISOPreset = .auto
                         self.selectedShutterPreset = .auto
-                        self.captureHintText = switchesToManual
-                            ? "EV \(String(format: "%+.2f", clamped))"
-                            : "EV：Auto"
+                        if source == .productAuto {
+                            self.productAutoExposureAppliedBias = clamped
+                            self.productAutoExposureStatusText = "商品 Auto \(String(format: "%+.2f", clamped))"
+                        } else {
+                            self.productAutoExposureAppliedBias = switchesToManual ? nil : clamped
+                            self.captureHintText = switchesToManual
+                                ? "EV \(String(format: "%+.2f", clamped))"
+                                : "EV：Auto"
+                        }
                     }
                 }
                 device.unlockForConfiguration()
@@ -3586,6 +3643,56 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 }
             }
         }
+    }
+
+    private func handleProductAutoExposureMetrics(_ metrics: ProductAutoExposureMetrics) {
+        let availability = productAutoExposureAvailability()
+        guard availability.canWrite else {
+            productAutoExposureOptimizer.reset()
+            productAutoExposureAppliedBias = nil
+            productAutoExposureStatusText = availability.statusText
+            return
+        }
+
+        guard Date().timeIntervalSince(lastProductAutoExposureWriteAt) >= productAutoExposureWriteInterval else {
+            return
+        }
+
+        guard let recommendation = productAutoExposureOptimizer.recommendation(
+            metrics: metrics,
+            currentBias: currentExposureBias,
+            minimumDeviceBias: minimumExposureBias,
+            maximumDeviceBias: maximumExposureBias
+        ) else {
+            productAutoExposureStatusText = "商品 Auto 稳定"
+            return
+        }
+
+        lastProductAutoExposureWriteAt = Date()
+#if DEBUG
+        print(
+            "[ProductAutoExposure] mean=\(String(format: "%.3f", metrics.meanLuma)) " +
+            "highlight=\(String(format: "%.3f", metrics.highlightRatio)) " +
+            "clipped=\(String(format: "%.3f", metrics.clippedRatio)) " +
+            "shadow=\(String(format: "%.3f", metrics.shadowRatio)) " +
+            "nearWhite=\(String(format: "%.3f", metrics.nearWhiteRatio)) " +
+            "target=\(String(format: "%+.2f", recommendation.targetBias)) " +
+            "next=\(String(format: "%+.2f", recommendation.nextBias)) " +
+            "reason=\(recommendation.reason)"
+        )
+#endif
+        setExposureBias(recommendation.nextBias, switchesToManual: false, source: .productAuto)
+    }
+
+    private func productAutoExposureAvailability() -> (canWrite: Bool, statusText: String) {
+        guard isExposureBiasSupported else { return (false, "商品 Auto 不可用") }
+        guard isExposureBiasAutoMode else { return (false, "商品 Auto 暂停 · 手动EV") }
+        guard !isManualExposurePresetActive else { return (false, "商品 Auto 暂停 · 手动曝光") }
+        guard !isFocusExposureLocked else { return (false, "商品 Auto 暂停 · AEAF-L") }
+        guard !isExposureLocked else { return (false, "商品 Auto 暂停 · AE-L") }
+        guard !isPreviewInteractionTemporarilyRestricted else { return (false, "商品 Auto 暂停 · 拍摄中") }
+        guard !isSwitchingCamera else { return (false, "商品 Auto 暂停 · 切镜头") }
+        return (true, "商品 Auto")
     }
 
     private enum FocusExposureInteractionSource {
@@ -3854,6 +3961,86 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             return "快速预览中，请稍后再调焦"
         }
         return "当前状态不可操作"
+    }
+}
+
+extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        let now = CACurrentMediaTime()
+        guard now - lastProductAutoExposureAnalysisAt >= productAutoExposureAnalysisInterval else { return }
+        lastProductAutoExposureAnalysisAt = now
+
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+              let metrics = Self.productAutoExposureMetrics(from: pixelBuffer) else {
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.handleProductAutoExposureMetrics(metrics)
+        }
+    }
+
+    private static func productAutoExposureMetrics(from pixelBuffer: CVPixelBuffer) -> ProductAutoExposureMetrics? {
+        guard CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_32BGRA else { return nil }
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        guard width > 0, height > 0, bytesPerRow > 0 else { return nil }
+
+        let sampleStride = max(1, min(width, height) / 96)
+        let buffer = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+        var sampleCount: Float = 0
+        var lumaSum: Float = 0
+        var highlightCount: Float = 0
+        var clippedCount: Float = 0
+        var shadowCount: Float = 0
+        var nearWhiteCount: Float = 0
+        var nearWhiteLumaSum: Float = 0
+
+        for y in stride(from: 0, to: height, by: sampleStride) {
+            let row = buffer + y * bytesPerRow
+            for x in stride(from: 0, to: width, by: sampleStride) {
+                let pixel = row + x * 4
+                let blue = Float(pixel[0]) / 255.0
+                let green = Float(pixel[1]) / 255.0
+                let red = Float(pixel[2]) / 255.0
+                let luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                let channelMax = max(red, max(green, blue))
+                let channelMin = min(red, min(green, blue))
+                let saturation = channelMax - channelMin
+
+                sampleCount += 1
+                lumaSum += luma
+                if luma > 0.92 { highlightCount += 1 }
+                if luma > 0.98 { clippedCount += 1 }
+                if luma < 0.20 { shadowCount += 1 }
+                if luma > 0.65, saturation < 0.16 {
+                    nearWhiteCount += 1
+                    nearWhiteLumaSum += luma
+                }
+            }
+        }
+
+        guard sampleCount > 0 else { return nil }
+
+        return ProductAutoExposureMetrics(
+            meanLuma: lumaSum / sampleCount,
+            highlightRatio: highlightCount / sampleCount,
+            clippedRatio: clippedCount / sampleCount,
+            shadowRatio: shadowCount / sampleCount,
+            nearWhiteRatio: nearWhiteCount / sampleCount,
+            nearWhiteMeanLuma: nearWhiteCount > 0 ? nearWhiteLumaSum / nearWhiteCount : 0
+        )
     }
 }
 
