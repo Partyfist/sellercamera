@@ -527,6 +527,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var maximumExposureBias: Float = 0
     @Published var productAutoExposureStatusText = "商品 Auto 待机"
     @Published var productAutoExposureAppliedBias: Float?
+    @Published var productAutoWhiteBalanceStatusText = "商品 WB 待机"
+    @Published var productAutoWhiteBalanceAppliedTemperature: Float?
     @Published var currentISOValue: Float = 0
     @Published var currentShutterDurationSeconds: Double = 0
     @Published var focusControlMode: CaptureFocusControlMode = .auto
@@ -563,12 +565,17 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var tele77PendingMultiplier: CGFloat?
     private var tele77StabilizationToken = UUID()
     private let productAutoExposureOptimizer = ProductAutoExposureOptimizer()
+    private let productAutoWhiteBalanceOptimizer = ProductAutoWhiteBalanceOptimizer()
     private var lastProductAutoExposureAnalysisAt: CFTimeInterval = 0
     private var lastProductAutoExposureWriteAt = Date.distantPast
     private var lastProductAutoExposureDebugLogAt = Date.distantPast
+    private var lastProductAutoWhiteBalanceWriteAt = Date.distantPast
+    private var lastProductAutoWhiteBalanceDebugLogAt = Date.distantPast
     private let productAutoExposureAnalysisInterval: CFTimeInterval = 0.35
     private let productAutoExposureWriteInterval: TimeInterval = 0.35
     private let productAutoExposureDebugLogInterval: TimeInterval = 1.0
+    private let productAutoWhiteBalanceWriteInterval: TimeInterval = 1.0
+    private let productAutoWhiteBalanceDebugLogInterval: TimeInterval = 1.0
 
     private let motionManager = CMMotionManager()
     private var levelMotionStarted = false
@@ -940,6 +947,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     var whiteBalanceDisplayText: String {
         if selectedWhiteBalancePreset == .auto {
+            if let productAutoWhiteBalanceAppliedTemperature {
+                return "Auto \(Int(productAutoWhiteBalanceAppliedTemperature.rounded()))K"
+            }
             return "Auto"
         }
         return "\(Int(currentWhiteBalanceTemperature.rounded()))K"
@@ -992,6 +1002,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     self.currentWhiteBalanceTemperature = self.clampedWhiteBalanceTemperature(autoTempTint.temperature)
                     // TINT 合同：WB Auto 统一回收为 0，避免用户误解自动状态下仍存在手动色偏。
                     self.currentWhiteBalanceTint = 0
+                    self.productAutoWhiteBalanceOptimizer.reset()
+                    self.productAutoWhiteBalanceAppliedTemperature = nil
+                    self.productAutoWhiteBalanceStatusText = "商品 WB 恢复"
                     if shouldShowHint {
                         self.captureHintText = "白平衡：Auto"
                     }
@@ -1018,6 +1031,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = "当前摄像头不支持固定白平衡"
             return
         }
+
+        productAutoWhiteBalanceOptimizer.reset()
+        productAutoWhiteBalanceAppliedTemperature = nil
+        productAutoWhiteBalanceStatusText = "商品 WB 暂停 · 手动WB"
 
         let clampedTemperature = clampedWhiteBalanceTemperature(requestedTemperature)
         let quantizedTemperature = (clampedTemperature / Self.whiteBalanceDialStep).rounded() * Self.whiteBalanceDialStep
@@ -2568,6 +2585,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     self.updateShutterCapabilityState(with: backCamera)
                     self.updateWhiteBalanceCapabilityState(with: backCamera)
                     self.updateFocusCapabilityState(with: backCamera)
+                    self.productAutoWhiteBalanceOptimizer.reset()
+                    self.productAutoWhiteBalanceAppliedTemperature = nil
+                    self.productAutoWhiteBalanceStatusText = self.isWhiteBalanceAutoSupported && self.isWhiteBalancePresetSupported
+                        ? "商品 WB 待机"
+                        : "商品 WB 不可用"
                     self.applyISOPreset(self.selectedISOPreset, shouldShowHint: false)
                     self.applyShutterPreset(self.selectedShutterPreset, shouldShowHint: false)
                     self.applyWhiteBalancePreset(self.selectedWhiteBalancePreset, shouldShowHint: false)
@@ -2675,6 +2697,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.updateShutterCapabilityState(with: camera)
                 self.updateWhiteBalanceCapabilityState(with: camera)
                 self.updateFocusCapabilityState(with: camera)
+                self.productAutoWhiteBalanceOptimizer.reset()
+                self.productAutoWhiteBalanceAppliedTemperature = nil
+                self.productAutoWhiteBalanceStatusText = self.isWhiteBalanceAutoSupported && self.isWhiteBalancePresetSupported
+                    ? "商品 WB 待机"
+                    : "商品 WB 不可用"
                 if !camera.hasFlash {
                     self.selectedFlashMode = .off
                 }
@@ -3698,6 +3725,97 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         setExposureBias(recommendation.nextBias, switchesToManual: false, source: .productAuto)
     }
 
+    private func handleProductAutoWhiteBalanceMetrics(_ metrics: ProductAutoWhiteBalanceMetrics) {
+        let availability = productAutoWhiteBalanceAvailability()
+        guard availability.canWrite else {
+            productAutoWhiteBalanceOptimizer.reset()
+            productAutoWhiteBalanceAppliedTemperature = nil
+            productAutoWhiteBalanceStatusText = availability.statusText
+            logProductAutoWhiteBalanceSummary(
+                metrics,
+                availability: availability,
+                recommendation: nil,
+                skippedReason: "unavailable"
+            )
+            return
+        }
+
+        guard Date().timeIntervalSince(lastProductAutoWhiteBalanceWriteAt) >= productAutoWhiteBalanceWriteInterval else {
+            logProductAutoWhiteBalanceSummary(
+                metrics,
+                availability: availability,
+                recommendation: nil,
+                skippedReason: "writeInterval"
+            )
+            return
+        }
+
+        guard let recommendation = productAutoWhiteBalanceOptimizer.recommendation(
+            metrics: metrics,
+            currentTemperature: currentWhiteBalanceTemperature,
+            minimumTemperature: Self.whiteBalanceMinimumTemperature,
+            maximumTemperature: Self.whiteBalanceMaximumTemperature
+        ) else {
+            productAutoWhiteBalanceStatusText = "商品 WB 稳定"
+            logProductAutoWhiteBalanceSummary(
+                metrics,
+                availability: availability,
+                recommendation: nil,
+                skippedReason: "stable"
+            )
+            return
+        }
+
+        lastProductAutoWhiteBalanceWriteAt = Date()
+        logProductAutoWhiteBalanceSummary(
+            metrics,
+            availability: availability,
+            recommendation: recommendation,
+            skippedReason: nil
+        )
+        applyProductAutoWhiteBalance(temperature: recommendation.nextTemperature)
+    }
+
+    private func applyProductAutoWhiteBalance(temperature: Float) {
+        let requestedTemperature = clampedWhiteBalanceTemperature(temperature)
+        let quantizedTemperature = (requestedTemperature / Self.whiteBalanceDialStep).rounded() * Self.whiteBalanceDialStep
+
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            guard let device = self.currentVideoInput?.device else { return }
+            do {
+                try device.lockForConfiguration()
+                guard device.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
+                    device.unlockForConfiguration()
+                    DispatchQueue.main.async {
+                        self.productAutoWhiteBalanceStatusText = "商品 WB 不可用"
+                    }
+                    return
+                }
+                let tempTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(
+                    temperature: quantizedTemperature,
+                    tint: 0
+                )
+                let rawGains = device.deviceWhiteBalanceGains(for: tempTint)
+                let safeGains = self.normalizedWhiteBalanceGains(rawGains, for: device)
+                device.setWhiteBalanceModeLocked(with: safeGains)
+                device.unlockForConfiguration()
+
+                DispatchQueue.main.async {
+                    self.currentWhiteBalanceTemperature = quantizedTemperature
+                    self.currentWhiteBalanceTint = 0
+                    self.selectedWhiteBalancePreset = .auto
+                    self.productAutoWhiteBalanceAppliedTemperature = quantizedTemperature
+                    self.productAutoWhiteBalanceStatusText = "商品 WB \(Int(quantizedTemperature.rounded()))K"
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.productAutoWhiteBalanceStatusText = "商品 WB 写入失败"
+                }
+            }
+        }
+    }
+
     private func logProductAutoExposureSummary(
         _ metrics: ProductAutoExposureMetrics,
         availability: (canWrite: Bool, statusText: String),
@@ -3735,6 +3853,45 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 #endif
     }
 
+    private func logProductAutoWhiteBalanceSummary(
+        _ metrics: ProductAutoWhiteBalanceMetrics,
+        availability: (canWrite: Bool, statusText: String),
+        recommendation: ProductAutoWhiteBalanceRecommendation?,
+        skippedReason: String?
+    ) {
+#if DEBUG
+        let now = Date()
+        guard now.timeIntervalSince(lastProductAutoWhiteBalanceDebugLogAt) >= productAutoWhiteBalanceDebugLogInterval else {
+            return
+        }
+        lastProductAutoWhiteBalanceDebugLogAt = now
+
+        let targetText = recommendation.map { "\(Int($0.targetTemperature.rounded()))K" } ?? "nil"
+        let nextText = recommendation.map { "\(Int($0.nextTemperature.rounded()))K" } ?? "nil"
+        let reasonText = recommendation?.reason ?? skippedReason ?? availability.statusText
+        let optimizerStateText = recommendation
+            .map { "decision=\($0.reason) stableHitCount=\($0.stableHitCount)" }
+            ?? productAutoWhiteBalanceOptimizer.debugStateSummary
+        print(
+            "[ProductAutoWB] " +
+            "whiteRatio=\(String(format: "%.3f", metrics.nearWhiteRatio)) " +
+            "R=\(String(format: "%.3f", metrics.meanRed)) " +
+            "G=\(String(format: "%.3f", metrics.meanGreen)) " +
+            "B=\(String(format: "%.3f", metrics.meanBlue)) " +
+            "Y=\(String(format: "%.3f", metrics.meanLuma)) " +
+            "redBlue=\(String(format: "%+.3f", metrics.redBlueDelta)) " +
+            "greenCast=\(String(format: "%+.3f", metrics.greenCast)) " +
+            "confidence=\(String(format: "%.2f", metrics.confidence)) " +
+            "target=\(targetText) " +
+            "next=\(nextText) " +
+            "current=\(Int(currentWhiteBalanceTemperature.rounded()))K " +
+            "reason=\(reasonText) " +
+            "\(optimizerStateText) " +
+            "status=\(availability.statusText)"
+        )
+#endif
+    }
+
     private func productAutoExposureAvailability() -> (canWrite: Bool, statusText: String) {
         guard isExposureBiasSupported else { return (false, "商品 Auto 不可用") }
         guard isExposureBiasAutoMode else { return (false, "商品 Auto 暂停 · 手动EV") }
@@ -3744,6 +3901,16 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         guard !isPreviewInteractionTemporarilyRestricted else { return (false, "商品 Auto 暂停 · 拍摄中") }
         guard !isSwitchingCamera else { return (false, "商品 Auto 暂停 · 切镜头") }
         return (true, "商品 Auto")
+    }
+
+    private func productAutoWhiteBalanceAvailability() -> (canWrite: Bool, statusText: String) {
+        guard isWhiteBalanceAutoSupported, isWhiteBalancePresetSupported else { return (false, "商品 WB 不可用") }
+        guard selectedWhiteBalancePreset == .auto else { return (false, "商品 WB 暂停 · 手动WB") }
+        guard !isFocusExposureLocked else { return (false, "商品 WB 暂停 · AEAF-L") }
+        guard !isExposureLocked else { return (false, "商品 WB 暂停 · AE-L") }
+        guard !isPreviewInteractionTemporarilyRestricted else { return (false, "商品 WB 暂停 · 拍摄中") }
+        guard !isSwitchingCamera else { return (false, "商品 WB 暂停 · 切镜头") }
+        return (true, "商品 WB")
     }
 
     private enum FocusExposureInteractionSource {
@@ -4015,6 +4182,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 }
 
+private struct ProductPreviewFrameAnalysis {
+    let exposureMetrics: ProductAutoExposureMetrics
+    let whiteBalanceMetrics: ProductAutoWhiteBalanceMetrics
+}
+
 extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(
         _ output: AVCaptureOutput,
@@ -4026,16 +4198,18 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         lastProductAutoExposureAnalysisAt = now
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let metrics = Self.productAutoExposureMetrics(from: pixelBuffer) else {
+              let analysis = Self.productPreviewFrameAnalysis(from: pixelBuffer) else {
             return
         }
 
         DispatchQueue.main.async { [weak self] in
-            self?.handleProductAutoExposureMetrics(metrics)
+            guard let self else { return }
+            self.handleProductAutoExposureMetrics(analysis.exposureMetrics)
+            self.handleProductAutoWhiteBalanceMetrics(analysis.whiteBalanceMetrics)
         }
     }
 
-    private static func productAutoExposureMetrics(from pixelBuffer: CVPixelBuffer) -> ProductAutoExposureMetrics? {
+    private static func productPreviewFrameAnalysis(from pixelBuffer: CVPixelBuffer) -> ProductPreviewFrameAnalysis? {
         guard CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_32BGRA else { return nil }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
@@ -4057,6 +4231,11 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         var shadowCount: Float = 0
         var nearWhiteCount: Float = 0
         var nearWhiteLumaSum: Float = 0
+        var autoWBNearWhiteCount: Float = 0
+        var autoWBNearWhiteLumaSum: Float = 0
+        var nearWhiteRedSum: Float = 0
+        var nearWhiteGreenSum: Float = 0
+        var nearWhiteBlueSum: Float = 0
 
         for y in stride(from: 0, to: height, by: sampleStride) {
             let row = buffer + y * bytesPerRow
@@ -4079,18 +4258,66 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
                     nearWhiteCount += 1
                     nearWhiteLumaSum += luma
                 }
+
+                let isWhiteBalanceCandidate = luma > 0.55
+                    && luma < 0.96
+                    && saturation < 0.25
+                    && channelMax < 0.98
+                if isWhiteBalanceCandidate {
+                    autoWBNearWhiteCount += 1
+                    autoWBNearWhiteLumaSum += luma
+                    nearWhiteRedSum += red
+                    nearWhiteGreenSum += green
+                    nearWhiteBlueSum += blue
+                }
             }
         }
 
         guard sampleCount > 0 else { return nil }
 
-        return ProductAutoExposureMetrics(
+        let exposureMetrics = ProductAutoExposureMetrics(
             meanLuma: lumaSum / sampleCount,
             highlightRatio: highlightCount / sampleCount,
             clippedRatio: clippedCount / sampleCount,
             shadowRatio: shadowCount / sampleCount,
             nearWhiteRatio: nearWhiteCount / sampleCount,
             nearWhiteMeanLuma: nearWhiteCount > 0 ? nearWhiteLumaSum / nearWhiteCount : 0
+        )
+
+        let whiteBalanceMetrics: ProductAutoWhiteBalanceMetrics
+        if autoWBNearWhiteCount > 0 {
+            let meanRed = nearWhiteRedSum / autoWBNearWhiteCount
+            let meanGreen = nearWhiteGreenSum / autoWBNearWhiteCount
+            let meanBlue = nearWhiteBlueSum / autoWBNearWhiteCount
+            let meanLuma = autoWBNearWhiteLumaSum / autoWBNearWhiteCount
+            let nearWhiteRatio = autoWBNearWhiteCount / sampleCount
+            let confidence = min(1.0, nearWhiteRatio / 0.20)
+            whiteBalanceMetrics = ProductAutoWhiteBalanceMetrics(
+                nearWhiteRatio: nearWhiteRatio,
+                meanRed: meanRed,
+                meanGreen: meanGreen,
+                meanBlue: meanBlue,
+                meanLuma: meanLuma,
+                redBlueDelta: meanRed - meanBlue,
+                greenCast: meanGreen - ((meanRed + meanBlue) * 0.5),
+                confidence: confidence
+            )
+        } else {
+            whiteBalanceMetrics = ProductAutoWhiteBalanceMetrics(
+                nearWhiteRatio: 0,
+                meanRed: 0,
+                meanGreen: 0,
+                meanBlue: 0,
+                meanLuma: 0,
+                redBlueDelta: 0,
+                greenCast: 0,
+                confidence: 0
+            )
+        }
+
+        return ProductPreviewFrameAnalysis(
+            exposureMetrics: exposureMetrics,
+            whiteBalanceMetrics: whiteBalanceMetrics
         )
     }
 }
