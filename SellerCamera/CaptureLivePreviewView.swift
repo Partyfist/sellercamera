@@ -3874,6 +3874,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             ?? productAutoWhiteBalanceOptimizer.debugStateSummary
         print(
             "[ProductAutoWB] " +
+            "whiteCount=\(metrics.nearWhiteSampleCount) " +
             "whiteRatio=\(String(format: "%.3f", metrics.nearWhiteRatio)) " +
             "R=\(String(format: "%.3f", metrics.meanRed)) " +
             "G=\(String(format: "%.3f", metrics.meanGreen)) " +
@@ -3885,11 +3886,18 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             "target=\(targetText) " +
             "next=\(nextText) " +
             "current=\(Int(currentWhiteBalanceTemperature.rounded()))K " +
+            "confidenceReason=\(productAutoWhiteBalanceConfidenceReason(for: metrics)) " +
             "reason=\(reasonText) " +
             "\(optimizerStateText) " +
             "status=\(availability.statusText)"
         )
 #endif
+    }
+
+    private func productAutoWhiteBalanceConfidenceReason(for metrics: ProductAutoWhiteBalanceMetrics) -> String {
+        if metrics.confidence < 0.30 { return "lowNearWhite" }
+        if metrics.nearWhiteRatio < 0.08 { return "marginalNearWhite" }
+        return "usableNearWhite"
     }
 
     private func productAutoExposureAvailability() -> (canWrite: Bool, statusText: String) {
@@ -4259,10 +4267,10 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
                     nearWhiteLumaSum += luma
                 }
 
-                let isWhiteBalanceCandidate = luma > 0.55
+                let isWhiteBalanceCandidate = luma > 0.50
                     && luma < 0.96
-                    && saturation < 0.25
-                    && channelMax < 0.98
+                    && saturation < 0.22
+                    && channelMax < 0.97
                 if isWhiteBalanceCandidate {
                     autoWBNearWhiteCount += 1
                     autoWBNearWhiteLumaSum += luma
@@ -4291,8 +4299,9 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
             let meanBlue = nearWhiteBlueSum / autoWBNearWhiteCount
             let meanLuma = autoWBNearWhiteLumaSum / autoWBNearWhiteCount
             let nearWhiteRatio = autoWBNearWhiteCount / sampleCount
-            let confidence = min(1.0, nearWhiteRatio / 0.20)
+            let confidence = min(1.0, nearWhiteRatio / 0.16)
             whiteBalanceMetrics = ProductAutoWhiteBalanceMetrics(
+                nearWhiteSampleCount: Int(autoWBNearWhiteCount),
                 nearWhiteRatio: nearWhiteRatio,
                 meanRed: meanRed,
                 meanGreen: meanGreen,
@@ -4304,6 +4313,7 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
             )
         } else {
             whiteBalanceMetrics = ProductAutoWhiteBalanceMetrics(
+                nearWhiteSampleCount: 0,
                 nearWhiteRatio: 0,
                 meanRed: 0,
                 meanGreen: 0,

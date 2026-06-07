@@ -8,6 +8,7 @@
 import Foundation
 
 struct ProductAutoWhiteBalanceMetrics {
+    let nearWhiteSampleCount: Int
     let nearWhiteRatio: Float
     let meanRed: Float
     let meanGreen: Float
@@ -29,10 +30,10 @@ final class ProductAutoWhiteBalanceOptimizer {
     private let minimumAutoTemperature: Float = 3000
     private let maximumAutoTemperature: Float = 7500
     private let singleStepKelvin: Float = 100
-    private let minimumEffectiveDelta: Float = 100
+    private let minimumEffectiveDelta: Float = 75
     private let stableHitThreshold = 3
-    private let minimumConfidence: Float = 0.35
-    private let castThreshold: Float = 0.06
+    private let minimumConfidence: Float = 0.30
+    private let castThreshold: Float = 0.055
     private let greenCastThreshold: Float = 0.07
 
     private var candidateTargetTemperature: Float?
