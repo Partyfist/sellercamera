@@ -3714,6 +3714,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let targetText = recommendation.map { String(format: "%+.2f", $0.targetBias) } ?? "nil"
         let nextText = recommendation.map { String(format: "%+.2f", $0.nextBias) } ?? "nil"
         let reasonText = recommendation?.reason ?? skippedReason ?? availability.statusText
+        let optimizerStateText = recommendation
+            .map { "decision=\($0.reason) stableBrightCount=\($0.stableBrightCount)" }
+            ?? productAutoExposureOptimizer.debugStateSummary
         print(
             "[ProductAutoExposure] metrics " +
             "mean=\(String(format: "%.3f", metrics.meanLuma)) " +
@@ -3726,6 +3729,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             "next=\(nextText) " +
             "applied=\(String(format: "%+.2f", currentExposureBias)) " +
             "reason=\(reasonText) " +
+            "\(optimizerStateText) " +
             "status=\(availability.statusText)"
         )
 #endif

@@ -71,3 +71,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R73E MF Ruler 刻度间距减半与拖动覆盖增强报告：`docs/reports/r73e_mf_ruler_tick_spacing_halved_and_drag_range.md`
 - R74 商品 Auto 实时曝光优化 1.0 报告：`docs/reports/r74_product_auto_realtime_exposure_optimization.md`
 - R74A 商品 Auto EV 真机验收与阈值收口报告：`docs/reports/r74a_product_auto_ev_real_device_acceptance.md`
+- R74B 商品 Auto EV 场景阈值校准报告：`docs/reports/r74b_product_auto_ev_scene_threshold_calibration.md`
