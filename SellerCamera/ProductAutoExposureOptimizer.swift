@@ -96,7 +96,8 @@ final class ProductAutoExposureOptimizer {
         if metrics.shadowRatio > 0.35 {
             return 0.3
         }
-        return 0.1
+        // Stable frames hold the current bias to avoid breathing back to a fixed baseline.
+        return currentBias
     }
 
     private func reason(for metrics: ProductAutoExposureMetrics) -> String {

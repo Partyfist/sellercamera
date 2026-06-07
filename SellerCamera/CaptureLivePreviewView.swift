@@ -565,8 +565,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private let productAutoExposureOptimizer = ProductAutoExposureOptimizer()
     private var lastProductAutoExposureAnalysisAt: CFTimeInterval = 0
     private var lastProductAutoExposureWriteAt = Date.distantPast
+    private var lastProductAutoExposureDebugLogAt = Date.distantPast
     private let productAutoExposureAnalysisInterval: CFTimeInterval = 0.35
     private let productAutoExposureWriteInterval: TimeInterval = 0.35
+    private let productAutoExposureDebugLogInterval: TimeInterval = 1.0
 
     private let motionManager = CMMotionManager()
     private var levelMotionStarted = false
@@ -3651,10 +3653,22 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             productAutoExposureOptimizer.reset()
             productAutoExposureAppliedBias = nil
             productAutoExposureStatusText = availability.statusText
+            logProductAutoExposureSummary(
+                metrics,
+                availability: availability,
+                recommendation: nil,
+                skippedReason: "unavailable"
+            )
             return
         }
 
         guard Date().timeIntervalSince(lastProductAutoExposureWriteAt) >= productAutoExposureWriteInterval else {
+            logProductAutoExposureSummary(
+                metrics,
+                availability: availability,
+                recommendation: nil,
+                skippedReason: "writeInterval"
+            )
             return
         }
 
@@ -3665,23 +3679,56 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             maximumDeviceBias: maximumExposureBias
         ) else {
             productAutoExposureStatusText = "商品 Auto 稳定"
+            logProductAutoExposureSummary(
+                metrics,
+                availability: availability,
+                recommendation: nil,
+                skippedReason: "stable"
+            )
             return
         }
 
         lastProductAutoExposureWriteAt = Date()
+        logProductAutoExposureSummary(
+            metrics,
+            availability: availability,
+            recommendation: recommendation,
+            skippedReason: nil
+        )
+        setExposureBias(recommendation.nextBias, switchesToManual: false, source: .productAuto)
+    }
+
+    private func logProductAutoExposureSummary(
+        _ metrics: ProductAutoExposureMetrics,
+        availability: (canWrite: Bool, statusText: String),
+        recommendation: ProductAutoExposureRecommendation?,
+        skippedReason: String?
+    ) {
 #if DEBUG
+        let now = Date()
+        guard now.timeIntervalSince(lastProductAutoExposureDebugLogAt) >= productAutoExposureDebugLogInterval else {
+            return
+        }
+        lastProductAutoExposureDebugLogAt = now
+
+        let targetText = recommendation.map { String(format: "%+.2f", $0.targetBias) } ?? "nil"
+        let nextText = recommendation.map { String(format: "%+.2f", $0.nextBias) } ?? "nil"
+        let reasonText = recommendation?.reason ?? skippedReason ?? availability.statusText
         print(
-            "[ProductAutoExposure] mean=\(String(format: "%.3f", metrics.meanLuma)) " +
+            "[ProductAutoExposure] metrics " +
+            "mean=\(String(format: "%.3f", metrics.meanLuma)) " +
             "highlight=\(String(format: "%.3f", metrics.highlightRatio)) " +
             "clipped=\(String(format: "%.3f", metrics.clippedRatio)) " +
             "shadow=\(String(format: "%.3f", metrics.shadowRatio)) " +
             "nearWhite=\(String(format: "%.3f", metrics.nearWhiteRatio)) " +
-            "target=\(String(format: "%+.2f", recommendation.targetBias)) " +
-            "next=\(String(format: "%+.2f", recommendation.nextBias)) " +
-            "reason=\(recommendation.reason)"
+            "nearWhiteLuma=\(String(format: "%.3f", metrics.nearWhiteMeanLuma)) " +
+            "target=\(targetText) " +
+            "next=\(nextText) " +
+            "applied=\(String(format: "%+.2f", currentExposureBias)) " +
+            "reason=\(reasonText) " +
+            "status=\(availability.statusText)"
         )
 #endif
-        setExposureBias(recommendation.nextBias, switchesToManual: false, source: .productAuto)
     }
 
     private func productAutoExposureAvailability() -> (canWrite: Bool, statusText: String) {
