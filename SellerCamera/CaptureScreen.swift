@@ -1127,9 +1127,9 @@ private struct CaptureManualFocusRulerPanel: View {
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
         // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
-        if lift > 90 { return 0.20 }
-        if lift > 40 { return 0.50 }
-        return 3.0
+        if lift > 90 { return 0.16 }
+        if lift > 40 { return 0.42 }
+        return 6.0
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
