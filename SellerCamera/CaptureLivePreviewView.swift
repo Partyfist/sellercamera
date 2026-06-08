@@ -529,6 +529,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var productAutoExposureAppliedBias: Float?
     @Published var productAutoWhiteBalanceStatusText = "商品 WB 待机"
     @Published var productAutoWhiteBalanceAppliedTemperature: Float?
+    @Published var productSharpnessStatusText = "清晰度待机"
     @Published var currentISOValue: Float = 0
     @Published var currentShutterDurationSeconds: Double = 0
     @Published var focusControlMode: CaptureFocusControlMode = .auto
@@ -572,12 +573,24 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var lastProductAutoWhiteBalanceWriteAt = Date.distantPast
     private var lastProductAutoWhiteBalanceDebugLogAt = Date.distantPast
     private var lastProductAutoSceneDebugLogAt = Date.distantPast
+    private var lastProductSharpnessDebugLogAt = Date.distantPast
+    private var lastProductSharpnessHintAt = Date.distantPast
+    private var lastProductFocusAssistAt = Date.distantPast
+    private var lastUserFocusInteractionAt = Date.distantPast
+    private var lastManualFocusInteractionAt = Date.distantPast
+    private var productSharpnessBlurryHitCount = 0
+    private var productSharpnessSharpHitCount = 0
+    private var isProductFocusAssistSuppressedByManualFocusUI = false
+    private var hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
     private let productAutoExposureAnalysisInterval: CFTimeInterval = 0.35
     private let productAutoExposureWriteInterval: TimeInterval = 0.35
     private let productAutoExposureDebugLogInterval: TimeInterval = 1.0
     private let productAutoWhiteBalanceWriteInterval: TimeInterval = 1.0
     private let productAutoWhiteBalanceDebugLogInterval: TimeInterval = 1.0
     private let productAutoSceneDebugLogInterval: TimeInterval = 1.0
+    private let productSharpnessDebugLogInterval: TimeInterval = 1.0
+    private let productFocusAssistCooldown: TimeInterval = 7.0
+    private let productFocusAssistManualCooldown: TimeInterval = 6.0
 
     private let motionManager = CMMotionManager()
     private var levelMotionStarted = false
@@ -1516,6 +1529,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func setManualFocusLensPosition(_ requestedLensPosition: Float) {
+        lastManualFocusInteractionAt = Date()
+        productSharpnessBlurryHitCount = 0
+        hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
         guard isManualFocusSupported else {
             captureHintText = "当前摄像头不支持手动对焦"
             return
@@ -1570,6 +1586,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func restoreAutofocusMode() {
+        isProductFocusAssistSuppressedByManualFocusUI = false
+        lastManualFocusInteractionAt = Date()
         guard !isPreviewInteractionTemporarilyRestricted else {
             captureHintText = previewInteractionRestrictedHintText
             return
@@ -1598,6 +1616,16 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     self.captureHintText = "恢复 AF 失败"
                 }
             }
+        }
+    }
+
+    func setProductFocusAssistManualSuppression(_ isSuppressed: Bool) {
+        isProductFocusAssistSuppressedByManualFocusUI = isSuppressed
+        lastManualFocusInteractionAt = Date()
+        productSharpnessBlurryHitCount = 0
+        hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
+        if isSuppressed {
+            productSharpnessStatusText = "MF 中，仅检测清晰度"
         }
     }
 
@@ -1869,6 +1897,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func handlePreviewTap(devicePoint: CGPoint, normalizedPoint: CGPoint) {
+        lastUserFocusInteractionAt = Date()
+        productSharpnessBlurryHitCount = 0
+        hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
         guard !isPreviewInteractionTemporarilyRestricted else {
             captureHintText = previewInteractionRestrictedHintText
             return
@@ -1893,6 +1924,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func handlePreviewLongPress(devicePoint: CGPoint, normalizedPoint: CGPoint) {
+        lastUserFocusInteractionAt = Date()
+        productSharpnessBlurryHitCount = 0
+        hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
         guard !isPreviewInteractionTemporarilyRestricted else {
             captureHintText = previewInteractionRestrictedHintText
             return
@@ -3778,6 +3812,63 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         applyProductAutoWhiteBalance(temperature: recommendation.nextTemperature)
     }
 
+    private func handleProductSharpnessMetrics(_ metrics: ProductSharpnessMetrics) {
+        let now = Date()
+        var autoFocusResult = "notRequested"
+
+        switch metrics.state {
+        case .sharp:
+            productSharpnessSharpHitCount += 1
+            productSharpnessBlurryHitCount = 0
+            if productSharpnessSharpHitCount >= 3 {
+                productSharpnessStatusText = "商品清晰"
+                hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
+            }
+        case .slightlySoft:
+            productSharpnessSharpHitCount = 0
+            productSharpnessBlurryHitCount = 0
+            hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
+            productSharpnessStatusText = "画面略虚"
+        case .blurry:
+            productSharpnessBlurryHitCount += 1
+            productSharpnessSharpHitCount = 0
+            productSharpnessStatusText = "商品可能未对焦"
+
+            if productSharpnessBlurryHitCount >= 3 {
+                if now.timeIntervalSince(lastProductSharpnessHintAt) >= 3.0 {
+                    captureHintText = "商品可能未对焦，建议重新对焦"
+                    lastProductSharpnessHintAt = now
+                }
+
+                let availability = productFocusAssistAvailability(now: now)
+                if hasProductFocusAssistTriggeredForCurrentBlurEpisode {
+                    autoFocusResult = "skipped:episodeAlreadyAssisted"
+                } else if availability.canTrigger {
+                    lastProductFocusAssistAt = now
+                    hasProductFocusAssistTriggeredForCurrentBlurEpisode = true
+                    productSharpnessStatusText = "正在辅助对焦"
+                    autoFocusResult = "triggered"
+                    applyFocusExposure(
+                        devicePoint: CGPoint(x: 0.5, y: 0.5),
+                        normalizedPoint: CGPoint(x: 0.5, y: 0.5),
+                        lockAfterFocus: false,
+                        source: .productAutoFocus
+                    )
+                } else {
+                    autoFocusResult = "skipped:\(availability.reason)"
+                }
+            }
+        case .lowConfidence:
+            productSharpnessSharpHitCount = 0
+            productSharpnessBlurryHitCount = 0
+            hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
+            productSharpnessStatusText = "清晰度置信度不足"
+            autoFocusResult = "skipped:lowConfidence"
+        }
+
+        logProductSharpnessSummary(metrics, autoFocusResult: autoFocusResult)
+    }
+
     private func applyProductAutoWhiteBalance(temperature: Float) {
         let requestedTemperature = clampedWhiteBalanceTemperature(temperature)
         let quantizedTemperature = (requestedTemperature / Self.whiteBalanceDialStep).rounded() * Self.whiteBalanceDialStep
@@ -3902,6 +3993,33 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         return "usableNearWhite"
     }
 
+    private func logProductSharpnessSummary(
+        _ metrics: ProductSharpnessMetrics,
+        autoFocusResult: String
+    ) {
+#if DEBUG
+        let now = Date()
+        guard now.timeIntervalSince(lastProductSharpnessDebugLogAt) >= productSharpnessDebugLogInterval else {
+            return
+        }
+        lastProductSharpnessDebugLogAt = now
+
+        let cooldownRemaining = max(0, productFocusAssistCooldown - now.timeIntervalSince(lastProductFocusAssistAt))
+        print(
+            "[ProductSharpness] " +
+            "score=\(String(format: "%.2f", metrics.sharpnessScore)) " +
+            "edge=\(String(format: "%.3f", metrics.edgeDensity)) " +
+            "conf=\(String(format: "%.2f", metrics.confidence)) " +
+            "state=\(metrics.state.rawValue) " +
+            "reason=\(metrics.reason) " +
+            "blurHit=\(productSharpnessBlurryHitCount) " +
+            "sharpHit=\(productSharpnessSharpHitCount) " +
+            "autoAF=\(autoFocusResult) " +
+            "cooldown=\(String(format: "%.1f", cooldownRemaining))"
+        )
+#endif
+    }
+
     private func logProductAutoSceneSummary(_ analysis: ProductPreviewFrameAnalysis) {
 #if DEBUG
         let now = Date()
@@ -3912,6 +4030,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
         let ev = analysis.exposureMetrics
         let wb = analysis.whiteBalanceMetrics
+        let focus = analysis.sharpnessMetrics
         print(
             "[ProductAutoScene] " +
             "sceneId=unlabeled " +
@@ -3935,9 +4054,40 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             "green=\(String(format: "%+.3f", wb.greenCast)) " +
             "conf=\(String(format: "%.2f", wb.confidence)) " +
             "confReason=\(productAutoWhiteBalanceConfidenceReason(for: wb))" +
+            ") " +
+            "Focus(" +
+            "state=\(focus.state.rawValue) " +
+            "score=\(String(format: "%.2f", focus.sharpnessScore)) " +
+            "edge=\(String(format: "%.3f", focus.edgeDensity)) " +
+            "conf=\(String(format: "%.2f", focus.confidence)) " +
+            "reason=\(focus.reason)" +
             ")"
         )
 #endif
+    }
+
+    private func productFocusAssistAvailability(now: Date) -> (canTrigger: Bool, reason: String) {
+        guard !isProductFocusAssistSuppressedByManualFocusUI, focusControlMode != .manual else {
+            return (false, "manualFocus")
+        }
+        guard !isFocusExposureLocked else { return (false, "AEAF-L") }
+        guard !isExposureLocked else { return (false, "AE-L") }
+        guard !isPreviewInteractionTemporarilyRestricted else { return (false, "restricted") }
+        guard !isSwitchingCamera else { return (false, "switchingCamera") }
+        guard now.timeIntervalSince(lastUserFocusInteractionAt) >= productFocusAssistManualCooldown else {
+            return (false, "recentUserFocus")
+        }
+        guard now.timeIntervalSince(lastManualFocusInteractionAt) >= productFocusAssistManualCooldown else {
+            return (false, "recentManualFocus")
+        }
+        guard now.timeIntervalSince(lastProductFocusAssistAt) >= productFocusAssistCooldown else {
+            return (false, "cooldown")
+        }
+        guard let device = currentVideoInput?.device else { return (false, "noDevice") }
+        let supportsFocusMode = device.isFocusModeSupported(.autoFocus)
+            || device.isFocusModeSupported(.continuousAutoFocus)
+        guard supportsFocusMode else { return (false, "unsupportedFocusMode") }
+        return (true, "ready")
     }
 
     private func productAutoExposureAvailability() -> (canWrite: Bool, statusText: String) {
@@ -3965,6 +4115,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         case tap
         case longPress
         case unlockByLongPress
+        case productAutoFocus
     }
 
     private func applyFocusExposure(
@@ -4166,6 +4317,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         case .longPress:
                             feedbackMode = .auto
                             self.captureHintText = "已设置对焦与测光点"
+                        case .productAutoFocus:
+                            feedbackMode = .auto
+                            self.captureHintText = "已辅助对焦，继续观察商品清晰度"
                         }
                         self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: feedbackMode)
                     }
@@ -4233,6 +4387,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 private struct ProductPreviewFrameAnalysis {
     let exposureMetrics: ProductAutoExposureMetrics
     let whiteBalanceMetrics: ProductAutoWhiteBalanceMetrics
+    let sharpnessMetrics: ProductSharpnessMetrics
 }
 
 extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -4254,6 +4409,7 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
             guard let self else { return }
             self.handleProductAutoExposureMetrics(analysis.exposureMetrics)
             self.handleProductAutoWhiteBalanceMetrics(analysis.whiteBalanceMetrics)
+            self.handleProductSharpnessMetrics(analysis.sharpnessMetrics)
             self.logProductAutoSceneSummary(analysis)
         }
     }
@@ -4271,6 +4427,8 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard width > 0, height > 0, bytesPerRow > 0 else { return nil }
 
         let sampleStride = max(1, min(width, height) / 96)
+        let sampleXs = Array(stride(from: 0, to: width, by: sampleStride))
+        let sampleYs = Array(stride(from: 0, to: height, by: sampleStride))
         let buffer = baseAddress.assumingMemoryBound(to: UInt8.self)
 
         var sampleCount: Float = 0
@@ -4285,10 +4443,12 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         var nearWhiteRedSum: Float = 0
         var nearWhiteGreenSum: Float = 0
         var nearWhiteBlueSum: Float = 0
+        var lumaGrid: [Float] = []
+        lumaGrid.reserveCapacity(sampleXs.count * sampleYs.count)
 
-        for y in stride(from: 0, to: height, by: sampleStride) {
+        for y in sampleYs {
             let row = buffer + y * bytesPerRow
-            for x in stride(from: 0, to: width, by: sampleStride) {
+            for x in sampleXs {
                 let pixel = row + x * 4
                 let blue = Float(pixel[0]) / 255.0
                 let green = Float(pixel[1]) / 255.0
@@ -4298,6 +4458,7 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
                 let channelMin = min(red, min(green, blue))
                 let saturation = channelMax - channelMin
 
+                lumaGrid.append(luma)
                 sampleCount += 1
                 lumaSum += luma
                 if luma > 0.92 { highlightCount += 1 }
@@ -4366,9 +4527,17 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
             )
         }
 
+        let sharpnessMetrics = ProductSharpnessAnalyzer.metrics(
+            lumaGrid: lumaGrid,
+            width: sampleXs.count,
+            height: sampleYs.count,
+            exposureMetrics: exposureMetrics
+        )
+
         return ProductPreviewFrameAnalysis(
             exposureMetrics: exposureMetrics,
-            whiteBalanceMetrics: whiteBalanceMetrics
+            whiteBalanceMetrics: whiteBalanceMetrics,
+            sharpnessMetrics: sharpnessMetrics
         )
     }
 }

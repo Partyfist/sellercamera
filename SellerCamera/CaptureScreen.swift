@@ -324,12 +324,14 @@ struct CaptureScreen: View {
             isManualFocusModeEnabled = false
             isManualFocusRulerPresented = false
             clearManualFocusPending()
+            cameraRuntime.setProductFocusAssistManualSuppression(false)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             cameraRuntime.restoreAutofocusMode()
             cameraRuntime.captureHintText = "已恢复 AF"
         } else {
             isManualFocusModeEnabled = true
             isManualFocusRulerPresented = true
+            cameraRuntime.setProductFocusAssistManualSuppression(true)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             cameraRuntime.captureHintText = "MF 模式已开启，左近右远，拖动刻度微调对焦"
         }
@@ -651,6 +653,7 @@ struct CaptureScreen: View {
                 isManualFocusModeEnabled = false
                 isManualFocusRulerPresented = false
                 clearManualFocusPending()
+                cameraRuntime.setProductFocusAssistManualSuppression(false)
             }
         }
         .onChange(of: cameraRuntime.isFocusExposureLocked) { isLocked in
@@ -658,6 +661,7 @@ struct CaptureScreen: View {
             isManualFocusModeEnabled = false
             isManualFocusRulerPresented = false
             clearManualFocusPending()
+            cameraRuntime.setProductFocusAssistManualSuppression(false)
         }
         .onReceive(exposureBiasPendingTicker) { _ in
             if let pendingExposureBiasWheelValue, let pendingExposureBiasUpdatedAt,
