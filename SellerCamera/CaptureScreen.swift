@@ -120,6 +120,14 @@ struct CaptureScreen: View {
         stride(from: 0.0, through: 1.0001, by: 0.005).map { min(1.0, max(0.0, ($0 * 1000).rounded() / 1000)) }
     }
 
+    private var shutterPrimaryAnchorDenominators: [Double] {
+        [30, 50, 60, 96, 100, 120, 125, 200, 240, 250, 500, 1000, 2000, 4000, 8000]
+    }
+
+    private var shutterPrimaryAnchorDurations: [Double] {
+        shutterPrimaryAnchorDenominators.map { 1.0 / $0 }
+    }
+
     private var selectedManualFocusRulerIndex: Int {
         nearestManualFocusRulerIndex(to: manualFocusDisplayPosition, in: manualFocusRulerValues)
     }
@@ -909,8 +917,8 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
-    private let tickSpacing: CGFloat = 14
-    private let dragStepThreshold: CGFloat = 20
+    private let tickSpacing: CGFloat = 10
+    private let dragStepThreshold: CGFloat = 18
 
     var body: some View {
         GeometryReader { geometry in
@@ -990,11 +998,17 @@ private struct CaptureManualFocusRulerPanel: View {
             ForEach(Array(values.enumerated()), id: \.offset) { index, value in
                 let isSelected = index == selectedIndex
                 let isMajor = isMajorTick(value)
+                let shouldHideCenterTick = shouldHideFocusCenterTick(index: index, value: value)
                 VStack(spacing: 3) {
-                    Rectangle()
-                        .fill(tickColor(isSelected: isSelected, isMajor: isMajor))
-                        .frame(width: isSelected ? 1.6 : 0.9, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
-                        .shadow(color: isSelected ? accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
+                    if shouldHideCenterTick {
+                        Color.clear
+                            .frame(width: 1.6, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
+                    } else {
+                        Rectangle()
+                            .fill(tickColor(isSelected: isSelected, isMajor: isMajor))
+                            .frame(width: isSelected ? 1.6 : 0.9, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
+                            .shadow(color: isSelected ? accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
+                    }
 
                     Text(shouldShowFocusTickLabel(index: index, value: value) ? focusTickLabel(value) : "")
                         .font(.system(size: 7, weight: .medium))
@@ -1101,8 +1115,8 @@ private struct CaptureManualFocusRulerPanel: View {
     private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
         guard lastScrubSensitivity >= 1 else { return }
         let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let rawStepCount = Int(((predictedDelta * 0.28) / dragStepThreshold).rounded(.towardZero))
-        let inertiaStepCount = max(-1, min(1, -rawStepCount))
+        let rawStepCount = Int(((predictedDelta * 0.24) / dragStepThreshold).rounded(.towardZero))
+        let inertiaStepCount = max(-2, min(2, -rawStepCount))
         guard inertiaStepCount != 0 else { return }
         let didApply = onStep(inertiaStepCount)
         if didApply {
@@ -1113,9 +1127,9 @@ private struct CaptureManualFocusRulerPanel: View {
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
         // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
-        if lift > 90 { return 0.35 }
-        if lift > 40 { return 0.70 }
-        return 2.0
+        if lift > 90 { return 0.24 }
+        if lift > 40 { return 0.56 }
+        return 2.2
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
@@ -1140,9 +1154,15 @@ private struct CaptureManualFocusRulerPanel: View {
         guard isMajorTick(value) else { return false }
         guard values.indices.contains(selectedIndex) else { return true }
         let selectedValue = values[selectedIndex]
-        let isNearSelectedIndex = abs(index - selectedIndex) <= 8
-        let isNearSelectedValue = abs(value - selectedValue) <= 0.0401
+        let isNearSelectedIndex = abs(index - selectedIndex) <= 10
+        let isNearSelectedValue = abs(value - selectedValue) <= 0.0501
         return !(isNearSelectedIndex || isNearSelectedValue)
+    }
+
+    private func shouldHideFocusCenterTick(index: Int, value: Double) -> Bool {
+        guard values.indices.contains(selectedIndex) else { return false }
+        let selectedValue = values[selectedIndex]
+        return index == selectedIndex || abs(value - selectedValue) <= 0.0051
     }
 
     private func tickHeight(isSelected: Bool, isMajor: Bool) -> CGFloat {
@@ -2251,7 +2271,7 @@ private extension CaptureScreen {
         case .iso:
             addMajorIndexes(for: [50, 100, 200, 400, 800, 1600, 3200], ticks: ticks, into: &indexes)
         case .shutter:
-            addMajorIndexes(for: [1.0 / 500.0, 1.0 / 250.0, 1.0 / 125.0, 1.0 / 60.0, 1.0 / 30.0, 1.0 / 15.0], ticks: ticks, into: &indexes)
+            addMajorIndexes(for: shutterPrimaryAnchorDurations, ticks: ticks, into: &indexes)
         default:
             break
         }
@@ -2310,8 +2330,10 @@ private extension CaptureScreen {
         switch kind {
         case .whiteBalance, .iso:
             return 2
-        case .exposureCompensation, .tint, .shutter:
+        case .exposureCompensation, .tint:
             return 1
+        case .shutter:
+            return 2
         default:
             return 1
         }
@@ -2996,36 +3018,11 @@ private extension CaptureScreen {
             return [fallback]
         }
 
-        // Generate the full activeFormat range in 1/8-stop log steps; labels stay anchored to common photo shutter values.
-        let stopRatio = pow(2.0, 1.0 / 8.0)
+        // Keep the ruler on product-photo shutter anchors while preserving activeFormat endpoints.
         var values: [Double] = [maxSeconds]
-        var current = maxSeconds
-        var guardCount = 0
-        while current / stopRatio > minSeconds, guardCount < 240 {
-            current /= stopRatio
-            values.append(current)
-            guardCount += 1
-        }
-        let productAnchors: [Double] = [
-            1.0 / 30.0,
-            1.0 / 33.0,
-            1.0 / 48.0,
-            1.0 / 50.0,
-            1.0 / 60.0,
-            1.0 / 96.0,
-            1.0 / 100.0,
-            1.0 / 120.0,
-            1.0 / 125.0,
-            1.0 / 200.0,
-            1.0 / 240.0,
-            1.0 / 250.0,
-            1.0 / 500.0,
-            1.0 / 1000.0,
-            1.0 / 2000.0,
-            1.0 / 4000.0,
-            1.0 / 8000.0
-        ]
-        values.append(contentsOf: productAnchors)
+        values.append(contentsOf: shutterPrimaryAnchorDurations.filter { anchor in
+            anchor >= minSeconds && anchor <= maxSeconds
+        })
         values.append(minSeconds)
         values.append(maxSeconds)
         if let pendingShutterWheelDurationSeconds, pendingShutterWheelDurationSeconds.isFinite, pendingShutterWheelDurationSeconds > 0 {
