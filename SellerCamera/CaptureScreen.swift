@@ -918,7 +918,7 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
     private let tickSpacing: CGFloat = 10
-    private let dragStepThreshold: CGFloat = 15
+    private let dragStepThreshold: CGFloat = 10
 
     var body: some View {
         GeometryReader { geometry in
@@ -1076,16 +1076,41 @@ private struct CaptureManualFocusRulerPanel: View {
             lastStepAppliedAt = .distantPast
         }
         lastDragDirection = rawDirection
-        // Consume boundary/cooldown movement to avoid residual drag that requires a reverse swipe to clear.
-        lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
         guard now.timeIntervalSince(lastStepAppliedAt) >= 0.12 else { return }
 
-        let clampedStepCount = max(-1, min(1, -rawStepCount))
+        let maximumStepCount = maximumManualFocusStepCount(for: sensitivity)
+        let consumedRawStepCount = max(-maximumStepCount, min(maximumStepCount, rawStepCount))
+        let clampedStepCount = -consumedRawStepCount
+#if DEBUG
+        let lensBefore = values.indices.contains(selectedIndex) ? values[selectedIndex] : 0
+        let predictedIndex = max(0, min(values.count - 1, selectedIndex + clampedStepCount))
+        let lensAfter = values.indices.contains(predictedIndex) ? values[predictedIndex] : lensBefore
+        let mode = manualFocusScrubMode(for: sensitivity)
+        let wasClamped = consumedRawStepCount != rawStepCount
+#endif
         let didApply = onStep(clampedStepCount)
-        guard didApply else { return }
+        if didApply {
+            lastDragStepTranslation += CGFloat(consumedRawStepCount) * effectiveThreshold
+        } else {
+            // Boundary movement is still consumed so users can reverse immediately at 0/1 limits.
+            lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
+            return
+        }
 
         lastStepAppliedAt = now
         triggerGearHapticIfNeeded(step: clampedStepCount, at: now)
+#if DEBUG
+        print(
+            "[ManualFocusRuler] translation=\(String(format: "%.1f", translationWidth)) " +
+            "mode=\(mode) sensitivity=\(String(format: "%.2f", sensitivity)) " +
+            "threshold=\(String(format: "%.2f", effectiveThreshold)) " +
+            "rawStepDelta=\(rawStepCount) appliedStepDelta=\(clampedStepCount) " +
+            "lensBefore=\(String(format: "%.3f", lensBefore)) " +
+            "lensAfter=\(String(format: "%.3f", lensAfter)) " +
+            "delta=\(String(format: "%.3f", lensAfter - lensBefore)) " +
+            "clamped=\(wasClamped)"
+        )
+#endif
     }
 
     private func finishDrag(
@@ -1128,8 +1153,20 @@ private struct CaptureManualFocusRulerPanel: View {
         let lift = max(0, -verticalTranslation)
         // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
         if lift > 90 { return 0.16 }
-        if lift > 40 { return 0.42 }
-        return 6.0
+        if lift > 40 { return 0.40 }
+        return 8.0
+    }
+
+    private func maximumManualFocusStepCount(for sensitivity: CGFloat) -> Int {
+        if sensitivity >= 1 { return 12 }
+        if sensitivity >= 0.30 { return 2 }
+        return 1
+    }
+
+    private func manualFocusScrubMode(for sensitivity: CGFloat) -> String {
+        if sensitivity >= 1 { return "normal" }
+        if sensitivity >= 0.30 { return "fine" }
+        return "ultraFine"
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {

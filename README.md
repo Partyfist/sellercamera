@@ -82,3 +82,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R76C S / MF 参数表盘手感回归修复报告：`docs/reports/r76c_shutter_mf_ruler_feel_regression_fix.md`
 - R76D MF Ruler 拖动速度二次加速报告：`docs/reports/r76d_mf_ruler_drag_speed_boost.md`
 - R76E MF Ruler 拖动速度三次加速报告：`docs/reports/r76e_mf_ruler_drag_speed_double_boost.md`
+- R76F MF 同距参数覆盖范围修复报告：`docs/reports/r76f_mf_ruler_same_distance_range_fix.md`
