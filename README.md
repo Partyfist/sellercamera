@@ -75,3 +75,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R75 商品 Auto WB 实时白平衡优化 1.0 报告：`docs/reports/r75_product_auto_wb_realtime_white_balance.md`
 - R75A 商品 Auto WB 真机场景校准报告：`docs/reports/r75a_product_auto_wb_real_device_calibration.md`
 - R75B 商品 Auto EV + WB 联合真机样本验收报告：`docs/reports/r75b_product_auto_ev_wb_joint_acceptance.md`
+- R75C 商品 Auto 固定样本验收与日志采集规范报告：`docs/reports/r75c_product_auto_fixed_sample_acceptance_protocol.md`

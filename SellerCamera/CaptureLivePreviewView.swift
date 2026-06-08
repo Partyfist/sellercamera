@@ -571,11 +571,13 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var lastProductAutoExposureDebugLogAt = Date.distantPast
     private var lastProductAutoWhiteBalanceWriteAt = Date.distantPast
     private var lastProductAutoWhiteBalanceDebugLogAt = Date.distantPast
+    private var lastProductAutoSceneDebugLogAt = Date.distantPast
     private let productAutoExposureAnalysisInterval: CFTimeInterval = 0.35
     private let productAutoExposureWriteInterval: TimeInterval = 0.35
     private let productAutoExposureDebugLogInterval: TimeInterval = 1.0
     private let productAutoWhiteBalanceWriteInterval: TimeInterval = 1.0
     private let productAutoWhiteBalanceDebugLogInterval: TimeInterval = 1.0
+    private let productAutoSceneDebugLogInterval: TimeInterval = 1.0
 
     private let motionManager = CMMotionManager()
     private var levelMotionStarted = false
@@ -3900,6 +3902,44 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         return "usableNearWhite"
     }
 
+    private func logProductAutoSceneSummary(_ analysis: ProductPreviewFrameAnalysis) {
+#if DEBUG
+        let now = Date()
+        guard now.timeIntervalSince(lastProductAutoSceneDebugLogAt) >= productAutoSceneDebugLogInterval else {
+            return
+        }
+        lastProductAutoSceneDebugLogAt = now
+
+        let ev = analysis.exposureMetrics
+        let wb = analysis.whiteBalanceMetrics
+        print(
+            "[ProductAutoScene] " +
+            "sceneId=unlabeled " +
+            "t=\(String(format: "%.1f", now.timeIntervalSince1970)) " +
+            "EV(" +
+            "\(productAutoExposureOptimizer.debugStateSummary) " +
+            "applied=\(String(format: "%+.2f", currentExposureBias)) " +
+            "mean=\(String(format: "%.3f", ev.meanLuma)) " +
+            "shadow=\(String(format: "%.3f", ev.shadowRatio)) " +
+            "hi=\(String(format: "%.3f", ev.highlightRatio)) " +
+            "clip=\(String(format: "%.3f", ev.clippedRatio)) " +
+            "white=\(String(format: "%.3f", ev.nearWhiteRatio)) " +
+            "whiteY=\(String(format: "%.3f", ev.nearWhiteMeanLuma))" +
+            ") " +
+            "WB(" +
+            "\(productAutoWhiteBalanceOptimizer.debugStateSummary) " +
+            "current=\(Int(currentWhiteBalanceTemperature.rounded()))K " +
+            "whiteRatio=\(String(format: "%.3f", wb.nearWhiteRatio)) " +
+            "whiteCount=\(wb.nearWhiteSampleCount) " +
+            "rb=\(String(format: "%+.3f", wb.redBlueDelta)) " +
+            "green=\(String(format: "%+.3f", wb.greenCast)) " +
+            "conf=\(String(format: "%.2f", wb.confidence)) " +
+            "confReason=\(productAutoWhiteBalanceConfidenceReason(for: wb))" +
+            ")"
+        )
+#endif
+    }
+
     private func productAutoExposureAvailability() -> (canWrite: Bool, statusText: String) {
         guard isExposureBiasSupported else { return (false, "商品 Auto 不可用") }
         guard isExposureBiasAutoMode else { return (false, "商品 Auto 暂停 · 手动EV") }
@@ -4214,6 +4254,7 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
             guard let self else { return }
             self.handleProductAutoExposureMetrics(analysis.exposureMetrics)
             self.handleProductAutoWhiteBalanceMetrics(analysis.whiteBalanceMetrics)
+            self.logProductAutoSceneSummary(analysis)
         }
     }
 
