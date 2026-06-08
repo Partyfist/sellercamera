@@ -4005,6 +4005,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         lastProductSharpnessDebugLogAt = now
 
         let cooldownRemaining = max(0, productFocusAssistCooldown - now.timeIntervalSince(lastProductFocusAssistAt))
+        let blockedReason: String = {
+            guard autoFocusResult.hasPrefix("skipped:") else { return "none" }
+            return String(autoFocusResult.dropFirst("skipped:".count))
+        }()
         print(
             "[ProductSharpness] " +
             "score=\(String(format: "%.2f", metrics.sharpnessScore)) " +
@@ -4015,6 +4019,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             "blurHit=\(productSharpnessBlurryHitCount) " +
             "sharpHit=\(productSharpnessSharpHitCount) " +
             "autoAF=\(autoFocusResult) " +
+            "blocked=\(blockedReason) " +
             "cooldown=\(String(format: "%.1f", cooldownRemaining))"
         )
 #endif

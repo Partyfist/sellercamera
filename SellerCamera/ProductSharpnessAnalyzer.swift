@@ -16,6 +16,15 @@ struct ProductSharpnessMetrics {
 }
 
 enum ProductSharpnessAnalyzer {
+    private static let edgeThreshold = 0.055
+    private static let lowTextureEdgeDensity = 0.018
+    private static let lowTextureContrast = 0.040
+    private static let minimumConfidence = 0.45
+    private static let sharpScoreThreshold = 5.8
+    private static let sharpEdgeDensityThreshold = 0.065
+    private static let slightlySoftScoreThreshold = 3.0
+    private static let slightlySoftEdgeDensityThreshold = 0.035
+
     static func metrics(
         lumaGrid: [Float],
         width: Int,
@@ -47,7 +56,6 @@ enum ProductSharpnessAnalyzer {
         var lumaSquaredSum = 0.0
         var gradientSum = 0.0
         var edgeCount = 0
-        let edgeThreshold = 0.055
 
         for y in startY..<endY {
             for x in startX..<endX {
@@ -79,7 +87,7 @@ enum ProductSharpnessAnalyzer {
         let edgeDensity = Double(edgeCount) / Double(sampleCount)
         let sharpnessScore = (gradientSum / Double(sampleCount)) * 100.0
 
-        guard !(edgeDensity < 0.012 && contrast < 0.030) else {
+        guard !(edgeDensity < lowTextureEdgeDensity && contrast < lowTextureContrast) else {
             return lowConfidence(
                 score: sharpnessScore,
                 edgeDensity: edgeDensity,
@@ -98,7 +106,7 @@ enum ProductSharpnessAnalyzer {
             )
         )
 
-        guard confidence >= 0.40 else {
+        guard confidence >= minimumConfidence else {
             return lowConfidence(
                 score: sharpnessScore,
                 edgeDensity: edgeDensity,
@@ -107,7 +115,7 @@ enum ProductSharpnessAnalyzer {
             )
         }
 
-        if sharpnessScore >= 4.8, edgeDensity >= 0.055 {
+        if sharpnessScore >= sharpScoreThreshold, edgeDensity >= sharpEdgeDensityThreshold {
             return ProductSharpnessMetrics(
                 sharpnessScore: sharpnessScore,
                 edgeDensity: edgeDensity,
@@ -116,7 +124,7 @@ enum ProductSharpnessAnalyzer {
                 reason: "sharpEdges"
             )
         }
-        if sharpnessScore >= 2.8, edgeDensity >= 0.030 {
+        if sharpnessScore >= slightlySoftScoreThreshold, edgeDensity >= slightlySoftEdgeDensityThreshold {
             return ProductSharpnessMetrics(
                 sharpnessScore: sharpnessScore,
                 edgeDensity: edgeDensity,

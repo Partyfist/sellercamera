@@ -77,3 +77,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R75B 商品 Auto EV + WB 联合真机样本验收报告：`docs/reports/r75b_product_auto_ev_wb_joint_acceptance.md`
 - R75C 商品 Auto 固定样本验收与日志采集规范报告：`docs/reports/r75c_product_auto_fixed_sample_acceptance_protocol.md`
 - R76 商品清晰度检测与对焦辅助 1.0 报告：`docs/reports/r76_product_sharpness_detection_focus_assist.md`
+- R76A 商品清晰度检测真机样本校准报告：`docs/reports/r76a_product_sharpness_real_device_calibration.md`
