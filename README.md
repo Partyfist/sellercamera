@@ -80,3 +80,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R76A 商品清晰度检测真机样本校准报告：`docs/reports/r76a_product_sharpness_real_device_calibration.md`
 - R76B 商品清晰度检测固定样本验收报告：`docs/reports/r76b_product_sharpness_fixed_sample_acceptance.md`
 - R76C S / MF 参数表盘手感回归修复报告：`docs/reports/r76c_shutter_mf_ruler_feel_regression_fix.md`
+- R76D MF Ruler 拖动速度二次加速报告：`docs/reports/r76d_mf_ruler_drag_speed_boost.md`

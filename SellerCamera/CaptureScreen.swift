@@ -918,7 +918,7 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
     private let tickSpacing: CGFloat = 10
-    private let dragStepThreshold: CGFloat = 18
+    private let dragStepThreshold: CGFloat = 15
 
     var body: some View {
         GeometryReader { geometry in
@@ -1127,9 +1127,9 @@ private struct CaptureManualFocusRulerPanel: View {
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
         // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
-        if lift > 90 { return 0.24 }
-        if lift > 40 { return 0.56 }
-        return 2.2
+        if lift > 90 { return 0.20 }
+        if lift > 40 { return 0.50 }
+        return 3.0
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
