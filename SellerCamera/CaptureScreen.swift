@@ -46,6 +46,7 @@ struct CaptureScreen: View {
     @State private var pendingManualFocusPosition: Float?
     @State private var pendingManualFocusUpdatedAt: Date?
     @State private var lastDispatchedManualFocusPosition: Float?
+    @State private var lastManualFocusRuntimeWriteAt: Date = .distantPast
     private let exposureBiasPendingTimeout: TimeInterval = 1.2
     private let whiteBalancePendingTimeout: TimeInterval = 1.5
     private let tintPendingTimeout: TimeInterval = 1.5
@@ -117,7 +118,8 @@ struct CaptureScreen: View {
     }
 
     private var manualFocusRulerValues: [Double] {
-        stride(from: 0.0, through: 1.0001, by: 0.005).map { min(1.0, max(0.0, ($0 * 1000).rounded() / 1000)) }
+        stride(from: 0.0, through: 1.0001, by: ManualFocusRulerTuning.lensPositionStep)
+            .map { min(1.0, max(0.0, ($0 * 1000).rounded() / 1000)) }
     }
 
     private var shutterPrimaryAnchorDenominators: [Double] {
@@ -902,12 +904,34 @@ private struct CaptureLensZoomControlPanel: View {
     }
 }
 
+private enum ManualFocusRulerStepResult {
+    case applied
+    case throttled(lastWriteAge: TimeInterval)
+    case rejected
+}
+
+private enum ManualFocusRulerTuning {
+    static let normalSensitivity: CGFloat = 8.0
+    static let fineSensitivity: CGFloat = 0.40
+    static let ultraFineSensitivity: CGFloat = 0.16
+
+    static let dragStepThreshold: CGFloat = 10
+    static let tickSpacing: CGFloat = 10
+
+    static let normalMaxStepPerUpdate: Int = 12
+    static let fineMaxStepPerUpdate: Int = 2
+    static let ultraFineMaxStepPerUpdate: Int = 1
+
+    static let lensPositionStep: Double = 0.005
+    static let writeMinInterval: TimeInterval = 0.04
+}
+
 private struct CaptureManualFocusRulerPanel: View {
     let values: [Double]
     let selectedIndex: Int
     let currentValueText: String
     let isEnabled: Bool
-    let onStep: (Int) -> Bool
+    let onStep: (Int) -> ManualFocusRulerStepResult
     @State private var dragOffset: CGFloat = 0
     @State private var lastDragStepTranslation: CGFloat = 0
     @State private var isDragInProgress = false
@@ -917,8 +941,8 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
     private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
-    private let tickSpacing: CGFloat = 10
-    private let dragStepThreshold: CGFloat = 10
+    private let tickSpacing: CGFloat = ManualFocusRulerTuning.tickSpacing
+    private let dragStepThreshold: CGFloat = ManualFocusRulerTuning.dragStepThreshold
 
     var body: some View {
         GeometryReader { geometry in
@@ -1076,7 +1100,29 @@ private struct CaptureManualFocusRulerPanel: View {
             lastStepAppliedAt = .distantPast
         }
         lastDragDirection = rawDirection
-        guard now.timeIntervalSince(lastStepAppliedAt) >= 0.12 else { return }
+        let cooldownAllowed = now.timeIntervalSince(lastStepAppliedAt) >= 0.12
+        guard cooldownAllowed else {
+#if DEBUG
+            logManualFocusDrag(
+                translationWidth: translationWidth,
+                delta: delta,
+                effectiveThreshold: effectiveThreshold,
+                rawStepCount: rawStepCount,
+                appliedStepDelta: 0,
+                cap: maximumManualFocusStepCount(for: sensitivity),
+                lensBefore: values.indices.contains(selectedIndex) ? values[selectedIndex] : 0,
+                lensAfter: values.indices.contains(selectedIndex) ? values[selectedIndex] : 0,
+                mode: manualFocusScrubMode(for: sensitivity),
+                writeAllowed: false,
+                throttled: false,
+                cooldownAllowed: false,
+                consumedOffset: false,
+                wasClamped: false,
+                lastWriteAge: nil
+            )
+#endif
+            return
+        }
 
         let maximumStepCount = maximumManualFocusStepCount(for: sensitivity)
         let consumedRawStepCount = max(-maximumStepCount, min(maximumStepCount, rawStepCount))
@@ -1088,27 +1134,75 @@ private struct CaptureManualFocusRulerPanel: View {
         let mode = manualFocusScrubMode(for: sensitivity)
         let wasClamped = consumedRawStepCount != rawStepCount
 #endif
-        let didApply = onStep(clampedStepCount)
-        if didApply {
+        let stepResult = onStep(clampedStepCount)
+        switch stepResult {
+        case .applied:
             lastDragStepTranslation += CGFloat(consumedRawStepCount) * effectiveThreshold
-        } else {
+        case .throttled(let lastWriteAge):
+#if DEBUG
+            logManualFocusDrag(
+                translationWidth: translationWidth,
+                delta: delta,
+                effectiveThreshold: effectiveThreshold,
+                rawStepCount: rawStepCount,
+                appliedStepDelta: clampedStepCount,
+                cap: maximumStepCount,
+                lensBefore: lensBefore,
+                lensAfter: lensBefore,
+                mode: mode,
+                writeAllowed: false,
+                throttled: true,
+                cooldownAllowed: true,
+                consumedOffset: false,
+                wasClamped: wasClamped,
+                lastWriteAge: lastWriteAge
+            )
+#endif
+            return
+        case .rejected:
             // Boundary movement is still consumed so users can reverse immediately at 0/1 limits.
             lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
+#if DEBUG
+            logManualFocusDrag(
+                translationWidth: translationWidth,
+                delta: delta,
+                effectiveThreshold: effectiveThreshold,
+                rawStepCount: rawStepCount,
+                appliedStepDelta: clampedStepCount,
+                cap: maximumStepCount,
+                lensBefore: lensBefore,
+                lensAfter: lensBefore,
+                mode: mode,
+                writeAllowed: false,
+                throttled: false,
+                cooldownAllowed: true,
+                consumedOffset: true,
+                wasClamped: wasClamped,
+                lastWriteAge: nil
+            )
+#endif
             return
         }
 
         lastStepAppliedAt = now
         triggerGearHapticIfNeeded(step: clampedStepCount, at: now)
 #if DEBUG
-        print(
-            "[ManualFocusRuler] translation=\(String(format: "%.1f", translationWidth)) " +
-            "mode=\(mode) sensitivity=\(String(format: "%.2f", sensitivity)) " +
-            "threshold=\(String(format: "%.2f", effectiveThreshold)) " +
-            "rawStepDelta=\(rawStepCount) appliedStepDelta=\(clampedStepCount) " +
-            "lensBefore=\(String(format: "%.3f", lensBefore)) " +
-            "lensAfter=\(String(format: "%.3f", lensAfter)) " +
-            "delta=\(String(format: "%.3f", lensAfter - lensBefore)) " +
-            "clamped=\(wasClamped)"
+        logManualFocusDrag(
+            translationWidth: translationWidth,
+            delta: delta,
+            effectiveThreshold: effectiveThreshold,
+            rawStepCount: rawStepCount,
+            appliedStepDelta: clampedStepCount,
+            cap: maximumStepCount,
+            lensBefore: lensBefore,
+            lensAfter: lensAfter,
+            mode: mode,
+            writeAllowed: true,
+            throttled: false,
+            cooldownAllowed: true,
+            consumedOffset: true,
+            wasClamped: wasClamped,
+            lastWriteAge: nil
         )
 #endif
     }
@@ -1143,8 +1237,8 @@ private struct CaptureManualFocusRulerPanel: View {
         let rawStepCount = Int(((predictedDelta * 0.24) / dragStepThreshold).rounded(.towardZero))
         let inertiaStepCount = max(-2, min(2, -rawStepCount))
         guard inertiaStepCount != 0 else { return }
-        let didApply = onStep(inertiaStepCount)
-        if didApply {
+        let stepResult = onStep(inertiaStepCount)
+        if case .applied = stepResult {
             triggerGearHapticIfNeeded(step: inertiaStepCount, at: Date())
         }
     }
@@ -1152,15 +1246,15 @@ private struct CaptureManualFocusRulerPanel: View {
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
         // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
-        if lift > 90 { return 0.16 }
-        if lift > 40 { return 0.40 }
-        return 8.0
+        if lift > 90 { return ManualFocusRulerTuning.ultraFineSensitivity }
+        if lift > 40 { return ManualFocusRulerTuning.fineSensitivity }
+        return ManualFocusRulerTuning.normalSensitivity
     }
 
     private func maximumManualFocusStepCount(for sensitivity: CGFloat) -> Int {
-        if sensitivity >= 1 { return 12 }
-        if sensitivity >= 0.30 { return 2 }
-        return 1
+        if sensitivity >= 1 { return ManualFocusRulerTuning.normalMaxStepPerUpdate }
+        if sensitivity >= 0.30 { return ManualFocusRulerTuning.fineMaxStepPerUpdate }
+        return ManualFocusRulerTuning.ultraFineMaxStepPerUpdate
     }
 
     private func manualFocusScrubMode(for sensitivity: CGFloat) -> String {
@@ -1168,6 +1262,41 @@ private struct CaptureManualFocusRulerPanel: View {
         if sensitivity >= 0.30 { return "fine" }
         return "ultraFine"
     }
+
+#if DEBUG
+    private func logManualFocusDrag(
+        translationWidth: CGFloat,
+        delta: CGFloat,
+        effectiveThreshold: CGFloat,
+        rawStepCount: Int,
+        appliedStepDelta: Int,
+        cap: Int,
+        lensBefore: Double,
+        lensAfter: Double,
+        mode: String,
+        writeAllowed: Bool,
+        throttled: Bool,
+        cooldownAllowed: Bool,
+        consumedOffset: Bool,
+        wasClamped: Bool,
+        lastWriteAge: TimeInterval?
+    ) {
+        let lastWriteAgeText = lastWriteAge.map { String(format: "%.3f", $0) } ?? "n/a"
+        print(
+            "[ManualFocusRuler] mode=\(mode) " +
+            "translation=\(String(format: "%.1f", translationWidth)) " +
+            "delta=\(String(format: "%.1f", delta)) " +
+            "effectiveThreshold=\(String(format: "%.2f", effectiveThreshold)) " +
+            "rawStepCount=\(rawStepCount) appliedStepDelta=\(appliedStepDelta) " +
+            "cap=\(cap) lensBefore=\(String(format: "%.3f", lensBefore)) " +
+            "lensAfter=\(String(format: "%.3f", lensAfter)) " +
+            "lensDelta=\(String(format: "%.3f", lensAfter - lensBefore)) " +
+            "writeAllowed=\(writeAllowed) throttled=\(throttled) " +
+            "cooldownAllowed=\(cooldownAllowed) consumedOffset=\(consumedOffset) " +
+            "clamped=\(wasClamped) lastWriteAge=\(lastWriteAgeText)"
+        )
+    }
+#endif
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
         let signature = "mf-\(selectedIndex)-\(step)"
@@ -1588,7 +1717,7 @@ private struct CapturePreviewContainer: View {
     let isManualFocusRulerEnabled: Bool
     let onToggleExposureLock: () -> Void
     let onToggleManualFocusMode: () -> Void
-    let onManualFocusStep: (Int) -> Bool
+    let onManualFocusStep: (Int) -> ManualFocusRulerStepResult
     let onTapPreviewBeforeFocus: () -> Bool
     @State private var transientLensFeedback: String?
     @State private var lensFeedbackToken = UUID()
@@ -3252,38 +3381,50 @@ private extension CaptureScreen {
         pendingManualFocusPosition = nil
         pendingManualFocusUpdatedAt = nil
         lastDispatchedManualFocusPosition = nil
+        lastManualFocusRuntimeWriteAt = .distantPast
     }
 
-    private func stepManualFocusRuler(by direction: Int) -> Bool {
-        guard isManualFocusModeActive, isManualFocusRulerPresented else { return false }
+    private func stepManualFocusRuler(by direction: Int) -> ManualFocusRulerStepResult {
+        guard isManualFocusModeActive, isManualFocusRulerPresented else { return .rejected }
         guard cameraRuntime.isManualFocusSupported else {
             cameraRuntime.captureHintText = "当前镜头不支持手动对焦"
-            return false
+            return .rejected
         }
         guard !cameraRuntime.isFocusExposureLocked else {
             cameraRuntime.captureHintText = "AE/AF 锁定中，长按画面解除后可调焦"
-            return false
+            return .rejected
         }
 
         let values = manualFocusRulerValues
-        guard !values.isEmpty else { return false }
+        guard !values.isEmpty else { return .rejected }
 
         let currentIndex = nearestManualFocusRulerIndex(to: manualFocusDisplayPosition, in: values)
         let targetIndex = max(0, min(values.count - 1, currentIndex + direction))
-        guard targetIndex != currentIndex else { return false }
+        guard targetIndex != currentIndex else { return .rejected }
 
         let targetPosition = Float(max(0, min(1, values[targetIndex])))
         if let lastDispatchedManualFocusPosition,
            abs(lastDispatchedManualFocusPosition - targetPosition) < 0.001 {
-            return false
+            return .rejected
+        }
+
+        let now = Date()
+        let writeAge = now.timeIntervalSince(lastManualFocusRuntimeWriteAt)
+        guard writeAge >= ManualFocusRulerTuning.writeMinInterval else {
+            logManualFocusRuler(
+                "throttled target \(formattedManualFocusRulerValue(Double(targetPosition))) " +
+                "lastWriteAge=\(String(format: "%.3f", writeAge)) minInterval=\(String(format: "%.3f", ManualFocusRulerTuning.writeMinInterval))"
+            )
+            return .throttled(lastWriteAge: writeAge)
         }
 
         pendingManualFocusPosition = targetPosition
         pendingManualFocusUpdatedAt = Date()
         lastDispatchedManualFocusPosition = targetPosition
+        lastManualFocusRuntimeWriteAt = now
         logManualFocusRuler("target \(formattedManualFocusRulerValue(Double(targetPosition)))")
         cameraRuntime.setManualFocusLensPosition(targetPosition)
-        return true
+        return .applied
     }
 
     private func nearestManualFocusRulerIndex(to value: Double, in values: [Double]) -> Int {
