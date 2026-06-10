@@ -95,6 +95,45 @@ enum CaptureTimerOption: Int, CaseIterable {
     }
 }
 
+enum CaptureStabilizerMode: String, CaseIterable {
+    case off
+    case standard
+    case enhanced
+
+    var displayText: String {
+        switch self {
+        case .off:
+            return "关闭"
+        case .standard:
+            return "标准"
+        case .enhanced:
+            return "增强"
+        }
+    }
+
+    var captureSettleWaitNanoseconds: UInt64 {
+        switch self {
+        case .off:
+            return 0
+        case .standard:
+            return 200_000_000
+        case .enhanced:
+            return 450_000_000
+        }
+    }
+
+    var requestedVideoStabilizationMode: AVCaptureVideoStabilizationMode {
+        switch self {
+        case .off:
+            return .off
+        case .standard:
+            return .auto
+        case .enhanced:
+            return .cinematic
+        }
+    }
+}
+
 enum CaptureWhiteBalancePreset: CaseIterable {
     case auto
     case warm
@@ -495,6 +534,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private static let lensZoomRampRate: Float = 7.0
     private static let closeFocusFallbackCooldown: TimeInterval = 5.0
     private static let closeFocusFallbackDelay: TimeInterval = 0.22
+    private static let lensRulerDirectWriteInterval: TimeInterval = 1.0 / 30.0
+    private static let lensRulerSwitchOverHysteresis: CGFloat = 0.035
+    private static let stabilizerUserDefaultsKey = "seller.camera.capture.stabilizer.mode"
 
     @Published var latestStillPhotoResult: CaptureStillPhotoResult?
     @Published var latestCaptureStatusText = "未拍摄"
@@ -521,6 +563,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var selectedFlashMode: CaptureFlashMode = .auto
     @Published var selectedTimerOption: CaptureTimerOption = .off
     @Published var selectedBurstOption: CaptureBurstOption = .single
+    @Published var selectedStabilizerMode: CaptureStabilizerMode = {
+        let rawValue = UserDefaults.standard.string(forKey: CaptureCameraRuntime.stabilizerUserDefaultsKey)
+        return rawValue.flatMap(CaptureStabilizerMode.init(rawValue:)) ?? .standard
+    }()
     @Published var isGridEnabled = false
     @Published var isLevelIndicatorEnabled = false
     @Published var isFlashModeSupported = false
@@ -616,6 +662,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var lastUserFocusInteractionAt = Date.distantPast
     private var lastManualFocusInteractionAt = Date.distantPast
     private var lastCloseFocusFallbackAt = Date.distantPast
+    private var lastLensRulerZoomWriteAt = Date.distantPast
+    private var pendingLensRulerZoomTarget: CGFloat?
+    private var lastLensRulerInteractionAt = Date.distantPast
     private var productSharpnessBlurryHitCount = 0
     private var productSharpnessSharpHitCount = 0
     private var isProductFocusAssistSuppressedByManualFocusUI = false
@@ -1809,6 +1858,43 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         setLensZoomMultiplier(CGFloat(dialValue))
     }
 
+    func beginLensZoomRulerInteraction() {
+        pendingLensRulerZoomTarget = nil
+        lastLensRulerZoomWriteAt = .distantPast
+        lastLensRulerInteractionAt = Date()
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.currentVideoInput?.device else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isRampingVideoZoom {
+                    device.cancelVideoZoomRamp()
+                }
+                device.unlockForConfiguration()
+            } catch {
+                // Zoom drag can continue with the next writable frame.
+            }
+        }
+    }
+
+    func setLensZoomDialValueFromRuler(_ dialValue: Double, isFinal: Bool = false) {
+        guard let profile = selectedLensProfile else {
+            setZoomFactor(CGFloat(dialValue), ramped: false, reason: isFinal ? "rulerFinalNoProfile" : "rulerDragNoProfile")
+            return
+        }
+        let targetZoom: CGFloat
+        if profile.source == .virtual {
+            targetZoom = CGFloat(dialValue)
+        } else {
+            let clampedMultiplier = max(1.0, min(currentLensMaximumZoomMultiplier, CGFloat(dialValue)))
+            targetZoom = profile.baseZoomFactor * clampedMultiplier
+        }
+        submitLensRulerZoomTarget(targetZoom, isFinal: isFinal)
+    }
+
+    func endLensZoomRulerInteraction(finalDialValue: Double) {
+        setLensZoomDialValueFromRuler(finalDialValue, isFinal: true)
+    }
+
     func lensProfile(for focal: CaptureSemanticFocal) -> CaptureLensProfile? {
         availableLensProfiles.first(where: { $0.semanticFocal == focal })
     }
@@ -1929,6 +2015,15 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         setZoomFactor(targetZoom, ramped: true, reason: "lensRuler")
     }
 
+    func cycleStabilizerMode() {
+        guard let index = CaptureStabilizerMode.allCases.firstIndex(of: selectedStabilizerMode) else { return }
+        let next = CaptureStabilizerMode.allCases[(index + 1) % CaptureStabilizerMode.allCases.count]
+        selectedStabilizerMode = next
+        UserDefaults.standard.set(next.rawValue, forKey: Self.stabilizerUserDefaultsKey)
+        applyStabilizerModeToConnections(reason: "userToggle")
+        captureHintText = "稳定器：\(next.displayText)"
+    }
+
     func cycleZoomPreset() {
         guard !isPreviewInteractionTemporarilyRestricted else {
             captureHintText = previewInteractionRestrictedHintText
@@ -1951,6 +2046,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             return
         }
         let clamped = max(minimumZoomFactor, min(maximumZoomFactor, requestedZoom))
+        lastLensRulerInteractionAt = Date()
         sessionQueue.async { [weak self] in
             guard let self else { return }
             guard let device = self.currentVideoInput?.device else { return }
@@ -1991,6 +2087,88 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 }
             }
         }
+    }
+
+    func applyStabilizerModeToConnections(reason: String = "refresh") {
+        let requestedMode = selectedStabilizerMode.requestedVideoStabilizationMode
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            let connections = [
+                self.videoOutput.connection(with: .video),
+                self.photoOutput.connection(with: .video)
+            ].compactMap { $0 }
+
+            for connection in connections {
+                guard connection.isVideoStabilizationSupported else {
+#if DEBUG
+                    print("[CaptureStabilizer] reason=\(reason) supported=false requested=\(requestedMode.rawValue)")
+#endif
+                    continue
+                }
+                let modeToApply: AVCaptureVideoStabilizationMode
+                switch self.selectedStabilizerMode {
+                case .off:
+                    modeToApply = .off
+                case .standard:
+                    modeToApply = .auto
+                case .enhanced:
+                    modeToApply = .cinematic
+                }
+                connection.preferredVideoStabilizationMode = modeToApply
+#if DEBUG
+                print(
+                    "[CaptureStabilizer] " +
+                    "reason=\(reason) " +
+                    "supported=true " +
+                    "requested=\(requestedMode.rawValue) " +
+                    "applied=\(connection.preferredVideoStabilizationMode.rawValue) " +
+                    "active=\(connection.activeVideoStabilizationMode.rawValue)"
+                )
+#endif
+            }
+        }
+    }
+
+    private func submitLensRulerZoomTarget(_ requestedZoom: CGFloat, isFinal: Bool) {
+        guard !isSwitchingCamera, countdownSecondsRemaining == nil, !isBurstCapturing, quickPreviewImage == nil else {
+            return
+        }
+        let clamped = max(minimumZoomFactor, min(maximumZoomFactor, requestedZoom))
+        let adjusted = lensRulerSwitchOverProtectedZoomTarget(clamped, isFinal: isFinal)
+        pendingLensRulerZoomTarget = adjusted
+        lastLensRulerInteractionAt = Date()
+
+        let now = Date()
+        guard isFinal || now.timeIntervalSince(lastLensRulerZoomWriteAt) >= Self.lensRulerDirectWriteInterval else {
+            return
+        }
+        lastLensRulerZoomWriteAt = now
+        pendingLensRulerZoomTarget = nil
+        setZoomFactor(adjusted, ramped: false, reason: isFinal ? "rulerFinal" : "rulerDrag")
+    }
+
+    private func lensRulerSwitchOverProtectedZoomTarget(_ requestedZoom: CGFloat, isFinal: Bool) -> CGFloat {
+        guard !isFinal, let device = currentVideoInput?.device else { return requestedZoom }
+        let switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors.map { CGFloat(truncating: $0) }
+        guard let nearest = switchFactors.min(by: { abs($0 - requestedZoom) < abs($1 - requestedZoom) }) else {
+            return requestedZoom
+        }
+        guard abs(nearest - requestedZoom) <= Self.lensRulerSwitchOverHysteresis else {
+            return requestedZoom
+        }
+        let current = currentZoomFactor
+        guard abs(current - nearest) <= Self.lensRulerSwitchOverHysteresis * 2 else {
+            return requestedZoom
+        }
+#if DEBUG
+        print(
+            "[CaptureLensZoom] switchOverHysteresis=true " +
+            "requested=\(String(format: "%.3f", requestedZoom)) " +
+            "held=\(String(format: "%.3f", current)) " +
+            "switch=\(String(format: "%.3f", nearest))"
+        )
+#endif
+        return current
     }
 
     func toggleCameraPosition() {
@@ -2654,7 +2832,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     private func captureSinglePhoto() async throws -> CaptureStillPhotoResult {
-        try await withCheckedThrowingContinuation { continuation in
+        await waitForCaptureStabilizationIfNeeded()
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CaptureStillPhotoResult, Error>) in
             guard self.isSessionConfigured else {
                 continuation.resume(throwing: NSError(domain: "CaptureCameraRuntime", code: -2))
                 return
@@ -2682,6 +2861,37 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             self.pendingCaptureDelegates[captureID] = proxy
             self.photoOutput.capturePhoto(with: settings, delegate: proxy)
         }
+    }
+
+    private func waitForCaptureStabilizationIfNeeded() async {
+        let maxWaitNanoseconds = selectedStabilizerMode.captureSettleWaitNanoseconds
+        guard maxWaitNanoseconds > 0 else { return }
+
+        let maxWaitSeconds = Double(maxWaitNanoseconds) / 1_000_000_000.0
+        let startedAt = Date()
+        var didWait = false
+
+        while Date().timeIntervalSince(startedAt) < maxWaitSeconds {
+            let recentZoomWrite = Date().timeIntervalSince(lastLensRulerInteractionAt) < 0.18
+            let zoomRamping = await isCurrentDeviceRampingZoom()
+            let focusAdjusting = await isCurrentDeviceAdjustingFocus()
+            guard recentZoomWrite || zoomRamping || focusAdjusting || isSwitchingCamera else {
+                break
+            }
+            didWait = true
+            try? await Task.sleep(for: .milliseconds(45))
+        }
+
+#if DEBUG
+        if didWait {
+            print(
+                "[CaptureStabilizer] captureSettleWait " +
+                "mode=\(selectedStabilizerMode.rawValue) " +
+                "elapsed=\(String(format: "%.3f", Date().timeIntervalSince(startedAt))) " +
+                "max=\(String(format: "%.3f", maxWaitSeconds))"
+            )
+        }
+#endif
     }
 
     private func preferredPhotoQualityPrioritization() -> AVCapturePhotoOutput.QualityPrioritization {
@@ -2737,6 +2947,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.session.addOutput(self.photoOutput)
                 self.photoOutput.maxPhotoQualityPrioritization = .quality
                 self.configureProductAutoExposureVideoOutputIfPossible()
+                self.applyStabilizerModeToConnections(reason: "configureSession")
                 self.currentVideoInput = input
                 self.isSessionConfigured = true
 
@@ -2883,6 +3094,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.updateShutterCapabilityState(with: camera)
                 self.updateWhiteBalanceCapabilityState(with: camera)
                 self.updateFocusCapabilityState(with: camera)
+                self.applyStabilizerModeToConnections(reason: "switchCamera")
                 self.productAutoWhiteBalanceOptimizer.reset()
                 self.productAutoWhiteBalanceAppliedTemperature = nil
                 self.productAutoWhiteBalanceStatusText = self.isWhiteBalanceAutoSupported && self.isWhiteBalancePresetSupported
@@ -4841,6 +5053,18 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
     }
 
+    private func isCurrentDeviceRampingZoom() async -> Bool {
+        await withCheckedContinuation { continuation in
+            sessionQueue.async { [weak self] in
+                guard let self, let device = self.currentVideoInput?.device else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                continuation.resume(returning: device.isRampingVideoZoom)
+            }
+        }
+    }
+
     private var isPreviewInteractionTemporarilyRestricted: Bool {
         isSwitchingCamera || countdownSecondsRemaining != nil || isBurstCapturing || quickPreviewImage != nil
     }
@@ -5120,6 +5344,7 @@ struct CaptureLivePreviewView: View {
             ZStack {
                 CameraPreviewLayerView(
                     session: cameraRuntime.session,
+                    stabilizerMode: cameraRuntime.selectedStabilizerMode,
                     onTapPreview: { devicePoint, normalizedPoint in
                         if onTapPreviewBeforeFocus?() == true {
                             return
@@ -5280,6 +5505,7 @@ private struct CaptureAspectRatioGuideOverlay: View {
 
 private struct CameraPreviewLayerView: UIViewRepresentable {
     let session: AVCaptureSession
+    let stabilizerMode: CaptureStabilizerMode
     let onTapPreview: (CGPoint, CGPoint) -> Void
     let onLongPressPreview: (CGPoint, CGPoint) -> Void
 
@@ -5289,6 +5515,7 @@ private struct CameraPreviewLayerView: UIViewRepresentable {
         view.onTapPreview = onTapPreview
         view.onLongPressPreview = onLongPressPreview
         view.previewLayer.session = session
+        applyPreviewStabilization(to: view.previewLayer.connection)
         return view
     }
 
@@ -5297,6 +5524,19 @@ private struct CameraPreviewLayerView: UIViewRepresentable {
         uiView.onLongPressPreview = onLongPressPreview
         if uiView.previewLayer.session !== session {
             uiView.previewLayer.session = session
+        }
+        applyPreviewStabilization(to: uiView.previewLayer.connection)
+    }
+
+    private func applyPreviewStabilization(to connection: AVCaptureConnection?) {
+        guard let connection, connection.isVideoStabilizationSupported else { return }
+        switch stabilizerMode {
+        case .off:
+            connection.preferredVideoStabilizationMode = .off
+        case .standard:
+            connection.preferredVideoStabilizationMode = .auto
+        case .enhanced:
+            connection.preferredVideoStabilizationMode = .cinematic
         }
     }
 }

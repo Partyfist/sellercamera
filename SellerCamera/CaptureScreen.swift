@@ -459,6 +459,8 @@ struct CaptureScreen: View {
                     onCycleTimerOption: cameraRuntime.cycleTimerOption,
                     selectedBurstOption: cameraRuntime.selectedBurstOption,
                     onCycleBurstOption: cameraRuntime.cycleBurstOption,
+                    selectedStabilizerMode: cameraRuntime.selectedStabilizerMode,
+                    onCycleStabilizerMode: cameraRuntime.cycleStabilizerMode,
                     isImportingPhoto: isImportingPhoto,
                     onTapImport: {
                         guard !isImportingPhoto else { return }
@@ -796,12 +798,19 @@ private struct CaptureLensZoomControlPanel: View {
         VStack(spacing: 0) {
             CaptureZoomDialView(
                 values: lensZoomValues,
+                valueRange: cameraRuntime.lensZoomDialRange,
                 selectedIndex: selectedLensZoomIndex,
                 currentValueText: formatLensZoom(displayZoomValue),
                 majorTickIndexes: majorLensZoomIndexes,
                 isEnabled: true,
-                onStep: { direction in
-                    stepLensZoom(by: direction)
+                onEditingBegan: {
+                    cameraRuntime.beginLensZoomRulerInteraction()
+                },
+                onValueChanged: { value in
+                    dispatchLensZoomValue(value, isFinal: false)
+                },
+                onValueSettled: { value in
+                    dispatchLensZoomValue(value, isFinal: true)
                 }
             )
         }
@@ -840,25 +849,22 @@ private struct CaptureLensZoomControlPanel: View {
         }
     }
 
-    private func stepLensZoom(by direction: Int) -> Bool {
-        let values = lensZoomValues
-        guard !values.isEmpty else { return false }
-
-        let currentIndex = nearestLensZoomIndex(to: displayZoomValue, in: values)
-        let targetIndex = max(0, min(values.count - 1, currentIndex + direction))
-        guard targetIndex != currentIndex else { return false }
-
-        let targetValue = values[targetIndex]
-        if let lastDispatchedLensZoomValue, abs(lastDispatchedLensZoomValue - targetValue) < 0.001 {
-            return false
+    private func dispatchLensZoomValue(_ value: Double, isFinal: Bool) {
+        let range = cameraRuntime.lensZoomDialRange
+        let targetValue = max(range.lowerBound, min(range.upperBound, roundedLensZoomTarget(value)))
+        if !isFinal, let lastDispatchedLensZoomValue, abs(lastDispatchedLensZoomValue - targetValue) < 0.004 {
+            pendingLensZoomValue = targetValue
+            return
         }
-
         pendingLensZoomValue = targetValue
         lastDispatchedLensZoomValue = targetValue
         lastLensZoomPendingAt = Date()
         onFocusDial()
-        cameraRuntime.setLensZoomDialValue(targetValue)
-        return true
+        if isFinal {
+            cameraRuntime.endLensZoomRulerInteraction(finalDialValue: targetValue)
+        } else {
+            cameraRuntime.setLensZoomDialValueFromRuler(targetValue)
+        }
     }
 
     private func lensZoomRulerValues(range: ClosedRange<Double>, currentValue: Double) -> [Double] {
@@ -898,6 +904,10 @@ private struct CaptureLensZoomControlPanel: View {
 
     private func roundedLensZoom(_ value: Double) -> Double {
         (value * 10).rounded() / 10
+    }
+
+    private func roundedLensZoomTarget(_ value: Double) -> Double {
+        (value * 50).rounded() / 50
     }
 
     private func formatLensZoom(_ value: Double) -> String {
@@ -1596,6 +1606,8 @@ private struct CaptureMoreOptionsPanel: View {
     let onCycleTimerOption: () -> Void
     let selectedBurstOption: CaptureBurstOption
     let onCycleBurstOption: () -> Void
+    let selectedStabilizerMode: CaptureStabilizerMode
+    let onCycleStabilizerMode: () -> Void
     let isImportingPhoto: Bool
     let onTapImport: () -> Void
 
@@ -1622,6 +1634,14 @@ private struct CaptureMoreOptionsPanel: View {
                 systemImage: "level",
                 isActive: isLevelIndicatorEnabled,
                 action: onToggleLevelIndicator
+            )
+
+            moreOptionButton(
+                title: "稳定器 \(selectedStabilizerMode.displayText)",
+                subtitle: "减少手持抖动导致的模糊",
+                systemImage: "hand.raised.fill",
+                isActive: selectedStabilizerMode != .off,
+                action: onCycleStabilizerMode
             )
 
             moreOptionButton(
@@ -2070,19 +2090,21 @@ private struct CaptureLensControlStrip: View {
 
 private struct CaptureZoomDialView: View {
     let values: [Double]
+    let valueRange: ClosedRange<Double>
     let selectedIndex: Int
     let currentValueText: String
     let majorTickIndexes: Set<Int>
     let isEnabled: Bool
-    let onStep: (Int) -> Bool
+    let onEditingBegan: () -> Void
+    let onValueChanged: (Double) -> Void
+    let onValueSettled: (Double) -> Void
     @State private var dragOffset: CGFloat = 0
-    @State private var lastDragStepTranslation: CGFloat = 0
     @State private var isDragInProgress = false
-    @State private var lastStepAppliedAt: Date = .distantPast
-    @State private var lastDragDirection: Int = 0
     @State private var lastScrubSensitivity: CGFloat = 1
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
+    @State private var dragBaselineValue: Double?
+    @State private var lastEmittedZoomValue: Double?
     private let accent = Color(red: 0.20, green: 0.88, blue: 0.76)
     private let tickSpacing: CGFloat = 34
 
@@ -2112,7 +2134,6 @@ private struct CaptureZoomDialView: View {
                 DragGesture(minimumDistance: 4)
                     .onChanged { value in
                         guard isEnabled else { return }
-                        dragOffset = value.translation.width - lastDragStepTranslation
                         handleDrag(value.translation)
                     }
                     .onEnded { value in
@@ -2222,33 +2243,34 @@ private struct CaptureZoomDialView: View {
 
     private func handleDrag(_ translation: CGSize) {
         guard isEnabled else { return }
-        isDragInProgress = true
-
-        let threshold: CGFloat = 30
+        if !isDragInProgress {
+            isDragInProgress = true
+            dragBaselineValue = selectedZoomValue
+            lastEmittedZoomValue = nil
+            onEditingBegan()
+        }
         let sensitivity = scrubSensitivity(for: translation.height)
         lastScrubSensitivity = sensitivity
-        let effectiveThreshold = threshold / sensitivity
-        let translationWidth = translation.width
-        let delta = translationWidth - lastDragStepTranslation
-        let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
-        guard rawStepCount != 0 else { return }
+        dragOffset = translation.width.truncatingRemainder(dividingBy: tickSpacing)
 
-        let now = Date()
-        let rawDirection = rawStepCount > 0 ? 1 : -1
-        if lastDragDirection != 0, rawDirection != lastDragDirection {
-            lastStepAppliedAt = .distantPast
-        }
-        lastDragDirection = rawDirection
-        // Consume movement before cooldown so boundary/cooldown drags do not become residual reverse resistance.
-        lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
-        guard now.timeIntervalSince(lastStepAppliedAt) >= 0.08 else { return }
+        let rawZoom = mappedZoomValue(for: translation.width, sensitivity: sensitivity)
+        let smoothedZoom = smoothedZoomValue(rawZoom)
+        let emittedZoom = softSnappedZoomValue(smoothedZoom, final: false)
+        guard shouldEmitZoomValue(emittedZoom) else { return }
 
-        let clampedStepCount = max(-2, min(2, -rawStepCount))
-        let didApply = onStep(clampedStepCount)
-        guard didApply else { return }
-
-        lastStepAppliedAt = now
-        triggerGearHapticIfNeeded(step: clampedStepCount, at: now)
+#if DEBUG
+        print(
+            "[CaptureLensZoomRuler] " +
+            "dragDelta=\(String(format: "%.1f", translation.width)) " +
+            "sensitivity=\(String(format: "%.2f", sensitivity)) " +
+            "rawZoom=\(String(format: "%.3f", rawZoom)) " +
+            "smoothedZoom=\(String(format: "%.3f", smoothedZoom)) " +
+            "emittedZoom=\(String(format: "%.3f", emittedZoom))"
+        )
+#endif
+        lastEmittedZoomValue = emittedZoom
+        onValueChanged(emittedZoom)
+        triggerAnchorHapticIfNeeded(for: emittedZoom, at: Date())
     }
 
     private func finishDrag(
@@ -2257,15 +2279,15 @@ private struct CaptureZoomDialView: View {
         animateOffset: Bool
     ) {
         if isEnabled, let translationWidth, let predictedEndTranslationWidth {
-            applyInertiaStep(
+            applyInertiaSettle(
                 translationWidth: translationWidth,
                 predictedEndTranslationWidth: predictedEndTranslationWidth
             )
         }
         isDragInProgress = false
-        lastDragStepTranslation = 0
-        lastDragDirection = 0
         lastScrubSensitivity = 1
+        dragBaselineValue = nil
+        lastEmittedZoomValue = nil
         if animateOffset {
             withAnimation(.easeOut(duration: 0.12)) {
                 dragOffset = 0
@@ -2275,16 +2297,75 @@ private struct CaptureZoomDialView: View {
         }
     }
 
-    private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
-        guard lastScrubSensitivity >= 1 else { return }
+    private func applyInertiaSettle(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
+        let baseline = dragBaselineValue ?? selectedZoomValue
+        let sensitivity = max(0.1, lastScrubSensitivity)
         let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let rawStepCount = Int(((predictedDelta * 0.38) / 30).rounded(.towardZero))
-        let inertiaStepCount = max(-2, min(2, -rawStepCount))
-        guard inertiaStepCount != 0 else { return }
-        let didApply = onStep(inertiaStepCount)
-        if didApply {
-            triggerGearHapticIfNeeded(step: inertiaStepCount, at: Date())
+        let cappedInertiaDelta = max(-56, min(56, predictedDelta * 0.28))
+        let inertiaEnabled = sensitivity >= 1
+        let finalTranslation = translationWidth + (inertiaEnabled ? cappedInertiaDelta : 0)
+        let target = finalSnappedZoomValue(mappedZoomValue(
+            for: finalTranslation,
+            sensitivity: sensitivity,
+            baseline: baseline
+        ))
+        onValueSettled(target)
+        triggerAnchorHapticIfNeeded(for: target, at: Date(), force: true)
+    }
+
+    private var selectedZoomValue: Double {
+        guard values.indices.contains(selectedIndex) else {
+            return max(valueRange.lowerBound, min(valueRange.upperBound, 1.0))
         }
+        return values[selectedIndex]
+    }
+
+    private func mappedZoomValue(
+        for translationWidth: CGFloat,
+        sensitivity: CGFloat,
+        baseline explicitBaseline: Double? = nil
+    ) -> Double {
+        let baseline = explicitBaseline ?? dragBaselineValue ?? selectedZoomValue
+        let effectiveSensitivity = max(0.12, sensitivity)
+        let pointsPerZoom: CGFloat = baseline > 3.0 ? 210 : 132
+        let rawDelta = Double((-translationWidth / pointsPerZoom) * effectiveSensitivity)
+        var candidate = baseline + rawDelta
+        if candidate > 3.0 {
+            candidate = 3.0 + (candidate - 3.0) * 0.58
+        }
+        return clampedZoom(candidate)
+    }
+
+    private func smoothedZoomValue(_ rawZoom: Double) -> Double {
+        guard let lastEmittedZoomValue else { return rawZoom }
+        return clampedZoom(lastEmittedZoomValue * 0.58 + rawZoom * 0.42)
+    }
+
+    private func softSnappedZoomValue(_ zoom: Double, final: Bool) -> Double {
+        let threshold = final ? 0.065 : 0.026
+        guard let anchor = zoomAnchors.min(by: { abs($0 - zoom) < abs($1 - zoom) }),
+              abs(anchor - zoom) <= threshold else {
+            return clampedZoom(zoom)
+        }
+        let weight = final ? 1.0 : 0.46
+        return clampedZoom(zoom + (anchor - zoom) * weight)
+    }
+
+    private func finalSnappedZoomValue(_ zoom: Double) -> Double {
+        softSnappedZoomValue(zoom, final: true)
+    }
+
+    private var zoomAnchors: [Double] {
+        [0.5, 1.0, 2.0, 3.0].filter { $0 >= valueRange.lowerBound - 0.001 && $0 <= valueRange.upperBound + 0.001 }
+    }
+
+    private func clampedZoom(_ zoom: Double) -> Double {
+        max(valueRange.lowerBound, min(valueRange.upperBound, zoom))
+    }
+
+    private func shouldEmitZoomValue(_ value: Double) -> Bool {
+        guard let lastEmittedZoomValue else { return true }
+        return abs(lastEmittedZoomValue - value) >= 0.006
     }
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
@@ -2295,10 +2376,12 @@ private struct CaptureZoomDialView: View {
         return 2.2
     }
 
-    private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
-        let signature = "lens-\(selectedIndex)-\(step)"
+    private func triggerAnchorHapticIfNeeded(for zoom: Double, at now: Date, force: Bool = false) {
+        guard let anchor = zoomAnchors.min(by: { abs($0 - zoom) < abs($1 - zoom) }) else { return }
+        guard force || abs(anchor - zoom) <= 0.035 else { return }
+        let signature = "lens-anchor-\(String(format: "%.1f", anchor))"
         guard signature != lastHapticSignature else { return }
-        guard now.timeIntervalSince(lastHapticAt) >= 0.08 else { return }
+        guard now.timeIntervalSince(lastHapticAt) >= 0.12 else { return }
         lastHapticSignature = signature
         lastHapticAt = now
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
