@@ -370,6 +370,7 @@ struct CaptureLensProfile: Identifiable, Equatable {
     }
 
     enum Source: String {
+        case virtual
         case physical
         case derived
     }
@@ -491,6 +492,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private static let wideLensBoundaryHeadroom: CGFloat = 1.06
     private static let teleLensBoundaryHeadroom: CGFloat = 1.06
     private static let lensZoomSnapThresholdBase: CGFloat = 0.03
+    private static let lensZoomRampRate: Float = 7.0
+    private static let closeFocusFallbackCooldown: TimeInterval = 5.0
+    private static let closeFocusFallbackDelay: TimeInterval = 0.22
 
     @Published var latestStillPhotoResult: CaptureStillPhotoResult?
     @Published var latestCaptureStatusText = "未拍摄"
@@ -611,6 +615,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var lastProductFocusAssistAt = Date.distantPast
     private var lastUserFocusInteractionAt = Date.distantPast
     private var lastManualFocusInteractionAt = Date.distantPast
+    private var lastCloseFocusFallbackAt = Date.distantPast
     private var productSharpnessBlurryHitCount = 0
     private var productSharpnessSharpHitCount = 0
     private var isProductFocusAssistSuppressedByManualFocusUI = false
@@ -1772,19 +1777,28 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     var currentLensZoomMultiplier: CGFloat {
         guard let profile = selectedLensProfile else { return 1.0 }
+        if profile.source == .virtual {
+            return currentZoomFactor
+        }
         let base = max(1.0, profile.baseZoomFactor)
         return max(1.0, currentZoomFactor / base)
     }
 
     var currentLensMaximumZoomMultiplier: CGFloat {
         guard let profile = selectedLensProfile else { return 1.0 }
+        if profile.source == .virtual {
+            return max(minimumZoomFactor, maximumZoomFactor)
+        }
         let base = max(1.0, profile.baseZoomFactor)
         let absoluteMax = max(base, maximumZoomFactor)
         return max(1.0, absoluteMax / base)
     }
 
     var lensZoomDialRange: ClosedRange<Double> {
-        1.0...Double(currentLensMaximumZoomMultiplier)
+        if selectedLensProfile?.source == .virtual {
+            return Double(minimumZoomFactor)...Double(max(minimumZoomFactor, maximumZoomFactor))
+        }
+        return 1.0...Double(currentLensMaximumZoomMultiplier)
     }
 
     var lensZoomDialValue: Double {
@@ -1803,6 +1817,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         selectedLensProfile?.semanticFocal
     }
 
+    private var isActiveBackVirtualCamera: Bool {
+        activeCameraPosition == .back && Self.isVirtualBackCameraDeviceType(activeCameraDeviceType)
+    }
+
     var semanticFocalCapabilities: [CaptureSemanticFocalCapability] {
         CaptureSemanticFocal.allCases.map { focal in
             guard activeCameraPosition == .back, let profile = lensProfile(for: focal) else {
@@ -1817,7 +1835,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             let availability: CaptureSemanticFocalAvailability = (profile.source == .physical)
                 ? .physical
                 : .derived
-            let base = max(1.0, profile.baseZoomFactor)
+            let base = profile.source == .virtual ? 1.0 : max(1.0, profile.baseZoomFactor)
             let absoluteMax = max(base, min(activeDeviceMaximumZoomFactor, profile.lensMaxZoomFactor))
             let multiplierMax = max(1.0, absoluteMax / base)
 
@@ -1843,6 +1861,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 preferredDeviceType: profile.preferredDeviceType,
                 preferredLensID: profile.id
             )
+            return
+        }
+
+        if profile.source == .virtual, isActiveBackVirtualCamera {
+            applyLensSelection(profile, shouldShowHint: true)
             return
         }
 
@@ -1883,6 +1906,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             setZoomFactor(zoomMultiplier)
             return
         }
+        if profile.source == .virtual {
+            let clampedZoom = max(minimumZoomFactor, min(maximumZoomFactor, zoomMultiplier))
+            setZoomFactor(clampedZoom, ramped: true, reason: "virtualLensRuler")
+            return
+        }
         let clampedMultiplier = max(1.0, min(currentLensMaximumZoomMultiplier, zoomMultiplier))
         let quantizedMultiplier = quantizedLensZoomMultiplier(
             clampedMultiplier,
@@ -1898,7 +1926,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
         clearTele77StabilizationState()
         let targetZoom = profile.baseZoomFactor * snappedMultiplier
-        setZoomFactor(targetZoom)
+        setZoomFactor(targetZoom, ramped: true, reason: "lensRuler")
     }
 
     func cycleZoomPreset() {
@@ -1911,10 +1939,14 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         guard !available.isEmpty else { return }
         let current = currentZoomFactor
         let next = available.first(where: { $0 > current + 0.05 }) ?? available[0]
-        setZoomFactor(next)
+        setZoomFactor(next, ramped: true, reason: "cyclePreset")
     }
 
-    func setZoomFactor(_ requestedZoom: CGFloat) {
+    func setZoomFactor(
+        _ requestedZoom: CGFloat,
+        ramped: Bool = true,
+        reason: String = "direct"
+    ) {
         guard !isSwitchingCamera, countdownSecondsRemaining == nil, !isBurstCapturing, quickPreviewImage == nil else {
             return
         }
@@ -1924,7 +1956,31 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             guard let device = self.currentVideoInput?.device else { return }
             do {
                 try device.lockForConfiguration()
-                device.videoZoomFactor = clamped
+                if device.isRampingVideoZoom {
+                    device.cancelVideoZoomRamp()
+                }
+                if ramped, abs(device.videoZoomFactor - clamped) > 0.015 {
+                    device.ramp(toVideoZoomFactor: clamped, withRate: Self.lensZoomRampRate)
+                } else {
+                    device.videoZoomFactor = clamped
+                }
+#if DEBUG
+                let switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors
+                    .map { String(format: "%.2f", CGFloat(truncating: $0)) }
+                    .joined(separator: ",")
+                print(
+                    "[CaptureLensZoom] " +
+                    "reason=\(reason) " +
+                    "device=\(device.localizedName) " +
+                    "type=\(device.deviceType.rawValue) " +
+                    "target=\(String(format: "%.2f", clamped)) " +
+                    "actual=\(String(format: "%.2f", device.videoZoomFactor)) " +
+                    "ramped=\(ramped) " +
+                    "min=\(String(format: "%.2f", device.minAvailableVideoZoomFactor)) " +
+                    "max=\(String(format: "%.2f", device.maxAvailableVideoZoomFactor)) " +
+                    "switchOver=[\(switchFactors)]"
+                )
+#endif
                 device.unlockForConfiguration()
                 DispatchQueue.main.async {
                     self.currentZoomFactor = clamped
@@ -2606,7 +2662,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
             let captureID = UUID()
             let settings = AVCapturePhotoSettings()
-            settings.photoQualityPrioritization = .quality
+            settings.photoQualityPrioritization = self.preferredPhotoQualityPrioritization()
 
             if self.isFlashModeSupported {
                 settings.flashMode = self.selectedFlashMode.avFlashMode
@@ -2625,6 +2681,19 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
             self.pendingCaptureDelegates[captureID] = proxy
             self.photoOutput.capturePhoto(with: settings, delegate: proxy)
+        }
+    }
+
+    private func preferredPhotoQualityPrioritization() -> AVCapturePhotoOutput.QualityPrioritization {
+        switch photoOutput.maxPhotoQualityPrioritization {
+        case .quality:
+            return .quality
+        case .balanced:
+            return .balanced
+        case .speed:
+            return .speed
+        @unknown default:
+            return photoOutput.maxPhotoQualityPrioritization
         }
     }
 
@@ -2655,8 +2724,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 defer { self.session.commitConfiguration() }
 
                 guard let backCamera = self.resolveCamera(
-                    position: .back,
-                    preferredDeviceType: .builtInWideAngleCamera
+                    position: .back
                 ),
                       let input = try? AVCaptureDeviceInput(device: backCamera),
                       self.session.canAddInput(input),
@@ -2675,6 +2743,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 let frontAvailable = self.resolveCamera(position: .front) != nil
                 let maxZoom = self.normalizedDeviceMaxZoom(for: backCamera)
                 let rawSupported = !self.photoOutput.availableRawPhotoPixelFormatTypes.isEmpty
+                self.logLensDeviceState(backCamera, uiFocalLabel: nil, reason: "configureSession")
 
                 DispatchQueue.main.async {
                     self.activeCameraPosition = .back
@@ -2782,9 +2851,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
             let maxZoom = self.normalizedDeviceMaxZoom(for: camera)
             let rawSupported = !self.photoOutput.availableRawPhotoPixelFormatTypes.isEmpty
+            self.logLensDeviceState(camera, uiFocalLabel: preferredLensID, reason: "switchCamera")
             do {
                 try camera.lockForConfiguration()
-                camera.videoZoomFactor = 1.0
+                camera.videoZoomFactor = max(1.0, camera.minAvailableVideoZoomFactor)
                 camera.unlockForConfiguration()
             } catch {
                 // Keep minimum stable zoom.
@@ -3269,6 +3339,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         if let preferredLensID,
            let preferred = profiles.first(where: { $0.id == preferredLensID }) {
             selectedProfile = preferred
+        } else if Self.isVirtualBackCameraDeviceType(activeDevice.deviceType),
+                  let defaultVirtualWide = profiles.first(where: { $0.source == .virtual && $0.semanticFocal == .mm24 }) {
+            selectedProfile = defaultVirtualWide
         } else if let matchedByDevice = profiles.first(where: { $0.preferredDeviceType == activeDevice.deviceType }) {
             selectedProfile = matchedByDevice
         } else {
@@ -3284,6 +3357,19 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     ) {
         configureTele77Stabilization(for: profile)
         selectedLensProfileID = profile.id
+        if profile.source == .virtual {
+            let lower = minimumAvailableZoomForCurrentDevice()
+            let upper = max(lower, min(activeDeviceMaximumZoomFactor, profile.lensMaxZoomFactor))
+            minimumZoomFactor = lower
+            maximumZoomFactor = upper
+            let targetZoom = max(lower, min(upper, profile.baseZoomFactor))
+            currentZoomFactor = targetZoom
+            setZoomFactor(targetZoom, ramped: shouldShowHint, reason: "semanticFocal:\(profile.displayText)")
+            if shouldShowHint {
+                captureHintText = "焦段 \(profile.displayText)"
+            }
+            return
+        }
         minimumZoomFactor = max(1.0, profile.baseZoomFactor)
         maximumZoomFactor = max(
             minimumZoomFactor,
@@ -3308,6 +3394,13 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 }
             }
         }
+    }
+
+    private func minimumAvailableZoomForCurrentDevice() -> CGFloat {
+        if let device = currentVideoInput?.device {
+            return max(1.0, device.minAvailableVideoZoomFactor)
+        }
+        return max(1.0, minimumZoomFactor)
     }
 
     private func shouldUseTele77StabilizationWindow(for profile: CaptureLensProfile) -> Bool {
@@ -3370,7 +3463,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         tele77PendingMultiplier = nil
         tele77LastWriteTimestamp = nowTimestamp()
         let targetZoom = profile.baseZoomFactor * pending
-        setZoomFactor(targetZoom)
+        setZoomFactor(targetZoom, ramped: true, reason: "tele77Stabilized")
     }
 
     private func nowTimestamp() -> TimeInterval {
@@ -3397,6 +3490,65 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
         let backDevices = discoverCameras(position: .back)
         var profiles: [CaptureLensProfile] = []
+
+        if let virtualBack = preferredVirtualBackCamera(in: backDevices) {
+            let virtualMaxZoom = normalizedDeviceMaxZoom(for: virtualBack)
+            let teleTarget = min(max(3.0, virtualBack.maxAvailableVideoZoomFactor >= 3.0 ? 3.0 : virtualMaxZoom), virtualMaxZoom)
+            let virtualProfiles: [CaptureLensProfile] = [
+                CaptureLensProfile(
+                    id: "virtual-13",
+                    kind: .ultraWide,
+                    source: .virtual,
+                    position: .back,
+                    semanticFocal: .mm13,
+                    displayText: "13mm",
+                    menuText: "超广角 13mm",
+                    preferredDeviceType: virtualBack.deviceType,
+                    baseZoomFactor: 0.5,
+                    lensMaxZoomFactor: virtualMaxZoom
+                ),
+                CaptureLensProfile(
+                    id: "virtual-24",
+                    kind: .wide,
+                    source: .virtual,
+                    position: .back,
+                    semanticFocal: .mm24,
+                    displayText: "24mm",
+                    menuText: "主摄 24mm",
+                    preferredDeviceType: virtualBack.deviceType,
+                    baseZoomFactor: 1.0,
+                    lensMaxZoomFactor: virtualMaxZoom
+                ),
+                CaptureLensProfile(
+                    id: "virtual-48",
+                    kind: .wide,
+                    source: .virtual,
+                    position: .back,
+                    semanticFocal: .mm48,
+                    displayText: "48mm",
+                    menuText: "主摄 48mm",
+                    preferredDeviceType: virtualBack.deviceType,
+                    baseZoomFactor: 2.0,
+                    lensMaxZoomFactor: virtualMaxZoom
+                ),
+                CaptureLensProfile(
+                    id: "virtual-77",
+                    kind: .tele,
+                    source: .virtual,
+                    position: .back,
+                    semanticFocal: .mm77,
+                    displayText: "77mm",
+                    menuText: "长焦 77mm",
+                    preferredDeviceType: virtualBack.deviceType,
+                    baseZoomFactor: teleTarget,
+                    lensMaxZoomFactor: virtualMaxZoom
+                )
+            ]
+
+            return virtualProfiles.filter { profile in
+                profile.baseZoomFactor <= virtualMaxZoom + 0.01 || profile.semanticFocal == .mm13
+            }
+        }
 
         if let ultraWide = backDevices.first(where: { $0.deviceType == .builtInUltraWideCamera }) {
             profiles.append(
@@ -3489,12 +3641,12 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     private func discoverCameras(position: AVCaptureDevice.Position) -> [AVCaptureDevice] {
         let types: [AVCaptureDevice.DeviceType] = [
-            .builtInWideAngleCamera,
-            .builtInUltraWideCamera,
-            .builtInTelephotoCamera,
             .builtInTripleCamera,
             .builtInDualWideCamera,
-            .builtInDualCamera
+            .builtInDualCamera,
+            .builtInWideAngleCamera,
+            .builtInUltraWideCamera,
+            .builtInTelephotoCamera
         ]
 
         return AVCaptureDevice.DiscoverySession(
@@ -3510,6 +3662,42 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             1.0,
             min(device.activeFormat.videoMaxZoomFactor, device.maxAvailableVideoZoomFactor)
         )
+    }
+
+    private func logLensDeviceState(
+        _ device: AVCaptureDevice,
+        uiFocalLabel: String?,
+        reason: String
+    ) {
+#if DEBUG
+        let switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors
+            .map { String(format: "%.2f", CGFloat(truncating: $0)) }
+            .joined(separator: ",")
+        print(
+            "[CaptureLensDevice] " +
+            "reason=\(reason) " +
+            "activeDevice=\(device.localizedName) " +
+            "deviceType=\(device.deviceType.rawValue) " +
+            "virtualSwitchOver=[\(switchFactors)] " +
+            "minZoom=\(String(format: "%.2f", device.minAvailableVideoZoomFactor)) " +
+            "maxZoom=\(String(format: "%.2f", device.maxAvailableVideoZoomFactor)) " +
+            "videoZoom=\(String(format: "%.2f", device.videoZoomFactor)) " +
+            "uiFocal=\(uiFocalLabel ?? selectedLensProfile?.displayText ?? "nil")"
+        )
+#endif
+    }
+
+    private static func isVirtualBackCameraDeviceType(_ deviceType: AVCaptureDevice.DeviceType?) -> Bool {
+        guard let deviceType else { return false }
+        return deviceType == .builtInTripleCamera
+            || deviceType == .builtInDualWideCamera
+            || deviceType == .builtInDualCamera
+    }
+
+    private func preferredVirtualBackCamera(in devices: [AVCaptureDevice]) -> AVCaptureDevice? {
+        devices.first(where: { $0.deviceType == .builtInTripleCamera })
+            ?? devices.first(where: { $0.deviceType == .builtInDualWideCamera })
+            ?? devices.first(where: { $0.deviceType == .builtInDualCamera })
     }
 
     private func maximumSupportedPhotoLongEdge(for device: AVCaptureDevice) -> Int {
@@ -3634,10 +3822,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
 
         if position == .back {
-            return cameras.first(where: { $0.deviceType == .builtInWideAngleCamera })
-                ?? cameras.first(where: { $0.deviceType == .builtInTripleCamera })
-                ?? cameras.first(where: { $0.deviceType == .builtInDualWideCamera })
-                ?? cameras.first(where: { $0.deviceType == .builtInDualCamera })
+            return preferredVirtualBackCamera(in: cameras)
+                ?? cameras.first(where: { $0.deviceType == .builtInWideAngleCamera })
                 ?? cameras.first(where: { $0.deviceType == .builtInUltraWideCamera })
                 ?? cameras.first(where: { $0.deviceType == .builtInTelephotoCamera })
                 ?? cameras.first
@@ -4540,6 +4726,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 if isStillAdjustingAtTimeout {
                     self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .warning)
                     self.captureHintText = "对焦偏慢"
+                    if source == .tap {
+                        self.triggerCloseFocusFallbackIfNeeded(normalizedPoint: normalizedPoint)
+                    }
 #if DEBUG
                     print(
                         "[CaptureTapFocus] timeout=true " +
@@ -4588,6 +4777,56 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 #endif
             }
         }
+    }
+
+    private func triggerCloseFocusFallbackIfNeeded(normalizedPoint: CGPoint) {
+        let now = Date()
+        guard activeCameraPosition == .back else { return }
+        guard focusControlMode != .manual else { return }
+        guard !isFocusExposureLocked, !isExposureLocked else { return }
+        guard !isPreviewInteractionTemporarilyRestricted, !isSwitchingCamera else { return }
+        guard selectedSemanticFocal != .mm77 else { return }
+        guard now.timeIntervalSince(lastCloseFocusFallbackAt) >= Self.closeFocusFallbackCooldown else { return }
+        guard let device = currentVideoInput?.device else { return }
+        let canUseVirtualOrUltraWide = Self.isVirtualBackCameraDeviceType(device.deviceType)
+            || discoverCameras(position: .back).contains(where: { $0.deviceType == .builtInUltraWideCamera })
+        guard canUseVirtualOrUltraWide else { return }
+
+        lastCloseFocusFallbackAt = now
+        let stableZoom = closeFocusFallbackZoomTarget(for: device)
+#if DEBUG
+        print(
+            "[CaptureLensMacroFallback] " +
+            "trigger=focusTimeout " +
+            "device=\(device.localizedName) " +
+            "type=\(device.deviceType.rawValue) " +
+            "currentZoom=\(String(format: "%.2f", currentZoomFactor)) " +
+            "targetZoom=\(String(format: "%.2f", stableZoom)) " +
+            "iso=\(String(format: "%.1f", Double(currentISOValue))) " +
+            "shutter=\(String(format: "%.5f", currentShutterDurationSeconds))"
+        )
+#endif
+        captureHintText = "近距辅助对焦"
+        setZoomFactor(stableZoom, ramped: true, reason: "closeFocusFallback")
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.closeFocusFallbackDelay) { [weak self] in
+            guard let self else { return }
+            guard self.focusControlMode != .manual else { return }
+            guard !self.isFocusExposureLocked, !self.isExposureLocked else { return }
+            guard !self.isPreviewInteractionTemporarilyRestricted, !self.isSwitchingCamera else { return }
+            self.applyFocusExposure(
+                devicePoint: normalizedPoint,
+                normalizedPoint: normalizedPoint,
+                lockAfterFocus: false,
+                source: .tap
+            )
+        }
+    }
+
+    private func closeFocusFallbackZoomTarget(for device: AVCaptureDevice) -> CGFloat {
+        let minZoom = max(1.0, device.minAvailableVideoZoomFactor)
+        let maxZoom = max(minZoom, min(device.maxAvailableVideoZoomFactor, activeDeviceMaximumZoomFactor))
+        // Virtual multi-camera devices can choose their best constituent lens around the stable wide range.
+        return max(minZoom, min(maxZoom, 1.0))
     }
 
     private func isCurrentDeviceAdjustingFocus() async -> Bool {

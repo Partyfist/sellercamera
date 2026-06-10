@@ -86,3 +86,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R76G MF Ruler 真机手感稳定性收口报告：`docs/reports/r76g_mf_ruler_stability_closure.md`
 - R77 拍照基础体验收口报告：`docs/reports/r77_camera_capture_foundation_closure.md`
 - R77A 拍摄参数实时显示与原生级点击对焦优化报告：`docs/reports/r77a_realtime_parameter_display_native_focus_polish.md`
+- R77B 原生式镜头系统收口报告：`docs/reports/r77b_native_lens_virtual_zoom_macro_closure.md`
