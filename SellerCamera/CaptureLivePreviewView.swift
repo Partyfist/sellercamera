@@ -258,13 +258,17 @@ enum CapturePhotoAspectRatioPreset: CaseIterable {
 }
 
 enum CapturePhotoPixelPreset: CaseIterable {
+    case best
     case p800
     case p1200
     case p1600
     case p2400
+    case raw
 
-    var longEdgePixels: Int {
+    var fixedLongEdgePixels: Int? {
         switch self {
+        case .best, .raw:
+            return nil
         case .p800:
             return 800
         case .p1200:
@@ -277,12 +281,28 @@ enum CapturePhotoPixelPreset: CaseIterable {
     }
 
     var shortLabel: String {
-        "\(longEdgePixels)"
+        switch self {
+        case .best:
+            return "best"
+        case .raw:
+            return "raw"
+        case .p800, .p1200, .p1600, .p2400:
+            return "\(fixedLongEdgePixels ?? 0)"
+        }
     }
 
-    func outputPixelSize(for ratio: CGFloat) -> CGSize {
+    var requiresRawSupport: Bool {
+        self == .raw
+    }
+
+    var usesFixedOutputSize: Bool {
+        fixedLongEdgePixels != nil
+    }
+
+    func fixedOutputPixelSize(for ratio: CGFloat) -> CGSize? {
+        guard let fixedLongEdgePixels else { return nil }
         let safeRatio = max(0.01, ratio)
-        let longEdge = CGFloat(longEdgePixels)
+        let longEdge = CGFloat(fixedLongEdgePixels)
         let width: CGFloat
         let height: CGFloat
         if safeRatio >= 1 {
@@ -299,7 +319,16 @@ enum CapturePhotoPixelPreset: CaseIterable {
     }
 
     func displayText(for ratio: CGFloat) -> String {
-        let size = outputPixelSize(for: ratio)
+        guard let size = fixedOutputPixelSize(for: ratio) else {
+            switch self {
+            case .best:
+                return "最佳质量"
+            case .raw:
+                return "RAW"
+            case .p800, .p1200, .p1600, .p2400:
+                return "最佳质量"
+            }
+        }
         return "\(Int(size.width))×\(Int(size.height))"
     }
 }
@@ -429,7 +458,9 @@ enum CaptureFocusControlMode {
 
 struct CaptureFocusMarker: Identifiable {
     enum Mode: Equatable {
-        case auto
+        case focusing
+        case focused
+        case warning
         case locked
         case unlocked
     }
@@ -510,6 +541,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var currentManualShutterDurationSeconds: Double = 1.0 / 120.0
     @Published var selectedAspectRatioPreset: CapturePhotoAspectRatioPreset = .ratio3x4
     @Published var selectedPixelPreset: CapturePhotoPixelPreset = .p1600
+    @Published var isRAWCaptureSupported = false
     @Published var isManualFocusSupported = false
     @Published var canSwitchCamera = false
     @Published var activeCameraPosition: AVCaptureDevice.Position = .back
@@ -560,6 +592,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var countdownTask: Task<Void, Never>?
     private var burstTask: Task<Void, Never>?
     private var quickPreviewHideTask: Task<Void, Never>?
+    private var focusFeedbackTask: Task<Void, Never>?
     private var lastAppliedManualFocusPosition: Float?
     private var tele77StabilizationUntil: TimeInterval = 0
     private var tele77LastWriteTimestamp: TimeInterval = 0
@@ -591,6 +624,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private let productSharpnessDebugLogInterval: TimeInterval = 1.0
     private let productFocusAssistCooldown: TimeInterval = 7.0
     private let productFocusAssistManualCooldown: TimeInterval = 6.0
+    private let tapFocusThrottleInterval: TimeInterval = 0.28
+    private let tapFocusSettleDelay: TimeInterval = 0.45
+    private let tapFocusTimeout: TimeInterval = 1.45
 
     private let motionManager = CMMotionManager()
     private var levelMotionStarted = false
@@ -599,6 +635,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         countdownTask?.cancel()
         burstTask?.cancel()
         quickPreviewHideTask?.cancel()
+        focusFeedbackTask?.cancel()
         videoOutput.setSampleBufferDelegate(nil, queue: nil)
         motionManager.stopDeviceMotionUpdates()
     }
@@ -1393,10 +1430,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         _ preset: CapturePhotoPixelPreset,
         shouldShowHint: Bool
     ) {
+        if preset.requiresRawSupport, !isRAWCaptureSupported {
+            captureHintText = "当前设备不支持 RAW"
+            return
+        }
         if selectedPixelPreset == preset { return }
         selectedPixelPreset = preset
         if shouldShowHint {
-            captureHintText = "像素：\(preset.displayText(for: selectedAspectRatioPreset.ratioValue))"
+            if preset == .raw {
+                captureHintText = "RAW：设备支持，当前保留最佳预览；RAW 文件保存后续接入"
+            } else if preset == .best {
+                captureHintText = "像素：最佳质量，不做固定长边压缩"
+            } else {
+                captureHintText = "像素：\(preset.displayText(for: selectedAspectRatioPreset.ratioValue))"
+            }
         }
     }
 
@@ -1529,6 +1576,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func setManualFocusLensPosition(_ requestedLensPosition: Float) {
+        focusFeedbackTask?.cancel()
+        focusFeedbackTask = nil
+        focusMarker = nil
         lastManualFocusInteractionAt = Date()
         productSharpnessBlurryHitCount = 0
         hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
@@ -1586,6 +1636,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func restoreAutofocusMode() {
+        focusFeedbackTask?.cancel()
+        focusFeedbackTask = nil
         isProductFocusAssistSuppressedByManualFocusUI = false
         lastManualFocusInteractionAt = Date()
         guard !isPreviewInteractionTemporarilyRestricted else {
@@ -1620,6 +1672,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func setProductFocusAssistManualSuppression(_ isSuppressed: Bool) {
+        if isSuppressed {
+            focusFeedbackTask?.cancel()
+            focusFeedbackTask = nil
+            focusMarker = nil
+        }
         isProductFocusAssistSuppressedByManualFocusUI = isSuppressed
         lastManualFocusInteractionAt = Date()
         productSharpnessBlurryHitCount = 0
@@ -1897,7 +1954,12 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     func handlePreviewTap(devicePoint: CGPoint, normalizedPoint: CGPoint) {
-        lastUserFocusInteractionAt = Date()
+        let now = Date()
+        guard now.timeIntervalSince(lastUserFocusInteractionAt) >= tapFocusThrottleInterval else {
+            captureHintText = "正在对焦，请稍候"
+            return
+        }
+        lastUserFocusInteractionAt = now
         productSharpnessBlurryHitCount = 0
         hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
         guard !isPreviewInteractionTemporarilyRestricted else {
@@ -1914,7 +1976,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .locked)
             return
         }
-        focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .auto)
+        focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .focusing)
+        captureHintText = isExposureLocked ? "正在对焦，AE-L 保持" : "正在对焦与测光"
         applyFocusExposure(
             devicePoint: devicePoint,
             normalizedPoint: normalizedPoint,
@@ -2355,10 +2418,13 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             burstProgressText = "连拍 \(shotIndex)/\(totalCount)"
             captureHintText = "连拍进行中 \(shotIndex)/\(totalCount)"
         } else {
-            captureHintText = "拍摄成功，可快速复核"
+            captureHintText = "拍摄成功，可继续拍摄"
         }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        quickPreviewHideTask?.cancel()
+        quickPreviewHideTask = nil
+        quickPreviewImage = nil
         refreshStatusSummary()
-        showQuickPreview(for: outputAdjustedResult)
     }
 
     private func applySelectedOutputPresetsIfNeeded(
@@ -2402,20 +2468,26 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             }
         }
 
-        let targetPixelSize = selectedPixelPreset.outputPixelSize(for: targetRatio)
-        let targetWidth = Int(targetPixelSize.width)
-        let targetHeight = Int(targetPixelSize.height)
-        if targetWidth > 1, targetHeight > 1,
-           (workingCGImage.width != targetWidth || workingCGImage.height != targetHeight),
-           let resizedCGImage = resizedCGImage(from: workingCGImage, to: targetPixelSize) {
-            workingCGImage = resizedCGImage
-            didMutateImage = true
+        if let targetPixelSize = selectedPixelPreset.fixedOutputPixelSize(for: targetRatio) {
+            let targetWidth = Int(targetPixelSize.width)
+            let targetHeight = Int(targetPixelSize.height)
+            if targetWidth > 1, targetHeight > 1,
+               (workingCGImage.width != targetWidth || workingCGImage.height != targetHeight),
+               let resizedCGImage = resizedCGImage(from: workingCGImage, to: targetPixelSize) {
+                workingCGImage = resizedCGImage
+                didMutateImage = true
+            }
         }
 
         var mergedMetadata = result.metadata
         mergedMetadata["capture_aspect_ratio"] = selectedAspectRatioPreset.displayText
         mergedMetadata["capture_aspect_ratio_value"] = String(format: "%.4f", selectedAspectRatioPreset.ratioValue)
         mergedMetadata["capture_pixel_preset"] = selectedPixelPreset.shortLabel
+        mergedMetadata["capture_pixel_strategy"] = selectedPixelPreset.usesFixedOutputSize ? "fixed_long_edge" : "best_available"
+        if selectedPixelPreset == .raw {
+            mergedMetadata["capture_raw_requested"] = "true"
+            mergedMetadata["capture_raw_file_saved"] = "false"
+        }
         mergedMetadata["capture_output_size"] = "\(workingCGImage.width)x\(workingCGImage.height)"
 
         guard didMutateImage else {
@@ -2534,6 +2606,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
             let captureID = UUID()
             let settings = AVCapturePhotoSettings()
+            settings.photoQualityPrioritization = .quality
 
             if self.isFlashModeSupported {
                 settings.flashMode = self.selectedFlashMode.avFlashMode
@@ -2601,6 +2674,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
                 let frontAvailable = self.resolveCamera(position: .front) != nil
                 let maxZoom = self.normalizedDeviceMaxZoom(for: backCamera)
+                let rawSupported = !self.photoOutput.availableRawPhotoPixelFormatTypes.isEmpty
 
                 DispatchQueue.main.async {
                     self.activeCameraPosition = .back
@@ -2611,6 +2685,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     self.activeDeviceMaximumZoomFactor = maxZoom
                     self.maximumZoomFactor = maxZoom
                     self.currentZoomFactor = 1.0
+                    self.isRAWCaptureSupported = rawSupported
                     self.refreshLensProfiles(
                         position: .back,
                         activeDevice: backCamera,
@@ -2706,6 +2781,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             self.session.commitConfiguration()
 
             let maxZoom = self.normalizedDeviceMaxZoom(for: camera)
+            let rawSupported = !self.photoOutput.availableRawPhotoPixelFormatTypes.isEmpty
             do {
                 try camera.lockForConfiguration()
                 camera.videoZoomFactor = 1.0
@@ -2722,6 +2798,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.activeDeviceMaximumZoomFactor = maxZoom
                 self.maximumZoomFactor = maxZoom
                 self.currentZoomFactor = 1.0
+                self.isRAWCaptureSupported = rawSupported
+                if !rawSupported, self.selectedPixelPreset == .raw {
+                    self.selectedPixelPreset = .best
+                }
                 self.isFlashModeSupported = camera.hasFlash
                 self.refreshLensProfiles(
                     position: position,
@@ -3590,6 +3670,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     private func clearTransientCaptureStates(clearCountdown: Bool) {
+        focusFeedbackTask?.cancel()
+        focusFeedbackTask = nil
         focusMarker = nil
         quickPreviewHideTask?.cancel()
         quickPreviewHideTask = nil
@@ -3847,6 +3929,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     lastProductFocusAssistAt = now
                     hasProductFocusAssistTriggeredForCurrentBlurEpisode = true
                     productSharpnessStatusText = "正在辅助对焦"
+                    focusMarker = CaptureFocusMarker(normalizedPoint: CGPoint(x: 0.5, y: 0.5), mode: .focusing)
                     autoFocusResult = "triggered"
                     applyFocusExposure(
                         devicePoint: CGPoint(x: 0.5, y: 0.5),
@@ -4133,6 +4216,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let shutterPresetSnapshot = selectedShutterPreset
         let isoPresetSnapshot = selectedISOPreset
         let manualShutterSecondsSnapshot = currentManualShutterDurationSeconds
+        let manualISOSnapshot = currentManualISOValue
 
         let isShutterAutoSnapshot: Bool = {
             if case .auto = shutterPresetSnapshot {
@@ -4159,6 +4243,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 if device.isFocusPointOfInterestSupported {
                     device.focusPointOfInterest = devicePoint
                 }
+                if device.isSmoothAutoFocusSupported {
+                    device.isSmoothAutoFocusEnabled = false
+                }
                 if lockAfterFocus {
                     if device.isFocusModeSupported(.locked) {
                         device.focusMode = .locked
@@ -4177,13 +4264,19 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 }
 
                 let shouldPreserveExposureLock = exposureLockSnapshot && !lockAfterFocus
+                let shouldPreserveFullManualExposure = !isShutterAutoSnapshot
+                    && !isISOAutoSnapshot
+                    && !lockAfterFocus
+                    && !shouldPreserveExposureLock
                 let shouldPreserveManualShutter = !isShutterAutoSnapshot
                     && !lockAfterFocus
                     && !shouldPreserveExposureLock
+                    && !shouldPreserveFullManualExposure
                     && isISOAutoSnapshot
                 let shouldPreserveManualISO = !isISOAutoSnapshot
                     && !lockAfterFocus
                     && !shouldPreserveExposureLock
+                    && !shouldPreserveFullManualExposure
                     && !shouldPreserveManualShutter
                 if device.isExposurePointOfInterestSupported, !shouldPreserveExposureLock {
                     device.exposurePointOfInterest = devicePoint
@@ -4199,6 +4292,33 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     }
                 } else if shouldPreserveExposureLock, device.isExposureModeSupported(.locked) {
                     device.exposureMode = .locked
+                    didApplyAny = true
+                } else if shouldPreserveFullManualExposure, device.isExposureModeSupported(.custom) {
+                    let targetDuration: CMTime
+                    if let presetDuration = shutterPresetSnapshot.durationSeconds {
+                        targetDuration = self.clampedShutterDuration(
+                            CMTime(seconds: presetDuration, preferredTimescale: 1_000_000_000),
+                            device: device
+                        )
+                    } else {
+                        targetDuration = self.clampedShutterDuration(
+                            CMTime(seconds: manualShutterSecondsSnapshot, preferredTimescale: 1_000_000_000),
+                            device: device
+                        )
+                    }
+                    guard let exposureWrite = self.sanitizedCustomExposureWrite(
+                        rawDuration: targetDuration,
+                        rawISO: manualISOSnapshot,
+                        device: device,
+                        context: "tapFocusPreserveFullManualExposure"
+                    ) else {
+                        device.unlockForConfiguration()
+                        DispatchQueue.main.async {
+                            self.captureHintText = "当前摄像头曝光能力异常，已跳过手动曝光保持"
+                        }
+                        return
+                    }
+                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
                     didApplyAny = true
                 } else if shouldPreserveManualShutter, device.isExposureModeSupported(.custom) {
                     let targetDuration: CMTime
@@ -4291,7 +4411,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                             self.currentShutterDurationSeconds = updatedShutterSeconds.isFinite ? updatedShutterSeconds : 0
                             self.selectedISOPreset = .auto
                             self.selectedShutterPreset = .auto
-                            self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .auto)
+                            self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .warning)
                             self.captureHintText = "当前设备不支持 AE/AF 锁定"
                         }
                     } else {
@@ -4303,32 +4423,36 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         self.currentExposureBias = updatedBias
                         self.currentISOValue = updatedISO
                         self.currentShutterDurationSeconds = updatedShutterSeconds.isFinite ? updatedShutterSeconds : 0
-                        if !shouldPreserveManualISO {
+                        if !shouldPreserveManualISO && !shouldPreserveFullManualExposure {
                             self.selectedISOPreset = .auto
                         }
-                        if !shouldPreserveManualShutter {
+                        if !shouldPreserveManualShutter && !shouldPreserveFullManualExposure {
                             self.selectedShutterPreset = .auto
                         }
                         let feedbackMode: CaptureFocusMarker.Mode
                         switch source {
                         case .tap:
-                            feedbackMode = .auto
+                            feedbackMode = .focusing
                             self.captureHintText = self.isExposureLocked
-                                ? "已更新对焦点（AE-L 生效）"
-                                : "已设置对焦与测光点"
+                                ? "正在对焦，AE-L 保持"
+                                : "正在对焦与测光"
                         case .unlockByLongPress:
                             feedbackMode = .unlocked
                             self.captureHintText = "已解除锁定并重新对焦测光"
                         case .longPress:
-                            feedbackMode = .auto
+                            feedbackMode = .focused
                             self.captureHintText = "已设置对焦与测光点"
                         case .productAutoFocus:
-                            feedbackMode = .auto
-                            self.captureHintText = "已辅助对焦，继续观察商品清晰度"
+                            feedbackMode = .focusing
+                            self.captureHintText = "正在辅助对焦"
                         }
                         self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: feedbackMode)
                     }
-                    self.hideFocusMarkerLaterIfNeeded()
+                    if source == .tap || source == .productAutoFocus {
+                        self.scheduleFocusFeedback(for: normalizedPoint, source: source)
+                    } else {
+                        self.hideFocusMarkerLaterIfNeeded()
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -4350,6 +4474,59 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 if !self.isFocusExposureLocked {
                     self.focusMarker = nil
                 }
+            }
+        }
+    }
+
+    private func scheduleFocusFeedback(
+        for normalizedPoint: CGPoint,
+        source: FocusExposureInteractionSource
+    ) {
+        focusFeedbackTask?.cancel()
+        let expectedMarkerID = focusMarker?.id
+        focusFeedbackTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: .seconds(self.tapFocusSettleDelay))
+            if Task.isCancelled { return }
+
+            let isStillAdjustingAfterSettle = await self.isCurrentDeviceAdjustingFocus()
+            await MainActor.run {
+                guard self.focusMarker?.id == expectedMarkerID else { return }
+                if !isStillAdjustingAfterSettle {
+                    self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .focused)
+                    self.captureHintText = source == .productAutoFocus ? "辅助对焦已稳定" : "对焦已稳定"
+                }
+            }
+
+            let remainingDelay = max(0, self.tapFocusTimeout - self.tapFocusSettleDelay)
+            try? await Task.sleep(for: .seconds(remainingDelay))
+            if Task.isCancelled { return }
+
+            let isStillAdjustingAtTimeout = await self.isCurrentDeviceAdjustingFocus()
+            await MainActor.run {
+                guard self.focusMarker?.id == expectedMarkerID else { return }
+                if isStillAdjustingAtTimeout {
+                    self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .warning)
+                    self.captureHintText = "对焦未稳定，增加光线或稍微远离商品"
+                } else {
+                    self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .focused)
+                    if source == .productAutoFocus {
+                        self.captureHintText = "辅助对焦已稳定"
+                    }
+                }
+                self.hideFocusMarkerLaterIfNeeded()
+            }
+        }
+    }
+
+    private func isCurrentDeviceAdjustingFocus() async -> Bool {
+        await withCheckedContinuation { continuation in
+            sessionQueue.async { [weak self] in
+                guard let self, let device = self.currentVideoInput?.device else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                continuation.resume(returning: device.isAdjustingFocus)
             }
         }
     }
@@ -5187,7 +5364,14 @@ private struct CaptureFocusMarkerOverlay: View {
             )
             ZStack {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(strokeColor.opacity(0.95), lineWidth: 1.5)
+                    .stroke(
+                        strokeColor.opacity(0.95),
+                        style: StrokeStyle(
+                            lineWidth: mode == .focusing ? 2.0 : 1.5,
+                            lineCap: .round,
+                            dash: mode == .focusing ? [7, 5] : []
+                        )
+                    )
                     .frame(width: 74, height: 74)
                     .shadow(color: strokeColor.opacity(0.35), radius: 5, x: 0, y: 0)
 
@@ -5205,6 +5389,20 @@ private struct CaptureFocusMarkerOverlay: View {
                         .padding(4)
                         .background(.blue.opacity(0.72), in: Circle())
                         .offset(x: 0, y: -50)
+                } else if mode == .focused {
+                    Image(systemName: "checkmark")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .padding(4)
+                        .background(.green.opacity(0.72), in: Circle())
+                        .offset(x: 0, y: -50)
+                } else if mode == .warning {
+                    Image(systemName: "exclamationmark")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .padding(4)
+                        .background(.orange.opacity(0.82), in: Circle())
+                        .offset(x: 0, y: -50)
                 }
             }
             .position(point)
@@ -5213,8 +5411,12 @@ private struct CaptureFocusMarkerOverlay: View {
 
     private var strokeColor: Color {
         switch mode {
-        case .auto:
+        case .focusing:
             return .yellow
+        case .focused:
+            return .green
+        case .warning:
+            return .orange
         case .locked:
             return .green
         case .unlocked:

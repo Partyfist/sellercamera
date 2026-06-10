@@ -373,6 +373,7 @@ struct CaptureScreen: View {
                     onTapSwitchCamera: cameraRuntime.toggleCameraPosition,
                     selectedAspectRatioPreset: cameraRuntime.selectedAspectRatioPreset,
                     selectedPixelPreset: cameraRuntime.selectedPixelPreset,
+                    isRawCaptureSupported: cameraRuntime.isRAWCaptureSupported,
                     onSelectAspectRatio: selectAspectRatioPreset,
                     onSelectPixel: selectPixelPreset,
                     isGridEnabled: cameraRuntime.isGridEnabled,
@@ -1427,6 +1428,7 @@ private struct CaptureTopStatusBar: View {
     let onTapSwitchCamera: () -> Void
     let selectedAspectRatioPreset: CapturePhotoAspectRatioPreset
     let selectedPixelPreset: CapturePhotoPixelPreset
+    let isRawCaptureSupported: Bool
     let onSelectAspectRatio: (CapturePhotoAspectRatioPreset) -> Void
     let onSelectPixel: (CapturePhotoPixelPreset) -> Void
     let isGridEnabled: Bool
@@ -1472,7 +1474,8 @@ private struct CaptureTopStatusBar: View {
 
                     Section("输出像素") {
                         ForEach(CapturePhotoPixelPreset.allCases, id: \.self) { preset in
-                            let text = preset.displayText(for: selectedAspectRatioPreset.ratioValue)
+                            let isPresetEnabled = !preset.requiresRawSupport || isRawCaptureSupported
+                            let text = pixelMenuText(for: preset)
                             Button {
                                 onSelectPixel(preset)
                             } label: {
@@ -1482,6 +1485,7 @@ private struct CaptureTopStatusBar: View {
                                     Text(text)
                                 }
                             }
+                            .disabled(!isPresetEnabled)
                         }
                     }
                 } label: {
@@ -1560,6 +1564,8 @@ private struct CaptureTopStatusBar: View {
 
     private func pixelCompactText(for preset: CapturePhotoPixelPreset) -> String {
         switch preset {
+        case .best:
+            return "Best"
         case .p800:
             return "0.8K"
         case .p1200:
@@ -1568,7 +1574,16 @@ private struct CaptureTopStatusBar: View {
             return "1.6K"
         case .p2400:
             return "2.4K"
+        case .raw:
+            return "RAW"
         }
+    }
+
+    private func pixelMenuText(for preset: CapturePhotoPixelPreset) -> String {
+        if preset == .raw, !isRawCaptureSupported {
+            return "RAW（不可用）"
+        }
+        return preset.displayText(for: selectedAspectRatioPreset.ratioValue)
     }
 }
 
@@ -3672,13 +3687,15 @@ private extension CaptureScreen {
                 isAdjustable: true,
                 canUseAuto: false,
                 canReset: cameraRuntime.selectedPixelPreset != .p1600,
-                hintText: "切换输出像素档位，拍照结果按当前比例生成对应尺寸。",
+                hintText: cameraRuntime.isRAWCaptureSupported
+                    ? "切换输出像素档位；最佳不做固定长边压缩，RAW 入口已按设备能力开放。"
+                    : "切换输出像素档位；最佳不做固定长边压缩，当前设备不支持 RAW。",
                 dialRange: 0...Double(maxIndex),
                 dialValue: cameraRuntime.pixelDialValue,
                 dialStep: 1,
-                leftLabel: "800",
+                leftLabel: "最佳",
                 centerLabel: "1600",
-                rightLabel: "2400"
+                rightLabel: "RAW"
             )
         case .settings:
             return CaptureProfessionalParameterState(
