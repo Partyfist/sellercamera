@@ -2561,7 +2561,7 @@ private extension CaptureScreen {
         case .focus:
             switch state.mode {
             case .auto:
-                return "A"
+                return "A \(formattedWhiteBalanceTick(Double(cameraRuntime.currentWhiteBalanceTemperature)))"
             case .manual:
                 return "M"
             case .locked:
@@ -2585,7 +2585,7 @@ private extension CaptureScreen {
             }
             switch state.mode {
             case .auto:
-                return "A"
+                return "A \(formattedWhiteBalanceTick(Double(cameraRuntime.currentWhiteBalanceTemperature)))"
             case .manual:
                 return cameraRuntime.whiteBalanceDisplayText
             case .locked:
@@ -2598,11 +2598,11 @@ private extension CaptureScreen {
         case .tint:
             guard state.mode != .disabled else { return "--" }
             if let pendingTintWheelValue {
-                return formattedTintTick(pendingTintWheelValue)
+                return formattedTintDisplayText(pendingTintWheelValue)
             }
             switch state.mode {
             case .manual:
-                return formattedTintTick(Double(cameraRuntime.currentWhiteBalanceTint))
+                return formattedTintDisplayText(Double(cameraRuntime.currentWhiteBalanceTint))
             case .locked:
                 return "L"
             case .pending:
@@ -2610,7 +2610,7 @@ private extension CaptureScreen {
             case .disabled:
                 return "--"
             case .auto:
-                return formattedTintTick(Double(cameraRuntime.currentWhiteBalanceTint))
+                return formattedTintDisplayText(Double(cameraRuntime.currentWhiteBalanceTint))
             }
         case .iso:
             guard state.mode != .disabled else { return "--" }
@@ -2619,7 +2619,8 @@ private extension CaptureScreen {
             }
             switch state.mode {
             case .auto:
-                return "A"
+                let roundedISO = Int(cameraRuntime.currentISOValue.rounded())
+                return roundedISO > 0 ? "A \(roundedISO)" : "A"
             case .manual:
                 let roundedISO = Int(cameraRuntime.currentManualISOValue.rounded())
                 return roundedISO > 0 ? "\(roundedISO)" : "--"
@@ -2642,7 +2643,7 @@ private extension CaptureScreen {
                 ? cameraRuntime.currentManualShutterDurationSeconds
                 : cameraRuntime.currentShutterDurationSeconds
             if let text = formattedShutterDisplayText(seconds: seconds) {
-                return state.mode == .auto ? "A" : text
+                return state.mode == .auto ? "A \(text)" : text
             }
             return state.mode == .auto ? "A" : "--"
         case .ratio, .pixel, .settings:
@@ -2666,6 +2667,12 @@ private extension CaptureScreen {
         if rounded == 0 { return "0" }
         if rounded > 0 { return "M\(rounded)" }
         return "G\(abs(rounded))"
+    }
+
+    private func formattedTintDisplayText(_ value: Double) -> String {
+        let rounded = Int(value.rounded())
+        if rounded == 0 { return "0" }
+        return rounded > 0 ? "+\(rounded)" : "\(rounded)"
     }
 
     private func formattedISOTick(_ value: Double) -> String {
@@ -3753,7 +3760,7 @@ private extension CaptureScreen {
     private func whiteBalanceEntryValueText(mode: CaptureProfessionalParameterMode) -> String {
         switch mode {
         case .auto:
-            return "Auto"
+            return "A \(formattedWhiteBalanceTick(Double(cameraRuntime.currentWhiteBalanceTemperature)))"
         case .manual:
             return cameraRuntime.whiteBalanceDisplayText
         case .locked:
@@ -3769,7 +3776,7 @@ private extension CaptureScreen {
         switch mode {
         case .auto:
             let value = Int(cameraRuntime.currentISOValue.rounded())
-            return value > 0 ? "A·\(value)" : "Auto"
+            return value > 0 ? "A \(value)" : "A"
         case .manual:
             return "\(Int(cameraRuntime.currentManualISOValue.rounded()))"
         case .locked:
@@ -3785,9 +3792,9 @@ private extension CaptureScreen {
         switch mode {
         case .auto:
             if let text = formattedShutterDisplayText(seconds: cameraRuntime.currentShutterDurationSeconds) {
-                return "A·\(text)"
+                return "A \(text)"
             }
-            return "Auto"
+            return "A"
         case .manual:
             return formattedShutterDisplayText(seconds: cameraRuntime.currentManualShutterDurationSeconds) ?? "Manual"
         case .locked:
@@ -3802,9 +3809,9 @@ private extension CaptureScreen {
     private func tintEntryValueText(mode: CaptureProfessionalParameterMode) -> String {
         switch mode {
         case .auto:
-            return "0"
+            return formattedTintDisplayText(Double(cameraRuntime.currentWhiteBalanceTint))
         case .manual:
-            return formattedTintTick(Double(cameraRuntime.currentWhiteBalanceTint))
+            return formattedTintDisplayText(Double(cameraRuntime.currentWhiteBalanceTint))
         case .locked:
             return "Locked"
         case .disabled:

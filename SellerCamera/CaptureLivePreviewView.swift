@@ -625,8 +625,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private let productFocusAssistCooldown: TimeInterval = 7.0
     private let productFocusAssistManualCooldown: TimeInterval = 6.0
     private let tapFocusThrottleInterval: TimeInterval = 0.28
-    private let tapFocusSettleDelay: TimeInterval = 0.45
-    private let tapFocusTimeout: TimeInterval = 1.45
+    private let tapFocusSettleDelay: TimeInterval = 0.32
+    private let tapFocusTimeout: TimeInterval = 1.15
 
     private let motionManager = CMMotionManager()
     private var levelMotionStarted = false
@@ -1977,7 +1977,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             return
         }
         focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .focusing)
-        captureHintText = isExposureLocked ? "正在对焦，AE-L 保持" : "正在对焦与测光"
+        captureHintText = isExposureLocked ? "对焦中 · AE-L" : "对焦中"
         applyFocusExposure(
             devicePoint: devicePoint,
             normalizedPoint: normalizedPoint,
@@ -4373,6 +4373,35 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 let updatedISO = device.iso
                 let updatedShutterSeconds = CMTimeGetSeconds(device.exposureDuration)
                 let updatedLensPosition = device.lensPosition
+                let updatedFocusMode = device.focusMode
+                let isAdjustingFocus = device.isAdjustingFocus
+#if DEBUG
+                let sourceText: String
+                switch source {
+                case .tap:
+                    sourceText = "tap"
+                case .longPress:
+                    sourceText = "longPress"
+                case .unlockByLongPress:
+                    sourceText = "unlockByLongPress"
+                case .productAutoFocus:
+                    sourceText = "productAutoFocus"
+                }
+                print(
+                    "[CaptureTapFocus] " +
+                    "source=\(sourceText) " +
+                    "devicePoint=(\(String(format: "%.3f", devicePoint.x)),\(String(format: "%.3f", devicePoint.y))) " +
+                    "normalized=(\(String(format: "%.3f", normalizedPoint.x)),\(String(format: "%.3f", normalizedPoint.y))) " +
+                    "focusMode=\(updatedFocusMode.rawValue) " +
+                    "isAdjustingFocus=\(isAdjustingFocus) " +
+                    "lens=\(String(format: "%.3f", Double(updatedLensPosition))) " +
+                    "iso=\(String(format: "%.1f", Double(updatedISO))) " +
+                    "shutter=\(String(format: "%.6f", updatedShutterSeconds)) " +
+                    "aeLocked=\(exposureLockSnapshot) " +
+                    "isoMode=\(isISOAutoSnapshot ? "auto" : "manual") " +
+                    "shutterMode=\(isShutterAutoSnapshot ? "auto" : "manual")"
+                )
+#endif
 
                 device.unlockForConfiguration()
 
@@ -4434,8 +4463,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         case .tap:
                             feedbackMode = .focusing
                             self.captureHintText = self.isExposureLocked
-                                ? "正在对焦，AE-L 保持"
-                                : "正在对焦与测光"
+                                ? "对焦中 · AE-L"
+                                : "对焦中"
                         case .unlockByLongPress:
                             feedbackMode = .unlocked
                             self.captureHintText = "已解除锁定并重新对焦测光"
@@ -4444,7 +4473,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                             self.captureHintText = "已设置对焦与测光点"
                         case .productAutoFocus:
                             feedbackMode = .focusing
-                            self.captureHintText = "正在辅助对焦"
+                            self.captureHintText = "对焦中"
                         }
                         self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: feedbackMode)
                     }
@@ -4494,7 +4523,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 guard self.focusMarker?.id == expectedMarkerID else { return }
                 if !isStillAdjustingAfterSettle {
                     self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .focused)
-                    self.captureHintText = source == .productAutoFocus ? "辅助对焦已稳定" : "对焦已稳定"
+                    self.captureHintText = source == .productAutoFocus ? "AF 稳定" : "AF 稳定"
+                    if source == .tap {
+                        self.restoreContinuousAutoFocusAfterTapIfPossible()
+                    }
                 }
             }
 
@@ -4507,14 +4539,53 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 guard self.focusMarker?.id == expectedMarkerID else { return }
                 if isStillAdjustingAtTimeout {
                     self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .warning)
-                    self.captureHintText = "对焦未稳定，增加光线或稍微远离商品"
+                    self.captureHintText = "对焦偏慢"
+#if DEBUG
+                    print(
+                        "[CaptureTapFocus] timeout=true " +
+                        "normalized=(\(String(format: "%.3f", normalizedPoint.x)),\(String(format: "%.3f", normalizedPoint.y))) " +
+                        "timeout=\(String(format: "%.2f", self.tapFocusTimeout))"
+                    )
+#endif
                 } else {
                     self.focusMarker = CaptureFocusMarker(normalizedPoint: normalizedPoint, mode: .focused)
                     if source == .productAutoFocus {
-                        self.captureHintText = "辅助对焦已稳定"
+                        self.captureHintText = "AF 稳定"
+                    }
+                    if source == .tap {
+                        self.restoreContinuousAutoFocusAfterTapIfPossible()
                     }
                 }
                 self.hideFocusMarkerLaterIfNeeded()
+            }
+        }
+    }
+
+    private func restoreContinuousAutoFocusAfterTapIfPossible() {
+        guard !isFocusExposureLocked, focusControlMode != .manual else { return }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.currentVideoInput?.device else { return }
+            guard device.isFocusModeSupported(.continuousAutoFocus) else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.focusMode != .continuousAutoFocus {
+                    device.focusMode = .continuousAutoFocus
+                }
+                if device.isSmoothAutoFocusSupported {
+                    device.isSmoothAutoFocusEnabled = true
+                }
+#if DEBUG
+                print(
+                    "[CaptureTapFocus] restoreContinuousAutoFocus=true " +
+                    "lens=\(String(format: "%.3f", Double(device.lensPosition))) " +
+                    "isAdjustingFocus=\(device.isAdjustingFocus)"
+                )
+#endif
+                device.unlockForConfiguration()
+            } catch {
+#if DEBUG
+                print("[CaptureTapFocus] restoreContinuousAutoFocus=false error=\(error.localizedDescription)")
+#endif
             }
         }
     }
@@ -5355,6 +5426,7 @@ private struct CaptureLevelOverlay: View {
 private struct CaptureFocusMarkerOverlay: View {
     let normalizedPoint: CGPoint
     let mode: CaptureFocusMarker.Mode
+    @State private var hasAppeared = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -5363,65 +5435,127 @@ private struct CaptureFocusMarkerOverlay: View {
                 y: normalizedPoint.y * proxy.size.height
             )
             ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(
-                        strokeColor.opacity(0.95),
-                        style: StrokeStyle(
-                            lineWidth: mode == .focusing ? 2.0 : 1.5,
-                            lineCap: .round,
-                            dash: mode == .focusing ? [7, 5] : []
-                        )
-                    )
-                    .frame(width: 74, height: 74)
-                    .shadow(color: strokeColor.opacity(0.35), radius: 5, x: 0, y: 0)
+                focusCorners
 
-                if mode == .locked {
-                    Image(systemName: "lock.fill")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(4)
-                        .background(.green.opacity(0.72), in: Circle())
-                        .offset(x: 0, y: -50)
-                } else if mode == .unlocked {
-                    Image(systemName: "lock.open.fill")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(4)
-                        .background(.blue.opacity(0.72), in: Circle())
-                        .offset(x: 0, y: -50)
-                } else if mode == .focused {
-                    Image(systemName: "checkmark")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(4)
-                        .background(.green.opacity(0.72), in: Circle())
-                        .offset(x: 0, y: -50)
-                } else if mode == .warning {
-                    Image(systemName: "exclamationmark")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(4)
-                        .background(.orange.opacity(0.82), in: Circle())
-                        .offset(x: 0, y: -50)
+                statusBadge
+            }
+            .scaleEffect(hasAppeared ? 1.0 : 0.84)
+            .opacity(hasAppeared ? 1.0 : 0.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: hasAppeared)
+            .animation(.easeInOut(duration: 0.14), value: mode)
+            .onAppear {
+                hasAppeared = true
+            }
+            .onChange(of: mode) { nextMode in
+                if nextMode == .warning {
+                    hasAppeared = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        hasAppeared = true
+                    }
                 }
             }
             .position(point)
         }
     }
 
+    private var focusCorners: some View {
+        ZStack {
+            cornerPath(size: 80, length: 18, inset: 2)
+                .stroke(strokeColor.opacity(0.98), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+                .frame(width: 84, height: 84)
+                .shadow(color: strokeColor.opacity(shadowOpacity), radius: shadowRadius)
+
+            if mode == .focusing {
+                cornerPath(size: 66, length: 13, inset: 0)
+                    .stroke(strokeColor.opacity(0.34), style: StrokeStyle(lineWidth: 1.1, lineCap: .round, lineJoin: .round))
+                    .frame(width: 70, height: 70)
+            }
+        }
+    }
+
+    private var statusBadge: some View {
+        Group {
+            switch mode {
+            case .focused:
+                Circle()
+                    .fill(strokeColor.opacity(0.92))
+                    .frame(width: 5, height: 5)
+                    .offset(y: -45)
+            case .warning:
+                Circle()
+                    .stroke(strokeColor.opacity(0.94), lineWidth: 1.5)
+                    .frame(width: 9, height: 9)
+                    .offset(y: -45)
+            case .locked, .unlocked:
+                Image(systemName: mode == .locked ? "lock.fill" : "lock.open.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .padding(4)
+                    .background(strokeColor.opacity(0.78), in: Circle())
+                    .offset(y: -47)
+            case .focusing:
+                Circle()
+                    .fill(strokeColor.opacity(0.72))
+                    .frame(width: 4, height: 4)
+                    .offset(y: -45)
+            }
+        }
+    }
+
+    private func cornerPath(size: CGFloat, length: CGFloat, inset: CGFloat) -> Path {
+        let minValue = inset
+        let maxValue = size - inset
+        return Path { path in
+            path.move(to: CGPoint(x: minValue, y: minValue + length))
+            path.addLine(to: CGPoint(x: minValue, y: minValue))
+            path.addLine(to: CGPoint(x: minValue + length, y: minValue))
+
+            path.move(to: CGPoint(x: maxValue - length, y: minValue))
+            path.addLine(to: CGPoint(x: maxValue, y: minValue))
+            path.addLine(to: CGPoint(x: maxValue, y: minValue + length))
+
+            path.move(to: CGPoint(x: maxValue, y: maxValue - length))
+            path.addLine(to: CGPoint(x: maxValue, y: maxValue))
+            path.addLine(to: CGPoint(x: maxValue - length, y: maxValue))
+
+            path.move(to: CGPoint(x: minValue + length, y: maxValue))
+            path.addLine(to: CGPoint(x: minValue, y: maxValue))
+            path.addLine(to: CGPoint(x: minValue, y: maxValue - length))
+        }
+    }
+
     private var strokeColor: Color {
         switch mode {
         case .focusing:
-            return .yellow
+            return Color(red: 1.0, green: 0.86, blue: 0.34)
         case .focused:
-            return .green
+            return Color(red: 0.30, green: 0.95, blue: 0.76)
         case .warning:
-            return .orange
+            return Color(red: 1.0, green: 0.62, blue: 0.22)
         case .locked:
-            return .green
+            return Color(red: 0.30, green: 0.95, blue: 0.76)
         case .unlocked:
-            return .blue
+            return Color(red: 0.48, green: 0.75, blue: 1.0)
         }
+    }
+
+    private var lineWidth: CGFloat {
+        switch mode {
+        case .focusing:
+            return 1.8
+        case .focused, .locked, .unlocked:
+            return 1.6
+        case .warning:
+            return 1.9
+        }
+    }
+
+    private var shadowOpacity: CGFloat {
+        mode == .warning ? 0.32 : 0.22
+    }
+
+    private var shadowRadius: CGFloat {
+        mode == .focusing ? 6 : 4
     }
 }
 
