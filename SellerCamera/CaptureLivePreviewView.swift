@@ -535,7 +535,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private static let closeFocusFallbackCooldown: TimeInterval = 5.0
     private static let closeFocusFallbackDelay: TimeInterval = 0.22
     private static let lensRulerDirectWriteInterval: TimeInterval = 1.0 / 30.0
-    private static let lensRulerSwitchOverHysteresis: CGFloat = 0.035
+    private static let lensRulerSwitchOverHysteresis: CGFloat = 0.022
     private static let stabilizerUserDefaultsKey = "seller.camera.capture.stabilizer.mode"
 
     @Published var latestStillPhotoResult: CaptureStillPhotoResult?

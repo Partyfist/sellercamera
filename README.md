@@ -88,3 +88,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R77A 拍摄参数实时显示与原生级点击对焦优化报告：`docs/reports/r77a_realtime_parameter_display_native_focus_polish.md`
 - R77B 原生式镜头系统收口报告：`docs/reports/r77b_native_lens_virtual_zoom_macro_closure.md`
 - R77C 焦段手动调节流畅度收口与拍摄稳定器设置报告：`docs/reports/r77c_lens_ruler_smoothness_and_stabilizer_settings.md`
+- R77D 参数调节回归修复与焦段 ruler 速度校准报告：`docs/reports/r77d_parameter_ruler_regression_and_lens_zoom_speed.md`

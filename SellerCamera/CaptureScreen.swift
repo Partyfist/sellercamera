@@ -166,8 +166,8 @@ struct CaptureScreen: View {
                 )
                 .padding(.horizontal, 18)
             }
-            .opacity(isBottomOverlayControlPresented ? 0 : 1)
-            .allowsHitTesting(!isBottomOverlayControlPresented)
+            .opacity(isBottomParameterPanelExpanded ? 0 : 1)
+            .allowsHitTesting(!isBottomParameterPanelExpanded)
 
             if isBottomParameterPanelExpanded {
                 CaptureHorizontalParameterRulerPanel(
@@ -191,20 +191,28 @@ struct CaptureScreen: View {
                         }
                     },
                     onWheelStep: { kind, direction in
+                        let didApply: Bool
                         switch kind {
                         case .exposureCompensation:
-                            return stepExposureCompensationWheel(by: direction)
+                            didApply = stepExposureCompensationWheel(by: direction)
                         case .whiteBalance:
-                            return stepWhiteBalanceWheel(by: direction)
+                            didApply = stepWhiteBalanceWheel(by: direction)
                         case .tint:
-                            return stepTintWheel(by: direction)
+                            didApply = stepTintWheel(by: direction)
                         case .iso:
-                            return stepISOWheel(by: direction)
+                            didApply = stepISOWheel(by: direction)
                         case .shutter:
-                            return stepShutterWheel(by: direction)
+                            didApply = stepShutterWheel(by: direction)
                         default:
-                            return false
+                            didApply = false
                         }
+                        logParameterRuler(
+                            kind: kind,
+                            inputValue: Double(direction),
+                            formattedValue: bottomParameterValueText(for: parameterState(for: kind)),
+                            applied: didApply
+                        )
+                        return didApply
                     },
                     onRulerDragStateChange: { kind, isDragging in
                         guard kind == .shutter else { return }
@@ -242,12 +250,26 @@ struct CaptureScreen: View {
 
     private func handleBottomParameterSelection(_ kind: CaptureProfessionalParameterKind) {
         let state = parameterState(for: kind)
+        let isAvailable = state.mode != .disabled
+        logParameterTap(
+            parameter: kind,
+            allowed: isAvailable,
+            activePanel: activeBottomParameterKind,
+            blockedReason: isAvailable ? nil : state.hintText
+        )
+        guard isAvailable else {
+            cameraRuntime.captureHintText = state.hintText
+            logParameterGuard(parameter: kind, reason: "disabled")
+            return
+        }
+
         if kind == .exposureCompensation, !state.isAdjustable {
             pendingExposureBiasWheelValue = nil
             pendingExposureBiasUpdatedAt = nil
             lastDispatchedExposureBiasValue = nil
             cameraRuntime.captureHintText = state.hintText
             logExposureTriangle("EV selection blocked reason=\(state.hintText)")
+            logParameterGuard(parameter: kind, reason: "notAdjustable \(state.hintText)")
             return
         }
 
@@ -2089,6 +2111,25 @@ private struct CaptureLensControlStrip: View {
 }
 
 private struct CaptureZoomDialView: View {
+    private enum Tuning {
+        static let tickSpacing: CGFloat = 34
+        static let normalSensitivity: CGFloat = 3.0
+        static let fineSensitivity: CGFloat = 0.90
+        static let ultraFineSensitivity: CGFloat = 0.38
+        static let pointsPerZoomCommon: CGFloat = 96
+        static let pointsPerZoomHigh: CGFloat = 172
+        static let smoothingPreviousWeight: Double = 0.34
+        static let dragSnapThreshold: Double = 0.016
+        static let dragSnapWeight: Double = 0.25
+        static let settleSnapThreshold: Double = 0.075
+        static let settleSnapWeight: Double = 1.0
+        static let emitDelta: Double = 0.005
+        static let maxInertiaDelta: CGFloat = 38
+        static let inertiaScale: CGFloat = 0.22
+        static let anchorHapticThreshold: Double = 0.032
+        static let hapticMinInterval: TimeInterval = 0.12
+    }
+
     let values: [Double]
     let valueRange: ClosedRange<Double>
     let selectedIndex: Int
@@ -2106,7 +2147,7 @@ private struct CaptureZoomDialView: View {
     @State private var dragBaselineValue: Double?
     @State private var lastEmittedZoomValue: Double?
     private let accent = Color(red: 0.20, green: 0.88, blue: 0.76)
-    private let tickSpacing: CGFloat = 34
+    private let tickSpacing: CGFloat = Tuning.tickSpacing
 
     var body: some View {
         GeometryReader { geometry in
@@ -2301,7 +2342,10 @@ private struct CaptureZoomDialView: View {
         let baseline = dragBaselineValue ?? selectedZoomValue
         let sensitivity = max(0.1, lastScrubSensitivity)
         let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let cappedInertiaDelta = max(-56, min(56, predictedDelta * 0.28))
+        let cappedInertiaDelta = max(
+            -Tuning.maxInertiaDelta,
+            min(Tuning.maxInertiaDelta, predictedDelta * Tuning.inertiaScale)
+        )
         let inertiaEnabled = sensitivity >= 1
         let finalTranslation = translationWidth + (inertiaEnabled ? cappedInertiaDelta : 0)
         let target = finalSnappedZoomValue(mappedZoomValue(
@@ -2327,7 +2371,7 @@ private struct CaptureZoomDialView: View {
     ) -> Double {
         let baseline = explicitBaseline ?? dragBaselineValue ?? selectedZoomValue
         let effectiveSensitivity = max(0.12, sensitivity)
-        let pointsPerZoom: CGFloat = baseline > 3.0 ? 210 : 132
+        let pointsPerZoom: CGFloat = baseline > 3.0 ? Tuning.pointsPerZoomHigh : Tuning.pointsPerZoomCommon
         let rawDelta = Double((-translationWidth / pointsPerZoom) * effectiveSensitivity)
         var candidate = baseline + rawDelta
         if candidate > 3.0 {
@@ -2338,16 +2382,19 @@ private struct CaptureZoomDialView: View {
 
     private func smoothedZoomValue(_ rawZoom: Double) -> Double {
         guard let lastEmittedZoomValue else { return rawZoom }
-        return clampedZoom(lastEmittedZoomValue * 0.58 + rawZoom * 0.42)
+        return clampedZoom(
+            lastEmittedZoomValue * Tuning.smoothingPreviousWeight
+                + rawZoom * (1.0 - Tuning.smoothingPreviousWeight)
+        )
     }
 
     private func softSnappedZoomValue(_ zoom: Double, final: Bool) -> Double {
-        let threshold = final ? 0.065 : 0.026
+        let threshold = final ? Tuning.settleSnapThreshold : Tuning.dragSnapThreshold
         guard let anchor = zoomAnchors.min(by: { abs($0 - zoom) < abs($1 - zoom) }),
               abs(anchor - zoom) <= threshold else {
             return clampedZoom(zoom)
         }
-        let weight = final ? 1.0 : 0.46
+        let weight = final ? Tuning.settleSnapWeight : Tuning.dragSnapWeight
         return clampedZoom(zoom + (anchor - zoom) * weight)
     }
 
@@ -2365,23 +2412,23 @@ private struct CaptureZoomDialView: View {
 
     private func shouldEmitZoomValue(_ value: Double) -> Bool {
         guard let lastEmittedZoomValue else { return true }
-        return abs(lastEmittedZoomValue - value) >= 0.006
+        return abs(lastEmittedZoomValue - value) >= Tuning.emitDelta
     }
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
         // Normal drag covers more zoom range; lifted drags keep the R73 fine-control path.
-        if lift > 90 { return 0.35 }
-        if lift > 40 { return 0.75 }
-        return 2.2
+        if lift > 90 { return Tuning.ultraFineSensitivity }
+        if lift > 40 { return Tuning.fineSensitivity }
+        return Tuning.normalSensitivity
     }
 
     private func triggerAnchorHapticIfNeeded(for zoom: Double, at now: Date, force: Bool = false) {
         guard let anchor = zoomAnchors.min(by: { abs($0 - zoom) < abs($1 - zoom) }) else { return }
-        guard force || abs(anchor - zoom) <= 0.035 else { return }
+        guard force || abs(anchor - zoom) <= Tuning.anchorHapticThreshold else { return }
         let signature = "lens-anchor-\(String(format: "%.1f", anchor))"
         guard signature != lastHapticSignature else { return }
-        guard now.timeIntervalSince(lastHapticAt) >= 0.12 else { return }
+        guard now.timeIntervalSince(lastHapticAt) >= Tuning.hapticMinInterval else { return }
         lastHapticSignature = signature
         lastHapticAt = now
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -2871,6 +2918,7 @@ private extension CaptureScreen {
         guard state.isAdjustable else {
             pendingWhiteBalanceWheelValue = nil
             pendingWhiteBalanceUpdatedAt = nil
+            logParameterGuard(parameter: .whiteBalance, reason: "notAdjustable mode=\(debugParameterModeText(state.mode))")
             logWhiteBalanceWheel("skip WB write: white balance not adjustable direction=\(direction) mode=\(debugParameterModeText(state.mode)) runtimePreset=\(String(describing: cameraRuntime.selectedWhiteBalancePreset))")
             return false
         }
@@ -2945,6 +2993,7 @@ private extension CaptureScreen {
         guard parameterState(for: .tint).isAdjustable else {
             pendingTintWheelValue = nil
             pendingTintUpdatedAt = nil
+            logParameterGuard(parameter: .tint, reason: "notAdjustable")
             logTintWheel("skip Tint write: Tint not adjustable")
             return false
         }
@@ -3015,6 +3064,7 @@ private extension CaptureScreen {
         guard state.isAdjustable else {
             pendingISOWheelValue = nil
             pendingISOUpdatedAt = nil
+            logParameterGuard(parameter: .iso, reason: "notAdjustable mode=\(debugParameterModeText(state.mode))")
             logISOWheel("skip ISO write: ISO not adjustable")
             return false
         }
@@ -3097,6 +3147,7 @@ private extension CaptureScreen {
             pendingShutterUpdatedAt = nil
             lastDispatchedShutterTickIndex = nil
             lastDispatchedShutterDurationSeconds = nil
+            logParameterGuard(parameter: .shutter, reason: "notAdjustable mode=\(debugParameterModeText(state.mode))")
             logShutterWheel("skip shutter write: shutter not adjustable")
             return false
         }
@@ -3399,6 +3450,47 @@ private extension CaptureScreen {
     private func logExposureTriangle(_ message: String) {
 #if DEBUG
         print("[CaptureExposureTriangle] \(message)")
+#endif
+    }
+
+    private func logParameterTap(
+        parameter: CaptureProfessionalParameterKind,
+        allowed: Bool,
+        activePanel: CaptureProfessionalParameterKind?,
+        blockedReason: String?
+    ) {
+#if DEBUG
+        print(
+            "[CaptureParameterTap] " +
+            "parameter=\(parameter.rawValue) " +
+            "allowed=\(allowed) " +
+            "activePanel=\(activePanel?.rawValue ?? "nil") " +
+            "lensZoomActive=\(isLensZoomControlPresented) " +
+            "blockedReason=\(blockedReason ?? "none")"
+        )
+#endif
+    }
+
+    private func logParameterRuler(
+        kind: CaptureProfessionalParameterKind,
+        inputValue: Double,
+        formattedValue: String,
+        applied: Bool
+    ) {
+#if DEBUG
+        print(
+            "[CaptureParameterRuler] " +
+            "kind=\(kind.rawValue) " +
+            "input=\(String(format: "%.3f", inputValue)) " +
+            "formatted=\(formattedValue) " +
+            "applied=\(applied)"
+        )
+#endif
+    }
+
+    private func logParameterGuard(parameter: CaptureProfessionalParameterKind, reason: String) {
+#if DEBUG
+        print("[CaptureParameterGuard] parameter=\(parameter.rawValue) reason=\(reason)")
 #endif
     }
 
