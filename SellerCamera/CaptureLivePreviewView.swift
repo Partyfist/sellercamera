@@ -656,6 +656,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var lastProductAutoWhiteBalanceWriteAt = Date.distantPast
     private var lastProductAutoWhiteBalanceDebugLogAt = Date.distantPast
     private var lastProductAutoSceneDebugLogAt = Date.distantPast
+    private var lastProductAutoSceneFrameGuardLogAt = Date.distantPast
     private var lastProductSharpnessDebugLogAt = Date.distantPast
     private var lastProductSharpnessHintAt = Date.distantPast
     private var lastProductFocusAssistAt = Date.distantPast
@@ -669,6 +670,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var productSharpnessSharpHitCount = 0
     private var isProductFocusAssistSuppressedByManualFocusUI = false
     private var hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
+    private var lastSessionStartAt = Date.distantPast
+    private var isCaptureStabilizerSettling = false
     private let productAutoExposureAnalysisInterval: CFTimeInterval = 0.35
     private let productAutoExposureWriteInterval: TimeInterval = 0.35
     private let productAutoExposureDebugLogInterval: TimeInterval = 1.0
@@ -2867,6 +2870,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let maxWaitNanoseconds = selectedStabilizerMode.captureSettleWaitNanoseconds
         guard maxWaitNanoseconds > 0 else { return }
 
+        isCaptureStabilizerSettling = true
+        defer { isCaptureStabilizerSettling = false }
+
         let maxWaitSeconds = Double(maxWaitNanoseconds) / 1_000_000_000.0
         let startedAt = Date()
         var didWait = false
@@ -2998,6 +3004,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             guard self.isSessionConfigured else { return }
             if !self.session.isRunning {
                 self.session.startRunning()
+                DispatchQueue.main.async {
+                    self.lastSessionStartAt = Date()
+                }
             }
         }
     }
@@ -4517,6 +4526,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let ev = analysis.exposureMetrics
         let wb = analysis.whiteBalanceMetrics
         let focus = analysis.sharpnessMetrics
+        let frame = analysis.frameDiagnostics
         print(
             "[ProductAutoScene] " +
             "sceneId=unlabeled " +
@@ -4548,6 +4558,54 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             "conf=\(String(format: "%.2f", focus.confidence)) " +
             "reason=\(focus.reason)" +
             ")"
+        )
+        print(
+            "[ProductAutoSceneFrame] " +
+            "format=\(frame.pixelFormatName) " +
+            "rawFormat=\(frame.pixelFormat) " +
+            "width=\(frame.width) " +
+            "height=\(frame.height) " +
+            "planes=\(frame.planeCount) " +
+            "bytesPerRow=\(frame.bytesPerRow) " +
+            "timestamp=\(String(format: "%.3f", frame.timestampSeconds)) " +
+            "age=\(String(format: "%.3f", frame.frameAgeSeconds))"
+        )
+        print(
+            "[ProductAutoSceneROI] " +
+            "normalized=x:\(String(format: "%.2f", frame.normalizedROI.minX))," +
+            "y:\(String(format: "%.2f", frame.normalizedROI.minY))," +
+            "w:\(String(format: "%.2f", frame.normalizedROI.width))," +
+            "h:\(String(format: "%.2f", frame.normalizedROI.height)) " +
+            "pixel=x:\(Int(frame.pixelROI.minX))," +
+            "y:\(Int(frame.pixelROI.minY))," +
+            "w:\(Int(frame.pixelROI.width))," +
+            "h:\(Int(frame.pixelROI.height)) " +
+            "valid=\(frame.validPixelCount) " +
+            "skipped=\(frame.skippedPixelCount) " +
+            "sampled=\(frame.sampledPixelCount)"
+        )
+#endif
+    }
+
+    private func logProductAutoSceneFrameGuard(_ skip: ProductAutoSceneFrameSkip) {
+#if DEBUG
+        let now = Date()
+        guard now.timeIntervalSince(lastProductAutoSceneFrameGuardLogAt) >= productAutoSceneDebugLogInterval else {
+            return
+        }
+        lastProductAutoSceneFrameGuardLogAt = now
+
+        print(
+            "[ProductAutoSceneFrameGuard] " +
+            "skipped reason=\(skip.reason) " +
+            "format=\(skip.pixelFormatName) " +
+            "rawFormat=\(skip.pixelFormat) " +
+            "width=\(skip.width) " +
+            "height=\(skip.height) " +
+            "planes=\(skip.planeCount) " +
+            "bytesPerRow=\(skip.bytesPerRow) " +
+            "timestamp=\(String(format: "%.3f", skip.timestampSeconds)) " +
+            "age=\(String(format: "%.3f", skip.frameAgeSeconds))"
         )
 #endif
     }
@@ -5104,6 +5162,35 @@ private struct ProductPreviewFrameAnalysis {
     let exposureMetrics: ProductAutoExposureMetrics
     let whiteBalanceMetrics: ProductAutoWhiteBalanceMetrics
     let sharpnessMetrics: ProductSharpnessMetrics
+    let frameDiagnostics: ProductAutoSceneFrameDiagnostics
+}
+
+private struct ProductAutoSceneFrameDiagnostics {
+    let pixelFormat: OSType
+    let pixelFormatName: String
+    let width: Int
+    let height: Int
+    let planeCount: Int
+    let bytesPerRow: Int
+    let timestampSeconds: Double
+    let frameAgeSeconds: Double
+    let normalizedROI: CGRect
+    let pixelROI: CGRect
+    let validPixelCount: Int
+    let skippedPixelCount: Int
+    let sampledPixelCount: Int
+}
+
+private struct ProductAutoSceneFrameSkip {
+    let reason: String
+    let pixelFormat: OSType
+    let pixelFormatName: String
+    let width: Int
+    let height: Int
+    let planeCount: Int
+    let bytesPerRow: Int
+    let timestampSeconds: Double
+    let frameAgeSeconds: Double
 }
 
 extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -5116,8 +5203,53 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard now - lastProductAutoExposureAnalysisAt >= productAutoExposureAnalysisInterval else { return }
         lastProductAutoExposureAnalysisAt = now
 
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let analysis = Self.productPreviewFrameAnalysis(from: pixelBuffer) else {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            let skip = Self.productAutoSceneFrameSkip(
+                reason: "missingPixelBuffer",
+                pixelBuffer: nil,
+                timestamp: timestamp,
+                now: now
+            )
+            DispatchQueue.main.async { [weak self] in
+                self?.logProductAutoSceneFrameGuard(skip)
+            }
+            return
+        }
+
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if let skipReason = productAutoSceneFrameSkipReason(
+            pixelBuffer: pixelBuffer,
+            timestamp: timestamp,
+            now: now
+        ) {
+            let skip = Self.productAutoSceneFrameSkip(
+                reason: skipReason,
+                pixelBuffer: pixelBuffer,
+                timestamp: timestamp,
+                now: now
+            )
+            DispatchQueue.main.async { [weak self] in
+                self?.logProductAutoSceneFrameGuard(skip)
+            }
+            return
+        }
+
+        let frameTiming = Self.productAutoSceneFrameTiming(timestamp: timestamp, now: now)
+        guard let analysis = Self.productPreviewFrameAnalysis(
+            from: pixelBuffer,
+            timestampSeconds: frameTiming.timestampSeconds,
+            frameAgeSeconds: frameTiming.frameAgeSeconds
+        ) else {
+            let skip = Self.productAutoSceneFrameSkip(
+                reason: "invalidROIOrSamples",
+                pixelBuffer: pixelBuffer,
+                timestamp: timestamp,
+                now: now
+            )
+            DispatchQueue.main.async { [weak self] in
+                self?.logProductAutoSceneFrameGuard(skip)
+            }
             return
         }
 
@@ -5130,24 +5262,76 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
     }
 
-    private static func productPreviewFrameAnalysis(from pixelBuffer: CVPixelBuffer) -> ProductPreviewFrameAnalysis? {
-        guard CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_32BGRA else { return nil }
+    private func productAutoSceneFrameSkipReason(
+        pixelBuffer: CVPixelBuffer,
+        timestamp: CMTime,
+        now: CFTimeInterval
+    ) -> String? {
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        guard width > 0, height > 0 else { return "invalidFrameSize" }
+
+        guard timestamp.isValid, timestamp.seconds.isFinite else {
+            return "invalidTimestamp"
+        }
+
+        let timing = Self.productAutoSceneFrameTiming(timestamp: timestamp, now: now)
+        if timing.frameAgeSeconds > 2.0 {
+            return "staleFrame"
+        }
+
+        let pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        guard Self.isSupportedProductAutoScenePixelFormat(pixelFormat) else {
+            return "unsupportedPixelFormat"
+        }
+
+        guard isSessionConfigured, session.isRunning else { return "sessionNotRunning" }
+        if Date().timeIntervalSince(lastSessionStartAt) < 0.6 { return "sessionWarmup" }
+        if isSwitchingCamera { return "unstableLensState:switchingCamera" }
+        if isCaptureStabilizerSettling { return "stabilizerSettle" }
+        if Date().timeIntervalSince(lastLensRulerInteractionAt) < 0.45 {
+            return "unstableLensState:recentZoom"
+        }
+        if Date().timeIntervalSince(lastCloseFocusFallbackAt) < 0.6 {
+            return "unstableLensState:macroFallback"
+        }
+        if currentVideoInput?.device.isRampingVideoZoom == true {
+            return "unstableLensState:zoomRamping"
+        }
+
+        return nil
+    }
+
+    private static func productPreviewFrameAnalysis(
+        from pixelBuffer: CVPixelBuffer,
+        timestampSeconds: Double,
+        frameAgeSeconds: Double
+    ) -> ProductPreviewFrameAnalysis? {
+        let pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        guard isSupportedProductAutoScenePixelFormat(pixelFormat) else { return nil }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
 
-        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
-        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-        guard width > 0, height > 0, bytesPerRow > 0 else { return nil }
+        guard width > 0, height > 0 else { return nil }
 
-        let sampleStride = max(1, min(width, height) / 96)
-        let sampleXs = Array(stride(from: 0, to: width, by: sampleStride))
-        let sampleYs = Array(stride(from: 0, to: height, by: sampleStride))
-        let buffer = baseAddress.assumingMemoryBound(to: UInt8.self)
+        let normalizedROI = CGRect(x: 0.20, y: 0.20, width: 0.60, height: 0.60)
+        let roiMinX = max(0, min(width - 1, Int((CGFloat(width) * normalizedROI.minX).rounded(.down))))
+        let roiMinY = max(0, min(height - 1, Int((CGFloat(height) * normalizedROI.minY).rounded(.down))))
+        let roiMaxX = max(roiMinX + 1, min(width, Int((CGFloat(width) * normalizedROI.maxX).rounded(.up))))
+        let roiMaxY = max(roiMinY + 1, min(height, Int((CGFloat(height) * normalizedROI.maxY).rounded(.up))))
+        let roiWidth = roiMaxX - roiMinX
+        let roiHeight = roiMaxY - roiMinY
+        guard roiWidth >= 8, roiHeight >= 8 else { return nil }
+
+        let lumaGridWidth = 36
+        let lumaGridHeight = 36
+        let totalGridSamples = lumaGridWidth * lumaGridHeight
 
         var sampleCount: Float = 0
+        var skippedPixelCount = 0
         var lumaSum: Float = 0
         var highlightCount: Float = 0
         var clippedCount: Float = 0
@@ -5160,46 +5344,122 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         var nearWhiteGreenSum: Float = 0
         var nearWhiteBlueSum: Float = 0
         var lumaGrid: [Float] = []
-        lumaGrid.reserveCapacity(sampleXs.count * sampleYs.count)
+        lumaGrid.reserveCapacity(totalGridSamples)
 
-        for y in sampleYs {
-            let row = buffer + y * bytesPerRow
-            for x in sampleXs {
-                let pixel = row + x * 4
-                let blue = Float(pixel[0]) / 255.0
-                let green = Float(pixel[1]) / 255.0
-                let red = Float(pixel[2]) / 255.0
-                let luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-                let channelMax = max(red, max(green, blue))
-                let channelMin = min(red, min(green, blue))
-                let saturation = channelMax - channelMin
+        func clamp01(_ value: Float) -> Float {
+            max(0, min(1, value))
+        }
 
-                lumaGrid.append(luma)
-                sampleCount += 1
-                lumaSum += luma
-                if luma > 0.92 { highlightCount += 1 }
-                if luma > 0.98 { clippedCount += 1 }
-                if luma < 0.20 { shadowCount += 1 }
-                if luma > 0.65, saturation < 0.16 {
-                    nearWhiteCount += 1
-                    nearWhiteLumaSum += luma
-                }
+        func recordSample(red: Float, green: Float, blue: Float, luma: Float) {
+            let safeRed = clamp01(red)
+            let safeGreen = clamp01(green)
+            let safeBlue = clamp01(blue)
+            let safeLuma = clamp01(luma)
+            let channelMax = max(safeRed, max(safeGreen, safeBlue))
+            let channelMin = min(safeRed, min(safeGreen, safeBlue))
+            let saturation = channelMax - channelMin
 
-                let isWhiteBalanceCandidate = luma > 0.50
-                    && luma < 0.96
-                    && saturation < 0.22
-                    && channelMax < 0.97
-                if isWhiteBalanceCandidate {
-                    autoWBNearWhiteCount += 1
-                    autoWBNearWhiteLumaSum += luma
-                    nearWhiteRedSum += red
-                    nearWhiteGreenSum += green
-                    nearWhiteBlueSum += blue
-                }
+            lumaGrid.append(safeLuma)
+            sampleCount += 1
+            lumaSum += safeLuma
+            if safeLuma > 0.92 { highlightCount += 1 }
+            if safeLuma > 0.98 { clippedCount += 1 }
+            if safeLuma < 0.20 { shadowCount += 1 }
+            if safeLuma > 0.65, saturation < 0.16 {
+                nearWhiteCount += 1
+                nearWhiteLumaSum += safeLuma
+            }
+
+            let isWhiteBalanceCandidate = safeLuma > 0.50
+                && safeLuma < 0.96
+                && saturation < 0.22
+                && channelMax < 0.97
+            if isWhiteBalanceCandidate {
+                autoWBNearWhiteCount += 1
+                autoWBNearWhiteLumaSum += safeLuma
+                nearWhiteRedSum += safeRed
+                nearWhiteGreenSum += safeGreen
+                nearWhiteBlueSum += safeBlue
             }
         }
 
-        guard sampleCount > 0 else { return nil }
+        let bytesPerRow: Int
+        switch pixelFormat {
+        case kCVPixelFormatType_32BGRA:
+            guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
+            bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+            guard bytesPerRow > 0 else { return nil }
+            let buffer = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+            for gridY in 0..<lumaGridHeight {
+                let normalizedY = lumaGridHeight == 1 ? 0 : Double(gridY) / Double(lumaGridHeight - 1)
+                let y = min(roiMaxY - 1, roiMinY + Int((Double(roiHeight - 1) * normalizedY).rounded()))
+                let row = buffer + y * bytesPerRow
+                for gridX in 0..<lumaGridWidth {
+                    let normalizedX = lumaGridWidth == 1 ? 0 : Double(gridX) / Double(lumaGridWidth - 1)
+                    let x = min(roiMaxX - 1, roiMinX + Int((Double(roiWidth - 1) * normalizedX).rounded()))
+                    let pixel = row + x * 4
+                    guard pixel[3] > 0 else {
+                        skippedPixelCount += 1
+                        lumaGrid.append(0)
+                        continue
+                    }
+                    let blue = Float(pixel[0]) / 255.0
+                    let green = Float(pixel[1]) / 255.0
+                    let red = Float(pixel[2]) / 255.0
+                    let luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                    recordSample(red: red, green: green, blue: blue, luma: luma)
+                }
+            }
+
+        case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+             kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+            let planeCount = CVPixelBufferGetPlaneCount(pixelBuffer)
+            guard planeCount >= 2,
+                  let yBaseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0),
+                  let uvBaseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1) else {
+                return nil
+            }
+            let yBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+            let uvBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1)
+            let uvHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, 1)
+            guard yBytesPerRow > 0, uvBytesPerRow >= 2, uvHeight > 0 else { return nil }
+            bytesPerRow = yBytesPerRow
+            let yBuffer = yBaseAddress.assumingMemoryBound(to: UInt8.self)
+            let uvBuffer = uvBaseAddress.assumingMemoryBound(to: UInt8.self)
+            let isVideoRange = pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+
+            for gridY in 0..<lumaGridHeight {
+                let normalizedY = lumaGridHeight == 1 ? 0 : Double(gridY) / Double(lumaGridHeight - 1)
+                let y = min(roiMaxY - 1, roiMinY + Int((Double(roiHeight - 1) * normalizedY).rounded()))
+                let yRow = yBuffer + y * yBytesPerRow
+                let uvY = min(uvHeight - 1, max(0, y / 2))
+                let uvRow = uvBuffer + uvY * uvBytesPerRow
+                for gridX in 0..<lumaGridWidth {
+                    let normalizedX = lumaGridWidth == 1 ? 0 : Double(gridX) / Double(lumaGridWidth - 1)
+                    let x = min(roiMaxX - 1, roiMinX + Int((Double(roiWidth - 1) * normalizedX).rounded()))
+                    let yByte = yRow[x]
+                    let uvOffset = min(max(0, (x / 2) * 2), max(0, uvBytesPerRow - 2))
+                    let cbByte = uvRow[uvOffset]
+                    let crByte = uvRow[uvOffset + 1]
+
+                    let yNorm: Float = isVideoRange
+                        ? clamp01((Float(yByte) - 16.0) / 219.0)
+                        : Float(yByte) / 255.0
+                    let cb = (Float(cbByte) - 128.0) / 255.0
+                    let cr = (Float(crByte) - 128.0) / 255.0
+                    let red = yNorm + 1.402 * cr
+                    let green = yNorm - 0.344136 * cb - 0.714136 * cr
+                    let blue = yNorm + 1.772 * cb
+                    recordSample(red: red, green: green, blue: blue, luma: yNorm)
+                }
+            }
+
+        default:
+            return nil
+        }
+
+        guard sampleCount >= 96, lumaGrid.count == totalGridSamples else { return nil }
 
         let exposureMetrics = ProductAutoExposureMetrics(
             meanLuma: lumaSum / sampleCount,
@@ -5245,16 +5505,103 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         let sharpnessMetrics = ProductSharpnessAnalyzer.metrics(
             lumaGrid: lumaGrid,
-            width: sampleXs.count,
-            height: sampleYs.count,
+            width: lumaGridWidth,
+            height: lumaGridHeight,
             exposureMetrics: exposureMetrics
         )
 
         return ProductPreviewFrameAnalysis(
             exposureMetrics: exposureMetrics,
             whiteBalanceMetrics: whiteBalanceMetrics,
-            sharpnessMetrics: sharpnessMetrics
+            sharpnessMetrics: sharpnessMetrics,
+            frameDiagnostics: ProductAutoSceneFrameDiagnostics(
+                pixelFormat: pixelFormat,
+                pixelFormatName: productAutoScenePixelFormatName(pixelFormat),
+                width: width,
+                height: height,
+                planeCount: CVPixelBufferGetPlaneCount(pixelBuffer),
+                bytesPerRow: bytesPerRow,
+                timestampSeconds: timestampSeconds,
+                frameAgeSeconds: frameAgeSeconds,
+                normalizedROI: normalizedROI,
+                pixelROI: CGRect(x: roiMinX, y: roiMinY, width: roiWidth, height: roiHeight),
+                validPixelCount: Int(sampleCount),
+                skippedPixelCount: skippedPixelCount,
+                sampledPixelCount: totalGridSamples
+            )
         )
+    }
+
+    private static func productAutoSceneFrameSkip(
+        reason: String,
+        pixelBuffer: CVPixelBuffer?,
+        timestamp: CMTime,
+        now: CFTimeInterval
+    ) -> ProductAutoSceneFrameSkip {
+        let timing = productAutoSceneFrameTiming(timestamp: timestamp, now: now)
+        guard let pixelBuffer else {
+            return ProductAutoSceneFrameSkip(
+                reason: reason,
+                pixelFormat: 0,
+                pixelFormatName: "none",
+                width: 0,
+                height: 0,
+                planeCount: 0,
+                bytesPerRow: 0,
+                timestampSeconds: timing.timestampSeconds,
+                frameAgeSeconds: timing.frameAgeSeconds
+            )
+        }
+
+        let pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        let planeCount = CVPixelBufferGetPlaneCount(pixelBuffer)
+        let bytesPerRow = planeCount > 0
+            ? CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+            : CVPixelBufferGetBytesPerRow(pixelBuffer)
+        return ProductAutoSceneFrameSkip(
+            reason: reason,
+            pixelFormat: pixelFormat,
+            pixelFormatName: productAutoScenePixelFormatName(pixelFormat),
+            width: CVPixelBufferGetWidth(pixelBuffer),
+            height: CVPixelBufferGetHeight(pixelBuffer),
+            planeCount: planeCount,
+            bytesPerRow: bytesPerRow,
+            timestampSeconds: timing.timestampSeconds,
+            frameAgeSeconds: timing.frameAgeSeconds
+        )
+    }
+
+    private static func productAutoSceneFrameTiming(
+        timestamp: CMTime,
+        now: CFTimeInterval
+    ) -> (timestampSeconds: Double, frameAgeSeconds: Double) {
+        guard timestamp.isValid, timestamp.seconds.isFinite else {
+            return (-1, -1)
+        }
+        let rawAge = now - timestamp.seconds
+        let age = rawAge.isFinite && rawAge >= 0 && rawAge < 60 ? rawAge : -1
+        return (timestamp.seconds, age)
+    }
+
+    private static func isSupportedProductAutoScenePixelFormat(_ pixelFormat: OSType) -> Bool {
+        pixelFormat == kCVPixelFormatType_32BGRA
+            || pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+            || pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    }
+
+    private static func productAutoScenePixelFormatName(_ pixelFormat: OSType) -> String {
+        switch pixelFormat {
+        case kCVPixelFormatType_32BGRA:
+            return "32BGRA"
+        case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+            return "420YpCbCr8BiPlanarFullRange"
+        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+            return "420YpCbCr8BiPlanarVideoRange"
+        case 0:
+            return "none"
+        default:
+            return String(format: "0x%08X", pixelFormat)
+        }
     }
 }
 
