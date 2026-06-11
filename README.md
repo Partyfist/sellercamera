@@ -91,3 +91,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R77D 参数调节回归修复与焦段 ruler 速度校准报告：`docs/reports/r77d_parameter_ruler_regression_and_lens_zoom_speed.md`
 - R77E 商品自动场景分析采样修复报告：`docs/reports/r77e_product_auto_scene_sampling_reliability.md`
 - R77F ProductAutoScene 真机指标校准与自动拍摄策略收口报告：`docs/reports/r77f_product_auto_scene_metrics_calibration.md`
+- R77G 拍摄链路真机手感复核报告：`docs/reports/r77g_capture_chain_device_feel_review_zoom_macro_focus.md`
