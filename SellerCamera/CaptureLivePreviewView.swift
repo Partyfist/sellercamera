@@ -528,6 +528,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private static let tele77PostSwitchStabilizationWindow: TimeInterval = 0.22
     private static let tele77PostSwitchWriteInterval: TimeInterval = 0.05
     private static let tele77PostSwitchHysteresis: CGFloat = 0.02
+    private static let productAutoSceneSessionWarmupInterval: TimeInterval = 1.2
+    private static let productAutoSceneNearBlackProbeLimit = 2
     private static let wideLensBoundaryHeadroom: CGFloat = 1.06
     private static let teleLensBoundaryHeadroom: CGFloat = 1.06
     private static let lensZoomSnapThresholdBase: CGFloat = 0.03
@@ -672,6 +674,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
     private var lastSessionStartAt = Date.distantPast
     private var isCaptureStabilizerSettling = false
+    private var productAutoSceneNearBlackFrameStreak = 0
     private let productAutoExposureAnalysisInterval: CFTimeInterval = 0.35
     private let productAutoExposureWriteInterval: TimeInterval = 0.35
     private let productAutoExposureDebugLogInterval: TimeInterval = 1.0
@@ -4646,7 +4649,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     }
 
     private func productAutoWhiteBalanceAvailability() -> (canWrite: Bool, statusText: String) {
-        guard isWhiteBalanceAutoSupported, isWhiteBalancePresetSupported else { return (false, "商品 WB 不可用") }
+        guard isWhiteBalanceAutoSupported else { return (false, "商品 WB 不可用 · 系统Auto") }
+        guard isWhiteBalancePresetSupported else { return (false, "商品 WB 不可用 · 设备Gains") }
         guard selectedWhiteBalancePreset == .auto else { return (false, "商品 WB 暂停 · 手动WB") }
         guard !isFocusExposureLocked else { return (false, "商品 WB 暂停 · AEAF-L") }
         guard !isExposureLocked else { return (false, "商品 WB 暂停 · AE-L") }
@@ -5253,6 +5257,24 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
             return
         }
 
+        if Self.isProductAutoSceneNearBlackProbeFrame(analysis) {
+            productAutoSceneNearBlackFrameStreak += 1
+            if productAutoSceneNearBlackFrameStreak <= Self.productAutoSceneNearBlackProbeLimit {
+                let skip = Self.productAutoSceneFrameSkip(
+                    reason: "nearBlackProbe",
+                    pixelBuffer: pixelBuffer,
+                    timestamp: timestamp,
+                    now: now
+                )
+                DispatchQueue.main.async { [weak self] in
+                    self?.logProductAutoSceneFrameGuard(skip)
+                }
+                return
+            }
+        } else {
+            productAutoSceneNearBlackFrameStreak = 0
+        }
+
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.handleProductAutoExposureMetrics(analysis.exposureMetrics)
@@ -5286,7 +5308,9 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
 
         guard isSessionConfigured, session.isRunning else { return "sessionNotRunning" }
-        if Date().timeIntervalSince(lastSessionStartAt) < 0.6 { return "sessionWarmup" }
+        if Date().timeIntervalSince(lastSessionStartAt) < Self.productAutoSceneSessionWarmupInterval {
+            return "sessionWarmup"
+        }
         if isSwitchingCamera { return "unstableLensState:switchingCamera" }
         if isCaptureStabilizerSettling { return "stabilizerSettle" }
         if Date().timeIntervalSince(lastLensRulerInteractionAt) < 0.45 {
@@ -5587,6 +5611,15 @@ extension CaptureCameraRuntime: AVCaptureVideoDataOutputSampleBufferDelegate {
         pixelFormat == kCVPixelFormatType_32BGRA
             || pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
             || pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    }
+
+    private static func isProductAutoSceneNearBlackProbeFrame(_ analysis: ProductPreviewFrameAnalysis) -> Bool {
+        let metrics = analysis.exposureMetrics
+        return metrics.meanLuma < 0.015
+            && metrics.shadowRatio > 0.985
+            && metrics.highlightRatio == 0
+            && metrics.clippedRatio == 0
+            && metrics.nearWhiteRatio == 0
     }
 
     private static func productAutoScenePixelFormatName(_ pixelFormat: OSType) -> String {
