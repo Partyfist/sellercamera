@@ -262,8 +262,8 @@ enum CapturePhotoAspectRatioPreset: CaseIterable {
     case ratio1x1
     case ratio4x5
     case ratio3x4
-    case ratio9x16
     case ratio16x9
+    case ratio9x16
 
     var displayText: String {
         switch self {
@@ -297,11 +297,11 @@ enum CapturePhotoAspectRatioPreset: CaseIterable {
 }
 
 enum CapturePhotoPixelPreset: CaseIterable {
-    case best
     case p800
     case p1200
     case p1600
     case p2400
+    case best
     case raw
 
     var fixedLongEdgePixels: Int? {
@@ -370,6 +370,14 @@ enum CapturePhotoPixelPreset: CaseIterable {
         }
         return "\(Int(size.width))×\(Int(size.height))"
     }
+}
+
+struct CaptureOptionSelectionResult {
+    let selectedIndex: Int
+    let selectedValue: String
+    let runtimeAppliedValue: String
+    let fallbackReason: String?
+    let generation: UInt64
 }
 
 enum CaptureBurstOption: Int, CaseIterable {
@@ -776,6 +784,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var deviceSwitchGeneration: UInt64 = 0
     private var exposureParameterWriteGeneration: UInt64 = 0
     private var whiteBalanceParameterWriteGeneration: UInt64 = 0
+    private var aspectRatioSelectionGeneration: UInt64 = 0
+    private var pixelSelectionGeneration: UInt64 = 0
     private var pendingDeviceSwitchCompletion: (() -> Void)?
     private var productSharpnessBlurryHitCount = 0
     private var productSharpnessSharpHitCount = 0
@@ -1664,11 +1674,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         guard !presets.isEmpty else { return }
         let clamped = max(0, min(Double(presets.count - 1), requestedValue))
         let index = Int(clamped.rounded())
-        applyAspectRatioPreset(presets[index], shouldShowHint: true)
+        _ = selectAspectRatioPreset(index: index, source: "legacyDial")
     }
 
     func resetAspectRatio() {
-        applyAspectRatioPreset(.ratio3x4, shouldShowHint: true)
+        _ = selectAspectRatioPreset(index: CapturePhotoAspectRatioPreset.allCases.firstIndex(of: .ratio3x4) ?? 0, source: "reset")
     }
 
     var aspectRatioDialValue: Double {
@@ -1690,11 +1700,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         guard !presets.isEmpty else { return }
         let clamped = max(0, min(Double(presets.count - 1), requestedValue))
         let index = Int(clamped.rounded())
-        applyPixelPreset(presets[index], shouldShowHint: true)
+        _ = selectPixelPreset(index: index, source: "legacyDial")
     }
 
     func resetPixelPreset() {
-        applyPixelPreset(.p1600, shouldShowHint: true)
+        _ = selectPixelPreset(index: CapturePhotoPixelPreset.allCases.firstIndex(of: .p1600) ?? 0, source: "reset")
     }
 
     var pixelDialValue: Double {
@@ -1707,26 +1717,115 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         selectedPixelPreset.displayText(for: selectedAspectRatioPreset.ratioValue)
     }
 
+    @discardableResult
+    func selectAspectRatioPreset(index requestedIndex: Int, source: String) -> CaptureOptionSelectionResult {
+        let presets = CapturePhotoAspectRatioPreset.allCases
+        guard !presets.isEmpty else {
+            return CaptureOptionSelectionResult(
+                selectedIndex: 0,
+                selectedValue: "--",
+                runtimeAppliedValue: "--",
+                fallbackReason: "noAspectRatioPresets",
+                generation: aspectRatioSelectionGeneration
+            )
+        }
+
+        aspectRatioSelectionGeneration &+= 1
+        let index = max(0, min(presets.count - 1, requestedIndex))
+        let preset = presets[index]
+        let previousPreset = selectedAspectRatioPreset
+        let didApply = applyAspectRatioPreset(preset, shouldShowHint: true)
+        let selectedIndex = presets.firstIndex(of: selectedAspectRatioPreset) ?? index
+        let fallbackReason = index == requestedIndex ? nil : "clampedIndex"
+        logCaptureOptionSelection(
+            scope: "aspectRatio",
+            source: source,
+            requestedIndex: requestedIndex,
+            selectedIndex: selectedIndex,
+            selectedValue: preset.displayText,
+            runtimeAppliedValue: selectedAspectRatioPreset.displayText,
+            fallbackReason: fallbackReason,
+            generation: aspectRatioSelectionGeneration,
+            changed: didApply || previousPreset != selectedAspectRatioPreset
+        )
+        return CaptureOptionSelectionResult(
+            selectedIndex: selectedIndex,
+            selectedValue: preset.displayText,
+            runtimeAppliedValue: selectedAspectRatioPreset.displayText,
+            fallbackReason: fallbackReason,
+            generation: aspectRatioSelectionGeneration
+        )
+    }
+
+    @discardableResult
+    func selectPixelPreset(index requestedIndex: Int, source: String) -> CaptureOptionSelectionResult {
+        let presets = CapturePhotoPixelPreset.allCases
+        guard !presets.isEmpty else {
+            return CaptureOptionSelectionResult(
+                selectedIndex: 0,
+                selectedValue: "--",
+                runtimeAppliedValue: "--",
+                fallbackReason: "noPixelPresets",
+                generation: pixelSelectionGeneration
+            )
+        }
+
+        pixelSelectionGeneration &+= 1
+        let index = max(0, min(presets.count - 1, requestedIndex))
+        let preset = presets[index]
+        let previousPreset = selectedPixelPreset
+        let didApply = applyPixelPreset(preset, shouldShowHint: true)
+        let selectedIndex = presets.firstIndex(of: selectedPixelPreset) ?? index
+        let fallbackReason: String? = {
+            if index != requestedIndex { return "clampedIndex" }
+            if preset.requiresRawSupport, !isRAWCaptureSupported { return "rawUnsupportedFallback" }
+            return nil
+        }()
+        logCaptureOptionSelection(
+            scope: "outputQuality",
+            source: source,
+            requestedIndex: requestedIndex,
+            selectedIndex: selectedIndex,
+            selectedValue: preset.shortLabel,
+            runtimeAppliedValue: selectedPixelPreset.shortLabel,
+            fallbackReason: fallbackReason,
+            generation: pixelSelectionGeneration,
+            changed: didApply || previousPreset != selectedPixelPreset
+        )
+        return CaptureOptionSelectionResult(
+            selectedIndex: selectedIndex,
+            selectedValue: preset.shortLabel,
+            runtimeAppliedValue: selectedPixelPreset.shortLabel,
+            fallbackReason: fallbackReason,
+            generation: pixelSelectionGeneration
+        )
+    }
+
+    @discardableResult
     private func applyAspectRatioPreset(
         _ preset: CapturePhotoAspectRatioPreset,
         shouldShowHint: Bool
-    ) {
-        if selectedAspectRatioPreset == preset { return }
+    ) -> Bool {
+        if selectedAspectRatioPreset == preset { return false }
         selectedAspectRatioPreset = preset
         if shouldShowHint {
             captureHintText = "比例：\(preset.displayText) · \(selectedPixelPreset.displayText(for: preset.ratioValue))"
         }
+        return true
     }
 
+    @discardableResult
     private func applyPixelPreset(
         _ preset: CapturePhotoPixelPreset,
         shouldShowHint: Bool
-    ) {
+    ) -> Bool {
         if preset.requiresRawSupport, !isRAWCaptureSupported {
-            captureHintText = "当前设备不支持 RAW"
-            return
+            let didFallback = selectedPixelPreset != .best
+            selectedPixelPreset = .best
+            captureHintText = "当前设备不支持 RAW，已回退最佳质量"
+            return didFallback
         }
-        if selectedPixelPreset == preset { return }
+        if selectedPixelPreset == preset { return false }
         selectedPixelPreset = preset
         if shouldShowHint {
             if preset == .raw {
@@ -1737,6 +1836,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 captureHintText = "像素：\(preset.displayText(for: selectedAspectRatioPreset.ratioValue))"
             }
         }
+        return true
     }
 
     private func applyShutterPreset(
@@ -5278,6 +5378,33 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             "bytesPerRow=\(skip.bytesPerRow) " +
             "timestamp=\(String(format: "%.3f", skip.timestampSeconds)) " +
             "age=\(String(format: "%.3f", skip.frameAgeSeconds))"
+        )
+#endif
+    }
+
+    private func logCaptureOptionSelection(
+        scope: String,
+        source: String,
+        requestedIndex: Int,
+        selectedIndex: Int,
+        selectedValue: String,
+        runtimeAppliedValue: String,
+        fallbackReason: String?,
+        generation: UInt64,
+        changed: Bool
+    ) {
+#if DEBUG
+        print(
+            "[CaptureOptionControl] " +
+            "scope=\(scope) " +
+            "source=\(source) " +
+            "requestedIndex=\(requestedIndex) " +
+            "selectedIndex=\(selectedIndex) " +
+            "selectedValue=\(selectedValue) " +
+            "runtimeAppliedValue=\(runtimeAppliedValue) " +
+            "fallbackReason=\(fallbackReason ?? "none") " +
+            "generation=\(generation) " +
+            "changed=\(changed)"
         )
 #endif
     }

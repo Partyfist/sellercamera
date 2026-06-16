@@ -24,6 +24,7 @@ struct CaptureScreen: View {
     @State private var isManualFocusModeEnabled = false
     @State private var isManualFocusRulerPresented = false
     @State private var isMoreOptionsPanelPresented = false
+    @State private var isCaptureOptionPanelPresented = false
     @State private var pendingExposureBiasWheelValue: Double?
     @State private var pendingExposureBiasUpdatedAt: Date?
     @State private var lastDispatchedExposureBiasValue: Double?
@@ -63,7 +64,7 @@ struct CaptureScreen: View {
     }
 
     private var isAnyFloatingControlPresented: Bool {
-        isLensZoomControlPresented || isManualFocusRulerPresented
+        isLensZoomControlPresented || isManualFocusRulerPresented || isCaptureOptionPanelPresented
     }
 
     private var primaryParameterKinds: [CaptureProfessionalParameterKind] {
@@ -297,11 +298,12 @@ struct CaptureScreen: View {
     }
 
     private func dismissInlineControls() {
-        guard isBottomParameterPanelExpanded || activeControlTarget != .none || isManualFocusRulerPresented else { return }
+        guard isBottomParameterPanelExpanded || activeControlTarget != .none || isManualFocusRulerPresented || isCaptureOptionPanelPresented else { return }
         withAnimation(.easeOut(duration: 0.18)) {
             isBottomParameterPanelExpanded = false
             activeControlTarget = .none
             isManualFocusRulerPresented = false
+            isCaptureOptionPanelPresented = false
         }
     }
 
@@ -317,6 +319,7 @@ struct CaptureScreen: View {
             if isMoreOptionsPanelPresented {
                 isMoreOptionsPanelPresented = false
             } else {
+                isCaptureOptionPanelPresented = false
                 isBottomParameterPanelExpanded = false
                 activeControlTarget = .none
                 isManualFocusRulerPresented = false
@@ -325,7 +328,25 @@ struct CaptureScreen: View {
         }
     }
 
+    private func handleCaptureOptionTap() {
+        withAnimation(.easeOut(duration: 0.16)) {
+            if isCaptureOptionPanelPresented {
+                isCaptureOptionPanelPresented = false
+            } else {
+                isMoreOptionsPanelPresented = false
+                isBottomParameterPanelExpanded = false
+                activeControlTarget = .none
+                isManualFocusRulerPresented = false
+                isCaptureOptionPanelPresented = true
+            }
+        }
+    }
+
     private func dismissInlineControlsForPreviewTapIfNeeded() -> Bool {
+        if isCaptureOptionPanelPresented {
+            dismissInlineControls()
+            return true
+        }
         if isMoreOptionsPanelPresented {
             dismissMoreOptionsPanel()
             return true
@@ -406,8 +427,8 @@ struct CaptureScreen: View {
                     selectedAspectRatioPreset: cameraRuntime.selectedAspectRatioPreset,
                     selectedPixelPreset: cameraRuntime.selectedPixelPreset,
                     isRawCaptureSupported: cameraRuntime.isRAWCaptureSupported,
-                    onSelectAspectRatio: selectAspectRatioPreset,
-                    onSelectPixel: selectPixelPreset,
+                    isCaptureOptionsPresented: isCaptureOptionPanelPresented,
+                    onTapCaptureOptions: handleCaptureOptionTap,
                     isGridEnabled: cameraRuntime.isGridEnabled,
                     onToggleGrid: cameraRuntime.toggleGrid,
                     isLevelIndicatorEnabled: cameraRuntime.isLevelIndicatorEnabled,
@@ -429,29 +450,44 @@ struct CaptureScreen: View {
                 .padding(.bottom, 6)
                 .opacity(isAnyFloatingControlPresented ? 0.86 : 1)
                 .animation(.easeInOut(duration: 0.18), value: isAnyFloatingControlPresented)
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        dismissInlineControls()
-                    }
-                )
 
-                CapturePreviewContainer(
-                    cameraRuntime: cameraRuntime,
-                    selectedAspectRatioPreset: cameraRuntime.selectedAspectRatioPreset,
-                    captureHintText: cameraRuntime.captureHintText,
-                    isAnyFloatingControlPresented: isAnyFloatingControlPresented,
-                    activeControlTarget: $activeControlTarget,
-                    isManualFocusModeActive: isManualFocusModeActive,
-                    isManualFocusRulerPresented: isManualFocusRulerPresented && isManualFocusModeActive,
-                    manualFocusRulerValues: manualFocusRulerValues,
-                    selectedManualFocusRulerIndex: selectedManualFocusRulerIndex,
-                    manualFocusValueText: formattedManualFocusRulerValue(manualFocusDisplayPosition),
-                    isManualFocusRulerEnabled: isManualFocusModeActive && cameraRuntime.isManualFocusSupported && !cameraRuntime.isFocusExposureLocked,
-                    onToggleExposureLock: cameraRuntime.toggleExposureLock,
-                    onToggleManualFocusMode: toggleManualFocusMode,
-                    onManualFocusStep: stepManualFocusRuler,
-                    onTapPreviewBeforeFocus: dismissInlineControlsForPreviewTapIfNeeded
-                )
+                ZStack(alignment: .top) {
+                    CapturePreviewContainer(
+                        cameraRuntime: cameraRuntime,
+                        selectedAspectRatioPreset: cameraRuntime.selectedAspectRatioPreset,
+                        captureHintText: cameraRuntime.captureHintText,
+                        isAnyFloatingControlPresented: isAnyFloatingControlPresented,
+                        activeControlTarget: $activeControlTarget,
+                        isManualFocusModeActive: isManualFocusModeActive,
+                        isManualFocusRulerPresented: isManualFocusRulerPresented && isManualFocusModeActive,
+                        manualFocusRulerValues: manualFocusRulerValues,
+                        selectedManualFocusRulerIndex: selectedManualFocusRulerIndex,
+                        manualFocusValueText: formattedManualFocusRulerValue(manualFocusDisplayPosition),
+                        isManualFocusRulerEnabled: isManualFocusModeActive && cameraRuntime.isManualFocusSupported && !cameraRuntime.isFocusExposureLocked,
+                        onToggleExposureLock: cameraRuntime.toggleExposureLock,
+                        onToggleManualFocusMode: toggleManualFocusMode,
+                        onManualFocusStep: stepManualFocusRuler,
+                        onTapPreviewBeforeFocus: dismissInlineControlsForPreviewTapIfNeeded
+                    )
+
+                    if isCaptureOptionPanelPresented {
+                        CaptureOptionControlPanel(
+                            selectedAspectRatioPreset: cameraRuntime.selectedAspectRatioPreset,
+                            selectedPixelPreset: cameraRuntime.selectedPixelPreset,
+                            isRawCaptureSupported: cameraRuntime.isRAWCaptureSupported,
+                            onSelectAspectRatioIndex: { index, source, context in
+                                selectAspectRatioOption(index: index, source: source, context: context)
+                            },
+                            onSelectPixelIndex: { index, source, context in
+                                selectPixelOption(index: index, source: source, context: context)
+                            }
+                        )
+                        .padding(.horizontal, 14)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(5)
+                    }
+                }
                 .frame(maxHeight: .infinity)
                 .padding(.top, 0)
 
@@ -465,6 +501,7 @@ struct CaptureScreen: View {
                     TapGesture().onEnded {
                         dismissInlineControls()
                         dismissMoreOptionsPanel()
+                        isCaptureOptionPanelPresented = false
                     }
                 )
 
@@ -567,6 +604,7 @@ struct CaptureScreen: View {
             }
             if target != .none {
                 dismissMoreOptionsPanel()
+                isCaptureOptionPanelPresented = false
             }
         }
         .onChange(of: cameraRuntime.currentExposureBias) { value in
@@ -783,13 +821,77 @@ struct CaptureScreen: View {
     private func selectAspectRatioPreset(_ preset: CapturePhotoAspectRatioPreset) {
         let allPresets = CapturePhotoAspectRatioPreset.allCases
         guard let index = allPresets.firstIndex(of: preset) else { return }
-        cameraRuntime.setAspectRatioDialValue(Double(index))
+        selectAspectRatioOption(index: index, source: .tap)
     }
 
     private func selectPixelPreset(_ preset: CapturePhotoPixelPreset) {
         let allPresets = CapturePhotoPixelPreset.allCases
         guard let index = allPresets.firstIndex(of: preset) else { return }
-        cameraRuntime.setPixelDialValue(Double(index))
+        selectPixelOption(index: index, source: .tap)
+    }
+
+    private func selectAspectRatioOption(
+        index: Int,
+        source: CaptureOptionSelectionSource,
+        context: CaptureOptionSelectionContext = .empty
+    ) {
+        let result = cameraRuntime.selectAspectRatioPreset(index: index, source: source.rawValue)
+        logCaptureOptionControl(
+            scope: .aspectRatio,
+            source: source,
+            context: context,
+            targetIndex: index,
+            selectedValue: result.selectedValue,
+            runtimeAppliedValue: result.runtimeAppliedValue,
+            fallbackReason: result.fallbackReason,
+            generation: result.generation
+        )
+    }
+
+    private func selectPixelOption(
+        index: Int,
+        source: CaptureOptionSelectionSource,
+        context: CaptureOptionSelectionContext = .empty
+    ) {
+        let result = cameraRuntime.selectPixelPreset(index: index, source: source.rawValue)
+        logCaptureOptionControl(
+            scope: .outputQuality,
+            source: source,
+            context: context,
+            targetIndex: index,
+            selectedValue: result.selectedValue,
+            runtimeAppliedValue: result.runtimeAppliedValue,
+            fallbackReason: result.fallbackReason,
+            generation: result.generation
+        )
+    }
+
+    private func logCaptureOptionControl(
+        scope: CaptureOptionControlScope,
+        source: CaptureOptionSelectionSource,
+        context: CaptureOptionSelectionContext,
+        targetIndex: Int,
+        selectedValue: String,
+        runtimeAppliedValue: String,
+        fallbackReason: String?,
+        generation: UInt64
+    ) {
+#if DEBUG
+        print(
+            "[CaptureOptionControl] " +
+            "scope=\(scope.rawValue) " +
+            "source=\(source.rawValue) " +
+            "startIndex=\(context.startIndex.map(String.init) ?? "nil") " +
+            "targetIndex=\(targetIndex) " +
+            "translation=\(context.translation.map { String(format: "%.1f", $0) } ?? "nil") " +
+            "predictedTranslation=\(context.predictedTranslation.map { String(format: "%.1f", $0) } ?? "nil") " +
+            "flingSteps=\(context.flingSteps.map(String.init) ?? "nil") " +
+            "selectedValue=\(selectedValue) " +
+            "runtimeAppliedValue=\(runtimeAppliedValue) " +
+            "fallbackReason=\(fallbackReason ?? "none") " +
+            "generation=\(generation)"
+        )
+#endif
     }
 }
 
@@ -1397,6 +1499,28 @@ private enum CaptureActiveControlTarget: Equatable {
     case lensZoom
 }
 
+private enum CaptureOptionControlScope: String {
+    case aspectRatio
+    case outputQuality
+}
+
+private enum CaptureOptionSelectionSource: String {
+    case tap
+    case drag
+    case fling
+    case programmaticRestore
+    case capabilityFallback
+}
+
+private struct CaptureOptionSelectionContext {
+    var startIndex: Int?
+    var translation: CGFloat?
+    var predictedTranslation: CGFloat?
+    var flingSteps: Int?
+
+    static let empty = CaptureOptionSelectionContext()
+}
+
 private enum CaptureIntentKind: String, CaseIterable, Identifiable {
     case standard
     case detail
@@ -1471,8 +1595,8 @@ private struct CaptureTopStatusBar: View {
     let selectedAspectRatioPreset: CapturePhotoAspectRatioPreset
     let selectedPixelPreset: CapturePhotoPixelPreset
     let isRawCaptureSupported: Bool
-    let onSelectAspectRatio: (CapturePhotoAspectRatioPreset) -> Void
-    let onSelectPixel: (CapturePhotoPixelPreset) -> Void
+    let isCaptureOptionsPresented: Bool
+    let onTapCaptureOptions: () -> Void
     let isGridEnabled: Bool
     let onToggleGrid: () -> Void
     let isLevelIndicatorEnabled: Bool
@@ -1499,43 +1623,13 @@ private struct CaptureTopStatusBar: View {
                 .buttonStyle(.plain)
                 .disabled(!isFlashModeSupported)
 
-                Menu {
-                    Section("拍摄比例") {
-                        ForEach(CapturePhotoAspectRatioPreset.allCases, id: \.self) { preset in
-                            Button {
-                                onSelectAspectRatio(preset)
-                            } label: {
-                                if preset == selectedAspectRatioPreset {
-                                    Label(preset.displayText, systemImage: "checkmark")
-                                } else {
-                                    Text(preset.displayText)
-                                }
-                            }
-                        }
-                    }
-
-                    Section("输出像素") {
-                        ForEach(CapturePhotoPixelPreset.allCases, id: \.self) { preset in
-                            let isPresetEnabled = !preset.requiresRawSupport || isRawCaptureSupported
-                            let text = pixelMenuText(for: preset)
-                            Button {
-                                onSelectPixel(preset)
-                            } label: {
-                                if preset == selectedPixelPreset {
-                                    Label(text, systemImage: "checkmark")
-                                } else {
-                                    Text(text)
-                                }
-                            }
-                            .disabled(!isPresetEnabled)
-                        }
-                    }
-                } label: {
+                Button(action: onTapCaptureOptions) {
                     topToolButtonContent(
                         symbol: "rectangle.on.rectangle.angled",
                         text: "\(selectedAspectRatioPreset.displayText)·\(pixelCompactText(for: selectedPixelPreset))",
                         enabled: true,
-                        showsSymbol: false
+                        showsSymbol: false,
+                        isActive: isCaptureOptionsPresented
                     )
                 }
                 .buttonStyle(.plain)
@@ -1626,6 +1720,384 @@ private struct CaptureTopStatusBar: View {
             return "RAW（不可用）"
         }
         return preset.displayText(for: selectedAspectRatioPreset.ratioValue)
+    }
+}
+
+private struct CaptureOptionControlPanel: View {
+    let selectedAspectRatioPreset: CapturePhotoAspectRatioPreset
+    let selectedPixelPreset: CapturePhotoPixelPreset
+    let isRawCaptureSupported: Bool
+    let onSelectAspectRatioIndex: (Int, CaptureOptionSelectionSource, CaptureOptionSelectionContext) -> Void
+    let onSelectPixelIndex: (Int, CaptureOptionSelectionSource, CaptureOptionSelectionContext) -> Void
+
+    private var aspectRatioItems: [CaptureOptionRulerItem] {
+        CapturePhotoAspectRatioPreset.allCases.map {
+            CaptureOptionRulerItem(
+                id: $0.displayText,
+                title: $0.displayText,
+                subtitle: "比例",
+                isSelectable: true
+            )
+        }
+    }
+
+    private var pixelItems: [CaptureOptionRulerItem] {
+        CapturePhotoPixelPreset.allCases.map { preset in
+            let isRawUnavailable = preset == .raw && !isRawCaptureSupported
+            return CaptureOptionRulerItem(
+                id: preset.shortLabel,
+                title: pixelTitle(for: preset),
+                subtitle: isRawUnavailable
+                    ? "不可用"
+                    : preset.displayText(for: selectedAspectRatioPreset.ratioValue),
+                isSelectable: true,
+                warnsOnSelect: isRawUnavailable
+            )
+        }
+    }
+
+    private var selectedAspectRatioIndex: Int {
+        CapturePhotoAspectRatioPreset.allCases.firstIndex(of: selectedAspectRatioPreset) ?? 0
+    }
+
+    private var selectedPixelIndex: Int {
+        CapturePhotoPixelPreset.allCases.firstIndex(of: selectedPixelPreset) ?? 0
+    }
+
+    var body: some View {
+        VStack(spacing: 9) {
+            CaptureDiscreteOptionRuler(
+                scope: .aspectRatio,
+                title: "拍摄比例",
+                items: aspectRatioItems,
+                selectedIndex: selectedAspectRatioIndex,
+                optionSpacing: 66,
+                maximumFlingSteps: 2,
+                onSelectIndex: onSelectAspectRatioIndex
+            )
+
+            CaptureDiscreteOptionRuler(
+                scope: .outputQuality,
+                title: "输出像素",
+                items: pixelItems,
+                selectedIndex: selectedPixelIndex,
+                optionSpacing: 62,
+                maximumFlingSteps: 2,
+                onSelectIndex: onSelectPixelIndex
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.black.opacity(0.58))
+        )
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.34), radius: 18, x: 0, y: 12)
+    }
+
+    private func pixelTitle(for preset: CapturePhotoPixelPreset) -> String {
+        switch preset {
+        case .p800:
+            return "800"
+        case .p1200:
+            return "1200"
+        case .p1600:
+            return "1600"
+        case .p2400:
+            return "2400"
+        case .best:
+            return "Best"
+        case .raw:
+            return "RAW"
+        }
+    }
+}
+
+private struct CaptureOptionRulerItem: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let isSelectable: Bool
+    var warnsOnSelect: Bool = false
+}
+
+private struct CaptureDiscreteOptionRuler: View {
+    private enum Tuning {
+        static let snapDuration: TimeInterval = 0.15
+        static let dragActivationDistance: CGFloat = 3
+        static let inertiaScale: CGFloat = 0.55
+        static let edgeResistance: CGFloat = 0.34
+    }
+
+    let scope: CaptureOptionControlScope
+    let title: String
+    let items: [CaptureOptionRulerItem]
+    let selectedIndex: Int
+    let optionSpacing: CGFloat
+    let maximumFlingSteps: Int
+    let onSelectIndex: (Int, CaptureOptionSelectionSource, CaptureOptionSelectionContext) -> Void
+
+    @State private var dragStartIndex: Int?
+    @State private var visualOffset: CGFloat = 0
+    @State private var isDragging = false
+    @State private var lastCandidateIndex: Int?
+    @State private var lastHapticIndex: Int?
+    @State private var snapGeneration: UInt64 = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.4)
+                    .foregroundStyle(.white.opacity(0.58))
+                    .textCase(.uppercase)
+
+                Spacer(minLength: 0)
+
+                Text(selectedItemTitle)
+                    .font(.system(size: 11, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(Color(red: 0.20, green: 0.88, blue: 0.76))
+            }
+            .padding(.horizontal, 4)
+
+            GeometryReader { proxy in
+                let centerX = proxy.size.width / 2
+                ZStack {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        optionChip(for: item, index: index)
+                            .position(
+                                x: centerX + CGFloat(index - displayBaseIndex) * optionSpacing + visualOffset,
+                                y: 30
+                            )
+                    }
+
+                    Capsule(style: .continuous)
+                        .fill(Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.92))
+                        .frame(width: 20, height: 2)
+                        .position(x: centerX, y: 58)
+                        .allowsHitTesting(false)
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .contentShape(Rectangle())
+                .highPriorityGesture(dragGesture)
+            }
+            .frame(height: 62)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.065))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .onChange(of: selectedIndex) { _ in
+            guard !isDragging else { return }
+            withAnimation(.easeOut(duration: Tuning.snapDuration)) {
+                visualOffset = 0
+            }
+        }
+    }
+
+    private var selectedItemTitle: String {
+        guard items.indices.contains(selectedIndex) else { return "--" }
+        return items[selectedIndex].title
+    }
+
+    private var displayBaseIndex: Int {
+        dragStartIndex ?? selectedIndex
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: Tuning.dragActivationDistance)
+            .onChanged { value in
+                beginDragIfNeeded()
+                guard let startIndex = dragStartIndex else { return }
+                let boundedTranslation = resistedTranslation(value.translation.width, startIndex: startIndex)
+                visualOffset = boundedTranslation
+
+                let candidateIndex = clampedIndex(startIndex + Int((-boundedTranslation / optionSpacing).rounded()))
+                guard candidateIndex != lastCandidateIndex else { return }
+                lastCandidateIndex = candidateIndex
+                guard items.indices.contains(candidateIndex), items[candidateIndex].isSelectable else { return }
+                triggerSelectionHapticIfNeeded(for: candidateIndex)
+                onSelectIndex(
+                    candidateIndex,
+                    .drag,
+                    CaptureOptionSelectionContext(
+                        startIndex: startIndex,
+                        translation: value.translation.width,
+                        predictedTranslation: nil,
+                        flingSteps: nil
+                    )
+                )
+            }
+            .onEnded { value in
+                finishDrag(
+                    translation: value.translation.width,
+                    predictedTranslation: value.predictedEndTranslation.width
+                )
+            }
+    }
+
+    private func optionChip(for item: CaptureOptionRulerItem, index: Int) -> some View {
+        let isSelected = index == selectedIndex
+        let isCandidate = index == lastCandidateIndex && isDragging
+        return VStack(spacing: 2) {
+            Text(item.title)
+                .font(.system(size: isSelected ? 13 : 12, weight: isSelected ? .bold : .semibold))
+                .monospacedDigit()
+                .foregroundStyle(chipTitleColor(isSelected: isSelected, item: item))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+
+            Text(item.subtitle)
+                .font(.system(size: 8.5, weight: .medium))
+                .foregroundStyle(item.warnsOnSelect ? Color.orange.opacity(0.80) : .white.opacity(isSelected ? 0.70 : 0.38))
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+        }
+        .frame(width: optionSpacing - 6, height: 46)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(chipFill(isSelected: isSelected, isCandidate: isCandidate, item: item))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(chipStroke(isSelected: isSelected, isCandidate: isCandidate, item: item), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !isDragging, item.isSelectable else { return }
+            if index != selectedIndex || item.warnsOnSelect {
+                triggerSelectionHapticIfNeeded(for: index)
+            }
+            onSelectIndex(
+                index,
+                .tap,
+                CaptureOptionSelectionContext(startIndex: selectedIndex)
+            )
+            withAnimation(.easeOut(duration: Tuning.snapDuration)) {
+                visualOffset = 0
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: isCandidate)
+    }
+
+    private func beginDragIfNeeded() {
+        guard dragStartIndex == nil else { return }
+        snapGeneration &+= 1
+        dragStartIndex = selectedIndex
+        lastCandidateIndex = selectedIndex
+        lastHapticIndex = selectedIndex
+        isDragging = true
+    }
+
+    private func finishDrag(translation: CGFloat, predictedTranslation: CGFloat) {
+        guard let startIndex = dragStartIndex else {
+            resetDragState(animated: true)
+            return
+        }
+
+        let boundedTranslation = resistedTranslation(translation, startIndex: startIndex)
+        let baseTargetIndex = clampedIndex(startIndex + Int((-boundedTranslation / optionSpacing).rounded()))
+        let predictedDelta = predictedTranslation - translation
+        let rawFlingSteps = Int(((-predictedDelta / optionSpacing) * Tuning.inertiaScale).rounded())
+        let flingSteps = max(-maximumFlingSteps, min(maximumFlingSteps, rawFlingSteps))
+        let targetIndex = nearestSelectableIndex(to: clampedIndex(baseTargetIndex + flingSteps))
+        let source: CaptureOptionSelectionSource = flingSteps == 0 ? .drag : .fling
+
+        triggerSelectionHapticIfNeeded(for: targetIndex)
+        onSelectIndex(
+            targetIndex,
+            source,
+            CaptureOptionSelectionContext(
+                startIndex: startIndex,
+                translation: translation,
+                predictedTranslation: predictedTranslation,
+                flingSteps: flingSteps
+            )
+        )
+        resetDragState(animated: true)
+    }
+
+    private func resetDragState(animated: Bool) {
+        let generation = snapGeneration &+ 1
+        snapGeneration = generation
+        let updates = {
+            visualOffset = 0
+            dragStartIndex = nil
+            isDragging = false
+            lastCandidateIndex = nil
+        }
+        if animated {
+            withAnimation(.easeOut(duration: Tuning.snapDuration), updates)
+        } else {
+            updates()
+        }
+    }
+
+    private func resistedTranslation(_ translation: CGFloat, startIndex: Int) -> CGFloat {
+        let minimum = -CGFloat(max(0, items.count - 1 - startIndex)) * optionSpacing
+        let maximum = CGFloat(max(0, startIndex)) * optionSpacing
+        if translation < minimum {
+            return minimum + (translation - minimum) * Tuning.edgeResistance
+        }
+        if translation > maximum {
+            return maximum + (translation - maximum) * Tuning.edgeResistance
+        }
+        return translation
+    }
+
+    private func clampedIndex(_ index: Int) -> Int {
+        max(0, min(max(0, items.count - 1), index))
+    }
+
+    private func nearestSelectableIndex(to index: Int) -> Int {
+        guard items.indices.contains(index), !items.isEmpty else { return 0 }
+        if items[index].isSelectable { return index }
+        return items.indices
+            .filter { items[$0].isSelectable }
+            .min { abs($0 - index) < abs($1 - index) } ?? selectedIndex
+    }
+
+    private func triggerSelectionHapticIfNeeded(for index: Int) {
+        guard index != lastHapticIndex else { return }
+        lastHapticIndex = index
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    private func chipTitleColor(isSelected: Bool, item: CaptureOptionRulerItem) -> Color {
+        guard item.isSelectable else { return .white.opacity(0.28) }
+        if item.warnsOnSelect { return isSelected ? .orange.opacity(0.92) : .white.opacity(0.72) }
+        return isSelected ? Color(red: 0.20, green: 0.88, blue: 0.76) : .white.opacity(0.86)
+    }
+
+    private func chipFill(isSelected: Bool, isCandidate: Bool, item: CaptureOptionRulerItem) -> Color {
+        guard item.isSelectable else { return .white.opacity(0.035) }
+        if item.warnsOnSelect { return Color.orange.opacity(isSelected ? 0.15 : 0.06) }
+        if isSelected { return Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.14) }
+        if isCandidate { return Color.white.opacity(0.11) }
+        return Color.white.opacity(0.055)
+    }
+
+    private func chipStroke(isSelected: Bool, isCandidate: Bool, item: CaptureOptionRulerItem) -> Color {
+        guard item.isSelectable else { return .white.opacity(0.05) }
+        if item.warnsOnSelect { return Color.orange.opacity(isSelected ? 0.34 : 0.18) }
+        if isSelected { return Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.42) }
+        if isCandidate { return .white.opacity(0.20) }
+        return .white.opacity(0.08)
     }
 }
 

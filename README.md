@@ -97,3 +97,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R78B iOS 27 四参数真实手动写入恢复报告：`docs/reports/r78b_ios27_manual_parameter_runtime_write_recovery.md`
 - R78C iOS 27 双模式相机设备协调报告：`docs/reports/r78c_ios27_dual_camera_mode_coordination.md`
 - R78D iOS 27 双模式相机真机矩阵验收报告：`docs/reports/r78d_ios27_dual_camera_mode_device_acceptance.md`
+- R79 拍摄比例与输出像素控制手感优化闭环报告：`docs/reports/r79_capture_ratio_output_quality_interaction_closure.md`
