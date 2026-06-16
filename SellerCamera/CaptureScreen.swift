@@ -1088,6 +1088,7 @@ private struct CaptureManualFocusRulerPanel: View {
     private let accent = SellerCameraColorToken.accent
     private let tickSpacing: CGFloat = ManualFocusRulerTuning.tickSpacing
     private let dragStepThreshold: CGFloat = ManualFocusRulerTuning.dragStepThreshold
+    private let interactionProfile = SellerCameraRulerInteractionProfile.manualFocusPrecision
 
     var body: some View {
         GeometryReader { geometry in
@@ -1379,8 +1380,8 @@ private struct CaptureManualFocusRulerPanel: View {
     private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
         guard lastScrubSensitivity >= 1 else { return }
         let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let rawStepCount = Int(((predictedDelta * 0.24) / dragStepThreshold).rounded(.towardZero))
-        let inertiaStepCount = max(-2, min(2, -rawStepCount))
+        let rawStepCount = Int(((predictedDelta * interactionProfile.inertiaScale) / dragStepThreshold).rounded(.towardZero))
+        let inertiaStepCount = max(-interactionProfile.maximumFlingSteps, min(interactionProfile.maximumFlingSteps, -rawStepCount))
         guard inertiaStepCount != 0 else { return }
         let stepResult = onStep(inertiaStepCount)
         if case .applied = stepResult {
@@ -1391,9 +1392,9 @@ private struct CaptureManualFocusRulerPanel: View {
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
         // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
-        if lift > 90 { return ManualFocusRulerTuning.ultraFineSensitivity }
-        if lift > 40 { return ManualFocusRulerTuning.fineSensitivity }
-        return ManualFocusRulerTuning.normalSensitivity
+        if lift > 90 { return interactionProfile.ultraFineSensitivity }
+        if lift > 40 { return interactionProfile.fineSensitivity }
+        return interactionProfile.sensitivity
     }
 
     private func maximumManualFocusStepCount(for sensitivity: CGFloat) -> Int {
@@ -1844,6 +1845,7 @@ private struct CaptureDiscreteOptionRuler: View {
     @State private var lastCandidateIndex: Int?
     @State private var lastHapticIndex: Int?
     @State private var snapGeneration: UInt64 = 0
+    private let interactionProfile = SellerCameraRulerInteractionProfile.ratioOutputQuality
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -2009,8 +2011,9 @@ private struct CaptureDiscreteOptionRuler: View {
         let boundedTranslation = resistedTranslation(translation, startIndex: startIndex)
         let baseTargetIndex = clampedIndex(startIndex + Int((-boundedTranslation / optionSpacing).rounded()))
         let predictedDelta = predictedTranslation - translation
-        let rawFlingSteps = Int(((-predictedDelta / optionSpacing) * Tuning.inertiaScale).rounded())
-        let flingSteps = max(-maximumFlingSteps, min(maximumFlingSteps, rawFlingSteps))
+        let rawFlingSteps = Int(((-predictedDelta / optionSpacing) * interactionProfile.inertiaScale).rounded())
+        let boundedMaximumFlingSteps = min(maximumFlingSteps, interactionProfile.maximumFlingSteps)
+        let flingSteps = max(-boundedMaximumFlingSteps, min(boundedMaximumFlingSteps, rawFlingSteps))
         let targetIndex = nearestSelectableIndex(to: clampedIndex(baseTargetIndex + flingSteps))
         let source: CaptureOptionSelectionSource = flingSteps == 0 ? .drag : .fling
 
@@ -2048,10 +2051,10 @@ private struct CaptureDiscreteOptionRuler: View {
         let minimum = -CGFloat(max(0, items.count - 1 - startIndex)) * optionSpacing
         let maximum = CGFloat(max(0, startIndex)) * optionSpacing
         if translation < minimum {
-            return minimum + (translation - minimum) * Tuning.edgeResistance
+            return minimum + (translation - minimum) * interactionProfile.boundaryResistance
         }
         if translation > maximum {
-            return maximum + (translation - maximum) * Tuning.edgeResistance
+            return maximum + (translation - maximum) * interactionProfile.boundaryResistance
         }
         return translation
     }
@@ -2624,6 +2627,7 @@ private struct CaptureZoomDialView: View {
     @State private var lastEmittedZoomValue: Double?
     private let accent = SellerCameraColorToken.accent
     private let tickSpacing: CGFloat = Tuning.tickSpacing
+    private let interactionProfile = SellerCameraRulerInteractionProfile.zoomPrecision
 
     var body: some View {
         GeometryReader { geometry in
@@ -2820,7 +2824,7 @@ private struct CaptureZoomDialView: View {
         let predictedDelta = predictedEndTranslationWidth - translationWidth
         let cappedInertiaDelta = max(
             -Tuning.maxInertiaDelta,
-            min(Tuning.maxInertiaDelta, predictedDelta * Tuning.inertiaScale)
+            min(Tuning.maxInertiaDelta, predictedDelta * interactionProfile.inertiaScale)
         )
         let inertiaEnabled = sensitivity >= 1
         let finalTranslation = translationWidth + (inertiaEnabled ? cappedInertiaDelta : 0)
@@ -2847,7 +2851,7 @@ private struct CaptureZoomDialView: View {
     ) -> Double {
         let baseline = explicitBaseline ?? dragBaselineValue ?? selectedZoomValue
         let effectiveSensitivity = max(0.12, sensitivity)
-        let pointsPerZoom: CGFloat = baseline > 3.0 ? Tuning.pointsPerZoomHigh : Tuning.pointsPerZoomCommon
+        let pointsPerZoom: CGFloat = baseline > 3.0 ? Tuning.pointsPerZoomHigh : interactionProfile.pointsPerStep
         let rawDelta = Double((-translationWidth / pointsPerZoom) * effectiveSensitivity)
         var candidate = baseline + rawDelta
         if candidate > 3.0 {
@@ -2894,9 +2898,9 @@ private struct CaptureZoomDialView: View {
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
         // Normal drag covers more zoom range; lifted drags keep the R73 fine-control path.
-        if lift > 90 { return Tuning.ultraFineSensitivity }
-        if lift > 40 { return Tuning.fineSensitivity }
-        return Tuning.normalSensitivity
+        if lift > 90 { return interactionProfile.ultraFineSensitivity }
+        if lift > 40 { return interactionProfile.fineSensitivity }
+        return interactionProfile.sensitivity
     }
 
     private func triggerAnchorHapticIfNeeded(for zoom: Double, at now: Date, force: Bool = false) {

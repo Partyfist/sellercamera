@@ -329,6 +329,9 @@ private struct CaptureHorizontalParameterRuler: View {
     @State private var lastHapticSignature: String?
 
     private var tickSpacing: CGFloat { item.tickSpacing }
+    private var interactionProfile: SellerCameraRulerInteractionProfile {
+        SellerCameraRulerInteractionProfile.professionalParameter(item.parameter.kind)
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -604,41 +607,18 @@ private struct CaptureHorizontalParameterRuler: View {
     }
 
     private var inertiaScale: CGFloat {
-        switch item.parameter.kind {
-        case .shutter:
-            return 1.0
-        case .whiteBalance, .iso:
-            return 0.75
-        case .tint:
-            return 0.55
-        case .exposureCompensation:
-            return 0.42
-        default:
-            return 0.5
-        }
+        interactionProfile.inertiaScale
     }
 
     private var inertiaMaximumStepCount: Int {
-        switch item.parameter.kind {
-        case .shutter:
-            return 5
-        case .whiteBalance, .iso:
-            return 3
-        case .tint:
-            return 2
-        case .exposureCompensation:
-            return 1
-        default:
-            return 2
-        }
+        interactionProfile.maximumFlingSteps
     }
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
         let lift = max(0, -verticalTranslation)
-        // Normal mode is intentionally faster; lifting the finger restores precise fine scrubbing.
-        if lift > 90 { return 0.35 }
-        if lift > 40 { return 0.75 }
-        return 1.8
+        if lift > 90 { return interactionProfile.ultraFineSensitivity }
+        if lift > 40 { return interactionProfile.fineSensitivity }
+        return interactionProfile.sensitivity
     }
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {

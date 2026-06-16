@@ -190,6 +190,7 @@ struct SellerCameraRulerInteractionProfile {
     let boundaryResistance: CGFloat
     let snapAnimation: Animation
     let allowsContinuousValue: Bool
+    let inertiaScale: CGFloat
 
     static let continuousPrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 34,
@@ -200,7 +201,8 @@ struct SellerCameraRulerInteractionProfile {
         velocityThreshold: 48,
         boundaryResistance: 0.38,
         snapAnimation: SellerCameraMotionToken.snap,
-        allowsContinuousValue: true
+        allowsContinuousValue: true,
+        inertiaScale: 0.50
     )
 
     static let discreteTechnical = SellerCameraRulerInteractionProfile(
@@ -212,7 +214,8 @@ struct SellerCameraRulerInteractionProfile {
         velocityThreshold: 56,
         boundaryResistance: 0.34,
         snapAnimation: SellerCameraMotionToken.snap,
-        allowsContinuousValue: false
+        allowsContinuousValue: false,
+        inertiaScale: 0.75
     )
 
     static let ratioOutputQuality = SellerCameraRulerInteractionProfile(
@@ -224,8 +227,93 @@ struct SellerCameraRulerInteractionProfile {
         velocityThreshold: 52,
         boundaryResistance: 0.34,
         snapAnimation: SellerCameraMotionToken.snap,
-        allowsContinuousValue: false
+        allowsContinuousValue: false,
+        inertiaScale: 0.55
     )
+
+    static let shutterTechnical = SellerCameraRulerInteractionProfile(
+        pointsPerStep: 34,
+        sensitivity: 1.8,
+        fineSensitivity: 0.75,
+        ultraFineSensitivity: 0.35,
+        maximumFlingSteps: 5,
+        velocityThreshold: 60,
+        boundaryResistance: 0.34,
+        snapAnimation: SellerCameraMotionToken.snap,
+        allowsContinuousValue: false,
+        inertiaScale: 1.0
+    )
+
+    static let exposurePrecision = SellerCameraRulerInteractionProfile(
+        pointsPerStep: 34,
+        sensitivity: 1.8,
+        fineSensitivity: 0.75,
+        ultraFineSensitivity: 0.35,
+        maximumFlingSteps: 1,
+        velocityThreshold: 42,
+        boundaryResistance: 0.38,
+        snapAnimation: SellerCameraMotionToken.snap,
+        allowsContinuousValue: true,
+        inertiaScale: 0.42
+    )
+
+    static let tintPrecision = SellerCameraRulerInteractionProfile(
+        pointsPerStep: 34,
+        sensitivity: 1.8,
+        fineSensitivity: 0.75,
+        ultraFineSensitivity: 0.35,
+        maximumFlingSteps: 2,
+        velocityThreshold: 44,
+        boundaryResistance: 0.38,
+        snapAnimation: SellerCameraMotionToken.snap,
+        allowsContinuousValue: true,
+        inertiaScale: 0.55
+    )
+
+    static let manualFocusPrecision = SellerCameraRulerInteractionProfile(
+        pointsPerStep: 18,
+        sensitivity: 2.4,
+        fineSensitivity: 0.65,
+        ultraFineSensitivity: 0.22,
+        maximumFlingSteps: 2,
+        velocityThreshold: 42,
+        boundaryResistance: 0.38,
+        snapAnimation: SellerCameraMotionToken.snap,
+        allowsContinuousValue: true,
+        inertiaScale: 0.24
+    )
+
+    static let zoomPrecision = SellerCameraRulerInteractionProfile(
+        pointsPerStep: 96,
+        sensitivity: 3.0,
+        fineSensitivity: 0.90,
+        ultraFineSensitivity: 0.38,
+        maximumFlingSteps: 2,
+        velocityThreshold: 44,
+        boundaryResistance: 0.38,
+        snapAnimation: SellerCameraMotionToken.snap,
+        allowsContinuousValue: true,
+        inertiaScale: 0.22
+    )
+}
+
+extension SellerCameraRulerInteractionProfile {
+    static func professionalParameter(_ kind: CaptureProfessionalParameterKind) -> SellerCameraRulerInteractionProfile {
+        switch kind {
+        case .shutter:
+            return .shutterTechnical
+        case .iso, .whiteBalance:
+            return .discreteTechnical
+        case .tint:
+            return .tintPrecision
+        case .exposureCompensation:
+            return .exposurePrecision
+        case .focus:
+            return .manualFocusPrecision
+        default:
+            return .continuousPrecision
+        }
+    }
 }
 
 struct SellerCameraGlassPanelModifier: ViewModifier {
