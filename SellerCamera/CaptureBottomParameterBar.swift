@@ -9,16 +9,16 @@ import SwiftUI
 import UIKit
 
 private enum CaptureParameterConsoleStyle {
-    static let accent = Color(red: 0.20, green: 0.88, blue: 0.76)
-    static let warmAccent = Color(red: 1.0, green: 0.76, blue: 0.35)
-    static let panelStroke = Color.white.opacity(0.065)
-    static let panelInnerStroke = Color.white.opacity(0.020)
-    static let panelShadow = Color.black.opacity(0.32)
-    static let baseFill = Color.black.opacity(0.50)
-    static let activeFill = Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.08)
-    static let activeStroke = Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.28)
-    static let consoleFillTop = Color(red: 0.055, green: 0.065, blue: 0.075).opacity(0.98)
-    static let consoleFillBottom = Color(red: 0.018, green: 0.022, blue: 0.030).opacity(0.99)
+    static let accent = SellerCameraColorToken.accent
+    static let warmAccent = SellerCameraColorToken.accent
+    static let panelStroke = SellerCameraColorToken.glassStroke.opacity(0.70)
+    static let panelInnerStroke = SellerCameraColorToken.glassStroke.opacity(0.28)
+    static let panelShadow = Color.black.opacity(0.30)
+    static let baseFill = SellerCameraColorToken.controlSurface.opacity(0.62)
+    static let activeFill = SellerCameraColorToken.accent.opacity(0.10)
+    static let activeStroke = SellerCameraColorToken.accent.opacity(0.30)
+    static let consoleFillTop = SellerCameraColorToken.canvasElevated.opacity(0.98)
+    static let consoleFillBottom = SellerCameraColorToken.canvas.opacity(0.99)
 }
 
 struct CaptureBottomParameterItem: Identifiable, Equatable {
@@ -79,14 +79,14 @@ struct CaptureBottomParameterBar: View {
                     .frame(width: 22, height: 15)
 
                 Text(item.title)
-                    .font(.system(size: 9, weight: .semibold, design: .default))
+                    .font(isActive ? SellerCameraTypographyToken.parameterActive : SellerCameraTypographyToken.parameter)
                     .textCase(.uppercase)
                     .foregroundStyle(titleColor(isActive: isActive, item: item))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text(item.valueText)
-                    .font(.system(size: 15, weight: .semibold, design: .default))
+                    .font(SellerCameraTypographyToken.value)
                     .monospacedDigit()
                     .foregroundStyle(valueColor(isActive: isActive, item: item))
                     .lineLimit(1)
@@ -117,20 +117,20 @@ struct CaptureBottomParameterBar: View {
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
         .accessibilityLabel("\(item.title) \(item.valueText)")
-        .animation(.easeOut(duration: 0.16), value: isActive)
-        .animation(.easeOut(duration: 0.14), value: item.valueText)
+        .animation(SellerCameraMotionToken.selection, value: isActive)
+        .animation(SellerCameraMotionToken.panelDismiss, value: item.valueText)
     }
 
     fileprivate func titleColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
-        guard item.isAvailable else { return .white.opacity(0.36) }
+        guard item.isAvailable else { return SellerCameraColorToken.disabled }
         if isActive { return CaptureParameterConsoleStyle.accent }
-        return .white.opacity(0.58)
+        return SellerCameraColorToken.textSecondary
     }
 
     fileprivate func valueColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
-        guard item.isAvailable else { return .white.opacity(0.34) }
-        if isActive { return Color(red: 1.0, green: 0.82, blue: 0.46) }
-        return .white.opacity(0.94)
+        guard item.isAvailable else { return SellerCameraColorToken.disabled }
+        if isActive { return CaptureParameterConsoleStyle.accent }
+        return SellerCameraColorToken.textPrimary
     }
 }
 
@@ -207,7 +207,7 @@ struct CaptureHorizontalParameterRulerPanel: View {
                     }
                 }
         )
-        .animation(.easeOut(duration: 0.20), value: activeKind)
+        .animation(SellerCameraMotionToken.panelPresent, value: activeKind)
         .onChange(of: activeKind) { _ in
             resetRulerDragTracking(markEnded: true)
         }
@@ -383,7 +383,7 @@ private struct CaptureHorizontalParameterRuler: View {
                 onTap: {
                     guard item.parameter.isAvailable else { return }
                     guard item.controlKind != .lock else { return }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    SellerCameraHaptic.play(.selection, signature: "parameter-control-\(item.parameter.kind.rawValue)")
                     onControlTap(item.parameter.kind)
                 }
             )
@@ -407,7 +407,7 @@ private struct CaptureHorizontalParameterRuler: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
+                .stroke(CaptureParameterConsoleStyle.panelStroke, lineWidth: 1)
         )
         .shadow(color: CaptureParameterConsoleStyle.panelShadow, radius: 14, x: 0, y: 9)
     }
@@ -425,7 +425,7 @@ private struct CaptureHorizontalParameterRuler: View {
                         .shadow(color: isSelected ? CaptureParameterConsoleStyle.accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
 
                     Text(isMajor ? label : "")
-                        .font(.system(size: isSelected ? 8.5 : 7, weight: isSelected ? .semibold : .medium))
+                        .font(isSelected ? SellerCameraTypographyToken.rulerMajor : SellerCameraTypographyToken.rulerMinor)
                         .monospacedDigit()
                         .foregroundStyle(tickLabelColor(isSelected: isSelected))
                         .lineLimit(1)
@@ -455,7 +455,7 @@ private struct CaptureHorizontalParameterRuler: View {
 
     private var valueBadge: some View {
         Text(item.parameter.valueText)
-            .font(.system(size: 11, weight: .bold))
+            .font(SellerCameraTypographyToken.label.weight(.bold))
             .monospacedDigit()
             .foregroundStyle(.white.opacity(0.98))
             .lineLimit(1)
@@ -473,7 +473,7 @@ private struct CaptureHorizontalParameterRuler: View {
             .shadow(color: CaptureParameterConsoleStyle.accent.opacity(0.18), radius: 9, x: 0, y: 0)
             .id(item.parameter.valueText)
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            .animation(.easeOut(duration: 0.13), value: item.parameter.valueText)
+            .animation(SellerCameraMotionToken.panelDismiss, value: item.parameter.valueText)
             .allowsHitTesting(false)
     }
 
@@ -483,15 +483,15 @@ private struct CaptureHorizontalParameterRuler: View {
     }
 
     private func tickColor(isSelected: Bool, isMajor: Bool) -> Color {
-        guard item.parameter.isAvailable else { return .white.opacity(0.20) }
+        guard item.parameter.isAvailable else { return SellerCameraColorToken.disabled.opacity(0.66) }
         if isSelected { return CaptureParameterConsoleStyle.accent }
-        return .white.opacity(isMajor ? 0.34 : 0.16)
+        return SellerCameraColorToken.textPrimary.opacity(isMajor ? 0.34 : 0.16)
     }
 
     private func tickLabelColor(isSelected: Bool) -> Color {
-        guard item.parameter.isAvailable else { return .white.opacity(0.22) }
-        if isSelected { return .white.opacity(0.94) }
-        return .white.opacity(0.42)
+        guard item.parameter.isAvailable else { return SellerCameraColorToken.disabled.opacity(0.74) }
+        if isSelected { return SellerCameraColorToken.textPrimary }
+        return SellerCameraColorToken.textTertiary
     }
 
     private func handleRulerDrag(_ translation: CGSize) {
@@ -647,7 +647,11 @@ private struct CaptureHorizontalParameterRuler: View {
         guard now.timeIntervalSince(lastHapticAt) >= 0.075 else { return }
         lastHapticSignature = signature
         lastHapticAt = now
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        SellerCameraHaptic.play(
+            .selection,
+            signature: "\(item.parameter.kind.rawValue)-\(item.selectedIndex)-\(step)",
+            minimumInterval: 0.075
+        )
     }
 }
 
@@ -719,8 +723,8 @@ private struct CaptureRulerControlCapsule: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .scaleEffect(isEnabled ? 1 : 0.98)
-        .animation(.easeOut(duration: 0.15), value: controlKind)
-        .animation(.easeOut(duration: 0.15), value: isEnabled)
+        .animation(SellerCameraMotionToken.selection, value: controlKind)
+        .animation(SellerCameraMotionToken.selection, value: isEnabled)
     }
 }
 

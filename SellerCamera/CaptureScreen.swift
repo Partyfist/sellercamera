@@ -404,8 +404,8 @@ struct CaptureScreen: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.05, green: 0.06, blue: 0.08),
-                    Color(red: 0.02, green: 0.03, blue: 0.05)
+                    SellerCameraColorToken.canvasElevated,
+                    SellerCameraColorToken.canvas
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -449,7 +449,7 @@ struct CaptureScreen: View {
                 .padding(.top, 6)
                 .padding(.bottom, 6)
                 .opacity(isAnyFloatingControlPresented ? 0.86 : 1)
-                .animation(.easeInOut(duration: 0.18), value: isAnyFloatingControlPresented)
+                .animation(SellerCameraMotionToken.modeSwitch, value: isAnyFloatingControlPresented)
 
                 ZStack(alignment: .top) {
                     CapturePreviewContainer(
@@ -496,7 +496,7 @@ struct CaptureScreen: View {
                     .padding(.top, 1)
                     .padding(.bottom, 3)
                     .opacity(isAnyFloatingControlPresented ? 0.6 : 1)
-                    .animation(.easeInOut(duration: 0.18), value: isAnyFloatingControlPresented)
+                    .animation(SellerCameraMotionToken.modeSwitch, value: isAnyFloatingControlPresented)
                 .simultaneousGesture(
                     TapGesture().onEnded {
                         dismissInlineControls()
@@ -795,8 +795,8 @@ struct CaptureScreen: View {
             }
 
         }
-        .animation(.easeInOut(duration: 0.18), value: activeBottomParameterKind)
-        .animation(.easeInOut(duration: 0.18), value: isBottomParameterPanelExpanded)
+        .animation(SellerCameraMotionToken.modeSwitch, value: activeBottomParameterKind)
+        .animation(SellerCameraMotionToken.modeSwitch, value: isBottomParameterPanelExpanded)
     }
 
     @MainActor
@@ -1658,8 +1658,8 @@ private struct CaptureTopStatusBar: View {
             }
 
             Text(memoryStatusText)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.56))
+                .font(SellerCameraTypographyToken.caption)
+                .foregroundStyle(SellerCameraColorToken.textTertiary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1676,25 +1676,25 @@ private struct CaptureTopStatusBar: View {
         HStack(spacing: 6) {
             if showsSymbol {
                 Image(systemName: symbol)
-                    .font(.caption2.weight(.semibold))
+                .font(SellerCameraTypographyToken.control)
             }
             Text(text)
-                .font(.caption2.weight(.semibold))
+                .font(SellerCameraTypographyToken.control)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .minimumScaleFactor(0.82)
                 .monospacedDigit()
         }
-        .foregroundStyle(isActive ? Color(red: 0.20, green: 0.88, blue: 0.76) : .white.opacity(enabled ? 0.94 : 0.54))
+        .foregroundStyle(isActive ? SellerCameraColorToken.accent : (enabled ? SellerCameraColorToken.textPrimary : SellerCameraColorToken.disabled))
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
         .background(
-            (isActive ? Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.16) : .white.opacity(enabled ? 0.1 : 0.07)),
+            (isActive ? SellerCameraColorToken.accent.opacity(0.16) : SellerCameraColorToken.controlSurface.opacity(enabled ? 0.74 : 0.42)),
             in: Capsule()
         )
         .overlay(
             Capsule()
-                .stroke(isActive ? Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.34) : .white.opacity(enabled ? 0.12 : 0.08), lineWidth: 1)
+                .stroke(isActive ? SellerCameraColorToken.accent.opacity(0.34) : SellerCameraColorToken.glassStroke.opacity(enabled ? 1 : 0.62), lineWidth: 1)
         )
     }
 
@@ -1788,16 +1788,12 @@ private struct CaptureOptionControlPanel: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.58))
+        .sellerCameraGlassPanel(
+            radius: SellerCameraShapeToken.panelRadius,
+            baseOpacity: 0.78,
+            strokeOpacity: 1,
+            shadowOpacity: 0.32
         )
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.34), radius: 18, x: 0, y: 12)
     }
 
     private func pixelTitle(for preset: CapturePhotoPixelPreset) -> String {
@@ -1853,17 +1849,17 @@ private struct CaptureDiscreteOptionRuler: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(SellerCameraTypographyToken.caption.weight(.semibold))
                     .tracking(0.4)
-                    .foregroundStyle(.white.opacity(0.58))
+                    .foregroundStyle(SellerCameraColorToken.textSecondary)
                     .textCase(.uppercase)
 
                 Spacer(minLength: 0)
 
                 Text(selectedItemTitle)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(SellerCameraTypographyToken.label.weight(.bold))
                     .monospacedDigit()
-                    .foregroundStyle(Color(red: 0.20, green: 0.88, blue: 0.76))
+                    .foregroundStyle(SellerCameraColorToken.accent)
             }
             .padding(.horizontal, 4)
 
@@ -1879,7 +1875,7 @@ private struct CaptureDiscreteOptionRuler: View {
                     }
 
                     Capsule(style: .continuous)
-                        .fill(Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.92))
+                        .fill(SellerCameraColorToken.accent.opacity(0.92))
                         .frame(width: 20, height: 2)
                         .position(x: centerX, y: 58)
                         .allowsHitTesting(false)
@@ -1895,15 +1891,15 @@ private struct CaptureDiscreteOptionRuler: View {
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.065))
+                    .fill(SellerCameraColorToken.controlSurface.opacity(0.72))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(SellerCameraColorToken.glassStroke.opacity(0.72), lineWidth: 1)
         )
         .onChange(of: selectedIndex) { _ in
             guard !isDragging else { return }
-            withAnimation(.easeOut(duration: Tuning.snapDuration)) {
+            withAnimation(SellerCameraMotionToken.snap) {
                 visualOffset = 0
             }
         }
@@ -1963,7 +1959,7 @@ private struct CaptureDiscreteOptionRuler: View {
 
             Text(item.subtitle)
                 .font(.system(size: 8.5, weight: .medium))
-                .foregroundStyle(item.warnsOnSelect ? Color.orange.opacity(0.80) : .white.opacity(isSelected ? 0.70 : 0.38))
+                .foregroundStyle(item.warnsOnSelect ? SellerCameraColorToken.warning.opacity(0.82) : SellerCameraColorToken.textSecondary.opacity(isSelected ? 1 : 0.58))
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
         }
@@ -1987,12 +1983,12 @@ private struct CaptureDiscreteOptionRuler: View {
                 .tap,
                 CaptureOptionSelectionContext(startIndex: selectedIndex)
             )
-            withAnimation(.easeOut(duration: Tuning.snapDuration)) {
+            withAnimation(SellerCameraMotionToken.snap) {
                 visualOffset = 0
             }
         }
-        .animation(.easeOut(duration: 0.12), value: isSelected)
-        .animation(.easeOut(duration: 0.12), value: isCandidate)
+        .animation(SellerCameraMotionToken.selection, value: isSelected)
+        .animation(SellerCameraMotionToken.selection, value: isCandidate)
     }
 
     private func beginDragIfNeeded() {
@@ -2042,7 +2038,7 @@ private struct CaptureDiscreteOptionRuler: View {
             lastCandidateIndex = nil
         }
         if animated {
-            withAnimation(.easeOut(duration: Tuning.snapDuration), updates)
+            withAnimation(SellerCameraMotionToken.snap, updates)
         } else {
             updates()
         }
@@ -2075,29 +2071,29 @@ private struct CaptureDiscreteOptionRuler: View {
     private func triggerSelectionHapticIfNeeded(for index: Int) {
         guard index != lastHapticIndex else { return }
         lastHapticIndex = index
-        UISelectionFeedbackGenerator().selectionChanged()
+        SellerCameraHaptic.play(.selection, signature: "\(scope.rawValue)-\(index)")
     }
 
     private func chipTitleColor(isSelected: Bool, item: CaptureOptionRulerItem) -> Color {
-        guard item.isSelectable else { return .white.opacity(0.28) }
-        if item.warnsOnSelect { return isSelected ? .orange.opacity(0.92) : .white.opacity(0.72) }
-        return isSelected ? Color(red: 0.20, green: 0.88, blue: 0.76) : .white.opacity(0.86)
+        guard item.isSelectable else { return SellerCameraColorToken.disabled }
+        if item.warnsOnSelect { return isSelected ? SellerCameraColorToken.warning : SellerCameraColorToken.textSecondary }
+        return isSelected ? SellerCameraColorToken.accent : SellerCameraColorToken.textPrimary.opacity(0.88)
     }
 
     private func chipFill(isSelected: Bool, isCandidate: Bool, item: CaptureOptionRulerItem) -> Color {
-        guard item.isSelectable else { return .white.opacity(0.035) }
-        if item.warnsOnSelect { return Color.orange.opacity(isSelected ? 0.15 : 0.06) }
-        if isSelected { return Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.14) }
-        if isCandidate { return Color.white.opacity(0.11) }
-        return Color.white.opacity(0.055)
+        guard item.isSelectable else { return SellerCameraColorToken.controlSurface.opacity(0.28) }
+        if item.warnsOnSelect { return SellerCameraColorToken.warning.opacity(isSelected ? 0.15 : 0.06) }
+        if isSelected { return SellerCameraColorToken.accent.opacity(0.14) }
+        if isCandidate { return SellerCameraColorToken.controlSurfacePressed.opacity(0.92) }
+        return SellerCameraColorToken.controlSurface.opacity(0.56)
     }
 
     private func chipStroke(isSelected: Bool, isCandidate: Bool, item: CaptureOptionRulerItem) -> Color {
-        guard item.isSelectable else { return .white.opacity(0.05) }
-        if item.warnsOnSelect { return Color.orange.opacity(isSelected ? 0.34 : 0.18) }
-        if isSelected { return Color(red: 0.20, green: 0.88, blue: 0.76).opacity(0.42) }
-        if isCandidate { return .white.opacity(0.20) }
-        return .white.opacity(0.08)
+        guard item.isSelectable else { return SellerCameraColorToken.glassStroke.opacity(0.38) }
+        if item.warnsOnSelect { return SellerCameraColorToken.warning.opacity(isSelected ? 0.34 : 0.18) }
+        if isSelected { return SellerCameraColorToken.accent.opacity(0.42) }
+        if isCandidate { return SellerCameraColorToken.glassStroke.opacity(1) }
+        return SellerCameraColorToken.glassStroke.opacity(0.64)
     }
 }
 
