@@ -93,3 +93,7 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R77F ProductAutoScene 真机指标校准与自动拍摄策略收口报告：`docs/reports/r77f_product_auto_scene_metrics_calibration.md`
 - R77G 拍摄链路真机手感复核报告：`docs/reports/r77g_capture_chain_device_feel_review_zoom_macro_focus.md`
 - R78 iOS 27 Beta 真机运行恢复与兼容性诊断收口报告：`docs/reports/r78_ios27_beta_device_runtime_compatibility_closure.md`
+- R78A Xcode 27 Beta 真机运行恢复验收报告：`docs/reports/r78a_xcode27_beta_device_runtime_recovery.md`
+- R78B iOS 27 四参数真实手动写入恢复报告：`docs/reports/r78b_ios27_manual_parameter_runtime_write_recovery.md`
+- R78C iOS 27 双模式相机设备协调报告：`docs/reports/r78c_ios27_dual_camera_mode_coordination.md`
+- R78D iOS 27 双模式相机真机矩阵验收报告：`docs/reports/r78d_ios27_dual_camera_mode_device_acceptance.md`

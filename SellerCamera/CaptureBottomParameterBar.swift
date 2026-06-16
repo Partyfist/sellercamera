@@ -356,6 +356,7 @@ private struct CaptureHorizontalParameterRuler: View {
             .gesture(
                 DragGesture(minimumDistance: 4)
                     .onChanged { value in
+                        guard item.isRulerInteractive, item.parameter.isAvailable else { return }
                         dragOffset = value.translation.width - lastDragStepTranslation
                         handleRulerDrag(value.translation)
                     }

@@ -441,6 +441,107 @@ struct CaptureLensProfile: Identifiable, Equatable {
     }
 }
 
+enum ManualParameterAvailability: Equatable {
+    case pending(reason: String)
+    case available
+    case temporarilyUnavailable(reason: String)
+    case unsupported(reason: String)
+    case failed(reason: String)
+
+    var isWritable: Bool {
+        if case .available = self { return true }
+        return false
+    }
+
+    var reasonText: String {
+        switch self {
+        case .pending(let reason),
+             .temporarilyUnavailable(let reason),
+             .unsupported(let reason),
+             .failed(let reason):
+            return reason
+        case .available:
+            return "available"
+        }
+    }
+}
+
+enum PhysicalCameraProfile: Equatable {
+    case ultraWide
+    case wide
+    case telephoto
+
+    var preferredDeviceType: AVCaptureDevice.DeviceType {
+        switch self {
+        case .ultraWide:
+            return .builtInUltraWideCamera
+        case .wide:
+            return .builtInWideAngleCamera
+        case .telephoto:
+            return .builtInTelephotoCamera
+        }
+    }
+
+    var displayText: String {
+        switch self {
+        case .ultraWide:
+            return "Ultra Wide"
+        case .wide:
+            return "Wide"
+        case .telephoto:
+            return "Telephoto"
+        }
+    }
+}
+
+struct CaptureDeviceIdentity: Equatable {
+    let uniqueID: String
+    let localizedName: String
+    let deviceType: AVCaptureDevice.DeviceType
+
+    init(device: AVCaptureDevice) {
+        uniqueID = device.uniqueID
+        localizedName = device.localizedName
+        deviceType = device.deviceType
+    }
+
+    var isPhysicalManualBackCamera: Bool {
+        deviceType == .builtInUltraWideCamera
+            || deviceType == .builtInWideAngleCamera
+            || deviceType == .builtInTelephotoCamera
+    }
+}
+
+enum CaptureDeviceOperatingMode: Equatable {
+    case automaticVirtual
+    case manualPhysical(profile: PhysicalCameraProfile)
+    case switching(from: CaptureDeviceIdentity?, to: CaptureDeviceIdentity, reason: String)
+    case unavailable(reason: String)
+
+    var shouldUsePhysicalLensProfiles: Bool {
+        switch self {
+        case .manualPhysical:
+            return true
+        case .switching(_, let target, _):
+            return target.isPhysicalManualBackCamera
+        case .automaticVirtual, .unavailable:
+            return false
+        }
+    }
+}
+
+enum ManualParameterWriteScope: Equatable {
+    case exposure
+    case whiteBalance
+}
+
+struct ManualParameterWriteToken: Equatable {
+    let scope: ManualParameterWriteScope
+    let deviceGeneration: UInt64
+    let parameterGeneration: UInt64
+    let deviceID: String
+}
+
 enum CaptureSemanticFocal: Int, CaseIterable, Identifiable {
     case mm13
     case mm24
@@ -576,17 +677,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var isExposureBiasSupported = false
     @Published var isWhiteBalanceAutoSupported = false
     @Published var isWhiteBalancePresetSupported = false
+    @Published var whiteBalanceManualAvailability: ManualParameterAvailability = .pending(reason: "sessionPreparing")
     @Published var selectedWhiteBalancePreset: CaptureWhiteBalancePreset = .auto
     @Published var currentWhiteBalanceTemperature: Float = 5000
     @Published var currentWhiteBalanceTint: Float = 0
     @Published var isISOAutoSupported = false
     @Published var isISOPresetSupported = false
+    @Published var isoManualAvailability: ManualParameterAvailability = .pending(reason: "sessionPreparing")
     @Published var selectedISOPreset: CaptureISOPreset = .auto
     @Published var minimumISOValue: Float = 0
     @Published var maximumISOValue: Float = 0
     @Published var currentManualISOValue: Float = 0
     @Published var isShutterAutoSupported = false
     @Published var isShutterPresetSupported = false
+    @Published var shutterManualAvailability: ManualParameterAvailability = .pending(reason: "sessionPreparing")
     @Published var selectedShutterPreset: CaptureShutterPreset = .auto
     @Published var minimumShutterDurationSeconds: Double = 0
     @Published var maximumShutterDurationSeconds: Double = 0
@@ -631,6 +735,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var isFocusExposureLocked = false
     @Published var isExposureLocked = false
     @Published var isSwitchingCamera = false
+    @Published var captureDeviceOperatingMode: CaptureDeviceOperatingMode = .automaticVirtual
 
     let session = AVCaptureSession()
 
@@ -668,6 +773,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var lastLensRulerZoomWriteAt = Date.distantPast
     private var pendingLensRulerZoomTarget: CGFloat?
     private var lastLensRulerInteractionAt = Date.distantPast
+    private var deviceSwitchGeneration: UInt64 = 0
+    private var exposureParameterWriteGeneration: UInt64 = 0
+    private var whiteBalanceParameterWriteGeneration: UInt64 = 0
+    private var pendingDeviceSwitchCompletion: (() -> Void)?
     private var productSharpnessBlurryHitCount = 0
     private var productSharpnessSharpHitCount = 0
     private var isProductFocusAssistSuppressedByManualFocusUI = false
@@ -1094,6 +1203,17 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             return
         }
 
+        invalidateManualParameterWrites(scope: .whiteBalance)
+        selectedWhiteBalancePreset = .auto
+        currentWhiteBalanceTint = 0
+        productAutoWhiteBalanceOptimizer.reset()
+        productAutoWhiteBalanceAppliedTemperature = nil
+        productAutoWhiteBalanceStatusText = "商品 WB 恢复"
+        if shouldShowHint {
+            captureHintText = "白平衡：Auto"
+        }
+        restoreAutomaticVirtualModeIfReady(reason: "whiteBalanceAutoIntent")
+
         sessionQueue.async { [weak self] in
             guard let self else { return }
             guard let device = self.currentVideoInput?.device else { return }
@@ -1106,10 +1226,15 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     }
                     return
                 }
+                let operationToken = self.nextManualParameterWriteToken(for: device, scope: .whiteBalance)
                 device.whiteBalanceMode = .continuousAutoWhiteBalance
                 let autoTempTint = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains)
                 device.unlockForConfiguration()
                 DispatchQueue.main.async {
+                    guard self.isCurrentManualParameterWrite(operationToken) else {
+                        print("[ManualParamWrite] stale WB auto completion ignored token=\(operationToken)")
+                        return
+                    }
                     self.selectedWhiteBalancePreset = .auto
                     self.currentWhiteBalanceTemperature = self.clampedWhiteBalanceTemperature(autoTempTint.temperature)
                     // TINT 合同：WB Auto 统一回收为 0，避免用户误解自动状态下仍存在手动色偏。
@@ -1120,6 +1245,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     if shouldShowHint {
                         self.captureHintText = "白平衡：Auto"
                     }
+                    self.restoreAutomaticVirtualModeIfReady(reason: "whiteBalanceAuto")
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -1139,8 +1265,21 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             captureHintText = previewInteractionRestrictedHintText
             return
         }
-        guard isWhiteBalancePresetSupported else {
-            captureHintText = "当前摄像头不支持固定白平衡"
+        if requestManualPhysicalModeIfNeeded(
+            reason: "manualWhiteBalance",
+            completion: { [weak self] in
+                self?.applyWhiteBalanceManualValues(
+                    requestedTemperature: requestedTemperature,
+                    requestedTint: requestedTint,
+                    semanticPreset: semanticPreset,
+                    shouldShowHint: shouldShowHint
+                )
+            }
+        ) {
+            return
+        }
+        guard whiteBalanceManualAvailability.isWritable else {
+            captureHintText = whiteBalanceManualAvailability.reasonText
             return
         }
 
@@ -1156,11 +1295,15 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             guard let device = self.currentVideoInput?.device else { return }
+            let whiteBalanceDevice = self.manualWhiteBalanceControlDevice(for: device)
             do {
-                try device.lockForConfiguration()
-                guard device.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
-                    device.unlockForConfiguration()
+                try whiteBalanceDevice.lockForConfiguration()
+                guard whiteBalanceDevice.isWhiteBalanceModeSupported(.locked),
+                      whiteBalanceDevice.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
+                    whiteBalanceDevice.unlockForConfiguration()
                     DispatchQueue.main.async {
+                        self.whiteBalanceManualAvailability = .unsupported(reason: "WB: customGainsUnsupported")
+                        self.isWhiteBalancePresetSupported = false
                         self.captureHintText = "当前摄像头不支持固定白平衡"
                     }
                     return
@@ -1169,22 +1312,51 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     temperature: quantizedTemperature,
                     tint: quantizedTint
                 )
-                let rawGains = device.deviceWhiteBalanceGains(for: tempTint)
-                let safeGains = self.normalizedWhiteBalanceGains(rawGains, for: device)
-                device.setWhiteBalanceModeLocked(with: safeGains)
-                device.unlockForConfiguration()
-
-                DispatchQueue.main.async {
-                    self.currentWhiteBalanceTemperature = quantizedTemperature
-                    self.currentWhiteBalanceTint = quantizedTint
-                    self.selectedWhiteBalancePreset = semanticPreset == .auto ? .custom : semanticPreset
-                    if shouldShowHint {
-                        let tintDisplayText = self.formattedWhiteBalanceTintText(quantizedTint)
-                        self.captureHintText = "白平衡：\(Int(quantizedTemperature.rounded()))K · \(tintDisplayText)"
+                let writeToken = self.nextManualParameterWriteToken(for: whiteBalanceDevice, scope: .whiteBalance)
+                if #available(iOS 26.0, *) {
+                    whiteBalanceDevice.setWhiteBalanceModeLocked(whiteBalanceTemperatureAndTintValues: tempTint) { [weak self, weak whiteBalanceDevice] _ in
+                        guard let self, let whiteBalanceDevice else { return }
+                        let readback = whiteBalanceDevice.temperatureAndTintValues(for: whiteBalanceDevice.deviceWhiteBalanceGains)
+                        DispatchQueue.main.async {
+                            guard self.isCurrentManualParameterWrite(writeToken) else {
+                                print("[ManualParamWrite] stale WB completion ignored token=\(writeToken)")
+                                return
+                            }
+                            self.currentWhiteBalanceTemperature = self.clampedWhiteBalanceTemperature(readback.temperature)
+                            self.currentWhiteBalanceTint = self.clampedWhiteBalanceTint(readback.tint)
+                            self.selectedWhiteBalancePreset = semanticPreset == .auto ? .custom : semanticPreset
+                            if shouldShowHint {
+                                let tintDisplayText = self.formattedWhiteBalanceTintText(self.currentWhiteBalanceTint)
+                                self.captureHintText = "白平衡：\(Int(self.currentWhiteBalanceTemperature.rounded()))K · \(tintDisplayText)"
+                            }
+                        }
+                    }
+                } else {
+                    let rawGains = whiteBalanceDevice.deviceWhiteBalanceGains(for: tempTint)
+                    let safeGains = self.normalizedWhiteBalanceGains(rawGains, for: whiteBalanceDevice)
+                    whiteBalanceDevice.setWhiteBalanceModeLocked(with: safeGains) { [weak self, weak whiteBalanceDevice] _ in
+                        guard let self, let whiteBalanceDevice else { return }
+                        let readback = whiteBalanceDevice.temperatureAndTintValues(for: whiteBalanceDevice.deviceWhiteBalanceGains)
+                        DispatchQueue.main.async {
+                            guard self.isCurrentManualParameterWrite(writeToken) else {
+                                print("[ManualParamWrite] stale WB gains completion ignored token=\(writeToken)")
+                                return
+                            }
+                            self.currentWhiteBalanceTemperature = self.clampedWhiteBalanceTemperature(readback.temperature)
+                            self.currentWhiteBalanceTint = self.clampedWhiteBalanceTint(readback.tint)
+                            self.selectedWhiteBalancePreset = semanticPreset == .auto ? .custom : semanticPreset
+                            if shouldShowHint {
+                                let tintDisplayText = self.formattedWhiteBalanceTintText(self.currentWhiteBalanceTint)
+                                self.captureHintText = "白平衡：\(Int(self.currentWhiteBalanceTemperature.rounded()))K · \(tintDisplayText)"
+                            }
+                        }
                     }
                 }
+                whiteBalanceDevice.unlockForConfiguration()
             } catch {
                 DispatchQueue.main.async {
+                    self.whiteBalanceManualAvailability = .failed(reason: "WB: lockFailed \(error.localizedDescription)")
+                    self.isWhiteBalancePresetSupported = false
                     self.captureHintText = "白平衡调整失败"
                 }
             }
@@ -1264,6 +1436,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
         switch preset {
         case .auto:
+            break
+        case .low, .medium, .high, .custom:
+            if requestManualPhysicalModeIfNeeded(
+                reason: "manualISO",
+                completion: { [weak self] in
+                    self?.applyISOPreset(preset, shouldShowHint: shouldShowHint)
+                }
+            ) {
+                return
+            }
+        }
+
+        switch preset {
+        case .auto:
             guard isISOAutoSupported else {
                 captureHintText = "当前摄像头不支持 ISO 自动模式"
                 return
@@ -1275,74 +1461,117 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             }
         }
 
+        let usesSessionExposureDevice: Bool
+        switch preset {
+        case .auto:
+            usesSessionExposureDevice = true
+        case .low, .medium, .high, .custom:
+            usesSessionExposureDevice = false
+        }
+
         sessionQueue.async { [weak self] in
             guard let self else { return }
             guard let device = self.currentVideoInput?.device else { return }
+            let exposureDevice = usesSessionExposureDevice ? device : self.manualExposureControlDevice(for: device)
             do {
-                try device.lockForConfiguration()
+                try exposureDevice.lockForConfiguration()
                 let appliedISO: Float
                 switch preset {
                 case .auto:
-                    guard device.isExposureModeSupported(.continuousAutoExposure) else {
-                        device.unlockForConfiguration()
+                    guard exposureDevice.isExposureModeSupported(.continuousAutoExposure) else {
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头不支持 ISO 自动模式"
                         }
                         return
                     }
-                    device.exposureMode = .continuousAutoExposure
-                    appliedISO = device.iso
+                    exposureDevice.exposureMode = .continuousAutoExposure
+                    appliedISO = exposureDevice.iso
                 case .low, .medium, .high:
-                    guard device.isExposureModeSupported(.custom) else {
-                        device.unlockForConfiguration()
+                    guard exposureDevice.isExposureModeSupported(.custom) else {
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头不支持固定 ISO"
                         }
                         return
                     }
-                    let targetISO = self.targetISOValue(for: preset, device: device)
+                    let targetISO = self.targetISOValue(for: preset, device: exposureDevice)
                     let quantizedISO = self.quantizedISOValue(targetISO)
                     guard let exposureWrite = self.sanitizedCustomExposureWrite(
                         rawDuration: AVCaptureDevice.currentExposureDuration,
                         rawISO: quantizedISO,
-                        device: device,
+                        device: exposureDevice,
                         context: "isoPreset"
                     ) else {
-                        device.unlockForConfiguration()
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头曝光能力异常，ISO 调整已跳过"
                         }
                         return
                     }
-                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    let writeToken = self.nextManualParameterWriteToken(for: exposureDevice, scope: .exposure)
+                    exposureDevice.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso) { [weak self, weak exposureDevice] _ in
+                        guard let self, let exposureDevice else { return }
+                        let readbackISO = exposureDevice.iso
+                        let readbackShutterSeconds = CMTimeGetSeconds(exposureDevice.exposureDuration)
+                        DispatchQueue.main.async {
+                            guard self.isCurrentManualParameterWrite(writeToken) else {
+                                print("[ManualParamWrite] stale ISO preset completion ignored token=\(writeToken)")
+                                return
+                            }
+                            self.currentISOValue = readbackISO
+                            self.currentManualISOValue = readbackISO
+                            self.currentShutterDurationSeconds = readbackShutterSeconds.isFinite ? readbackShutterSeconds : 0
+                            if shouldShowHint {
+                                self.captureHintText = "ISO：\(Int(readbackISO.rounded()))"
+                            }
+                        }
+                    }
                     appliedISO = exposureWrite.iso
                 case .custom:
-                    guard device.isExposureModeSupported(.custom) else {
-                        device.unlockForConfiguration()
+                    guard exposureDevice.isExposureModeSupported(.custom) else {
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头不支持固定 ISO"
                         }
                         return
                     }
-                    let targetISO = self.clampedISOValue(self.currentManualISOValue, device: device)
+                    let targetISO = self.clampedISOValue(self.currentManualISOValue, device: exposureDevice)
                     let quantizedISO = self.quantizedISOValue(targetISO)
                     guard let exposureWrite = self.sanitizedCustomExposureWrite(
                         rawDuration: AVCaptureDevice.currentExposureDuration,
                         rawISO: quantizedISO,
-                        device: device,
+                        device: exposureDevice,
                         context: "isoCustom"
                     ) else {
-                        device.unlockForConfiguration()
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头曝光能力异常，ISO 调整已跳过"
                         }
                         return
                     }
-                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    let writeToken = self.nextManualParameterWriteToken(for: exposureDevice, scope: .exposure)
+                    exposureDevice.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso) { [weak self, weak exposureDevice] _ in
+                        guard let self, let exposureDevice else { return }
+                        let readbackISO = exposureDevice.iso
+                        let readbackShutterSeconds = CMTimeGetSeconds(exposureDevice.exposureDuration)
+                        DispatchQueue.main.async {
+                            guard self.isCurrentManualParameterWrite(writeToken) else {
+                                print("[ManualParamWrite] stale ISO custom completion ignored token=\(writeToken)")
+                                return
+                            }
+                            self.currentISOValue = readbackISO
+                            self.currentManualISOValue = readbackISO
+                            self.currentShutterDurationSeconds = readbackShutterSeconds.isFinite ? readbackShutterSeconds : 0
+                            if shouldShowHint {
+                                self.captureHintText = "ISO：\(Int(readbackISO.rounded()))"
+                            }
+                        }
+                    }
                     appliedISO = exposureWrite.iso
                 }
-                let updatedShutterSeconds = CMTimeGetSeconds(device.exposureDuration)
-                device.unlockForConfiguration()
+                let updatedShutterSeconds = CMTimeGetSeconds(exposureDevice.exposureDuration)
+                exposureDevice.unlockForConfiguration()
                 DispatchQueue.main.async {
                     self.selectedISOPreset = preset == .auto ? .auto : .custom
                     self.currentISOValue = appliedISO
@@ -1352,6 +1581,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         self.captureHintText = preset == .auto
                             ? "ISO：Auto"
                             : "ISO：\(Int(appliedISO.rounded()))"
+                    }
+                    if preset == .auto {
+                        self.restoreAutomaticVirtualModeIfReady(reason: "isoAuto")
                     }
                 }
             } catch {
@@ -1526,6 +1758,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
         switch preset {
         case .auto:
+            break
+        case .s1_30, .s1_60, .s1_120, .s1_250, .s1_500, .custom:
+            if requestManualPhysicalModeIfNeeded(
+                reason: "manualShutter",
+                completion: { [weak self] in
+                    self?.applyShutterPreset(preset, shouldShowHint: shouldShowHint)
+                }
+            ) {
+                return
+            }
+        }
+
+        switch preset {
+        case .auto:
             guard isShutterAutoSupported else {
                 captureHintText = "当前摄像头不支持自动快门"
                 return
@@ -1537,52 +1783,80 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             }
         }
 
+        let usesSessionExposureDevice: Bool
+        switch preset {
+        case .auto:
+            usesSessionExposureDevice = true
+        case .s1_30, .s1_60, .s1_120, .s1_250, .s1_500, .custom:
+            usesSessionExposureDevice = false
+        }
+
         sessionQueue.async { [weak self] in
             guard let self else { return }
             guard let device = self.currentVideoInput?.device else { return }
+            let exposureDevice = usesSessionExposureDevice ? device : self.manualExposureControlDevice(for: device)
 
             do {
-                try device.lockForConfiguration()
+                try exposureDevice.lockForConfiguration()
                 let appliedDuration: CMTime
                 switch preset {
                 case .auto:
-                    guard device.isExposureModeSupported(.continuousAutoExposure) else {
-                        device.unlockForConfiguration()
+                    guard exposureDevice.isExposureModeSupported(.continuousAutoExposure) else {
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头不支持自动快门"
                         }
                         return
                     }
-                    device.exposureMode = .continuousAutoExposure
-                    appliedDuration = device.exposureDuration
+                    exposureDevice.exposureMode = .continuousAutoExposure
+                    appliedDuration = exposureDevice.exposureDuration
                 case .s1_30, .s1_60, .s1_120, .s1_250, .s1_500:
-                    guard device.isExposureModeSupported(.custom) else {
-                        device.unlockForConfiguration()
+                    guard exposureDevice.isExposureModeSupported(.custom) else {
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头不支持手动快门"
                         }
                         return
                     }
-                    let targetDuration = self.clampedShutterDuration(for: preset, device: device)
-                    let quantizedDuration = self.quantizedShutterDuration(targetDuration, device: device)
-                    let isoForWrite = device.iso
+                    let targetDuration = self.clampedShutterDuration(for: preset, device: exposureDevice)
+                    let quantizedDuration = self.quantizedShutterDuration(targetDuration, device: exposureDevice)
+                    let isoForWrite = exposureDevice.iso
                     guard let exposureWrite = self.sanitizedCustomExposureWrite(
                         rawDuration: quantizedDuration,
                         rawISO: isoForWrite,
-                        device: device,
+                        device: exposureDevice,
                         context: "shutterPreset"
                     ) else {
-                        device.unlockForConfiguration()
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头曝光能力异常，快门调整已跳过"
                         }
                         return
                     }
-                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    let writeToken = self.nextManualParameterWriteToken(for: exposureDevice, scope: .exposure)
+                    exposureDevice.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso) { [weak self, weak exposureDevice] _ in
+                        guard let self, let exposureDevice else { return }
+                        let readbackISO = exposureDevice.iso
+                        let readbackSeconds = CMTimeGetSeconds(exposureDevice.exposureDuration)
+                        DispatchQueue.main.async {
+                            guard self.isCurrentManualParameterWrite(writeToken) else {
+                                print("[ManualParamWrite] stale shutter preset completion ignored token=\(writeToken)")
+                                return
+                            }
+                            self.currentISOValue = readbackISO
+                            self.currentShutterDurationSeconds = readbackSeconds.isFinite ? readbackSeconds : 0
+                            if readbackSeconds.isFinite, readbackSeconds > 0 {
+                                self.currentManualShutterDurationSeconds = readbackSeconds
+                            }
+                            if shouldShowHint {
+                                self.captureHintText = "快门：\(self.formattedShutterDurationText(seconds: readbackSeconds) ?? "手动")"
+                            }
+                        }
+                    }
                     appliedDuration = exposureWrite.duration
                 case .custom:
-                    guard device.isExposureModeSupported(.custom) else {
-                        device.unlockForConfiguration()
+                    guard exposureDevice.isExposureModeSupported(.custom) else {
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头不支持手动快门"
                         }
@@ -1592,28 +1866,47 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         seconds: self.currentManualShutterDurationSeconds,
                         preferredTimescale: 1_000_000_000
                     )
-                    let targetDuration = self.clampedShutterDuration(requestedDuration, device: device)
-                    let quantizedDuration = self.quantizedShutterDuration(targetDuration, device: device)
-                    let isoForWrite = device.iso
+                    let targetDuration = self.clampedShutterDuration(requestedDuration, device: exposureDevice)
+                    let quantizedDuration = self.quantizedShutterDuration(targetDuration, device: exposureDevice)
+                    let isoForWrite = exposureDevice.iso
                     guard let exposureWrite = self.sanitizedCustomExposureWrite(
                         rawDuration: quantizedDuration,
                         rawISO: isoForWrite,
-                        device: device,
+                        device: exposureDevice,
                         context: "shutterCustom"
                     ) else {
-                        device.unlockForConfiguration()
+                        exposureDevice.unlockForConfiguration()
                         DispatchQueue.main.async {
                             self.captureHintText = "当前摄像头曝光能力异常，快门调整已跳过"
                         }
                         return
                     }
-                    device.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso)
+                    let writeToken = self.nextManualParameterWriteToken(for: exposureDevice, scope: .exposure)
+                    exposureDevice.setExposureModeCustom(duration: exposureWrite.duration, iso: exposureWrite.iso) { [weak self, weak exposureDevice] _ in
+                        guard let self, let exposureDevice else { return }
+                        let readbackISO = exposureDevice.iso
+                        let readbackSeconds = CMTimeGetSeconds(exposureDevice.exposureDuration)
+                        DispatchQueue.main.async {
+                            guard self.isCurrentManualParameterWrite(writeToken) else {
+                                print("[ManualParamWrite] stale shutter custom completion ignored token=\(writeToken)")
+                                return
+                            }
+                            self.currentISOValue = readbackISO
+                            self.currentShutterDurationSeconds = readbackSeconds.isFinite ? readbackSeconds : 0
+                            if readbackSeconds.isFinite, readbackSeconds > 0 {
+                                self.currentManualShutterDurationSeconds = readbackSeconds
+                            }
+                            if shouldShowHint {
+                                self.captureHintText = "快门：\(self.formattedShutterDurationText(seconds: readbackSeconds) ?? "手动")"
+                            }
+                        }
+                    }
                     appliedDuration = exposureWrite.duration
                 }
-                device.unlockForConfiguration()
+                exposureDevice.unlockForConfiguration()
 
                 let seconds = CMTimeGetSeconds(appliedDuration)
-                let updatedISO = device.iso
+                let updatedISO = exposureDevice.iso
                 DispatchQueue.main.async {
                     self.selectedShutterPreset = preset == .auto ? .auto : .custom
                     self.currentShutterDurationSeconds = seconds.isFinite ? seconds : 0
@@ -1625,6 +1918,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                         self.captureHintText = preset == .auto
                             ? "快门：Auto"
                             : "快门：\(self.formattedShutterDurationText(seconds: seconds) ?? "手动")"
+                    }
+                    if preset == .auto {
+                        self.restoreAutomaticVirtualModeIfReady(reason: "shutterAuto")
                     }
                 }
             } catch {
@@ -1944,6 +2240,128 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         semanticFocalCapabilities.filter(\.isAvailable)
     }
 
+    private var isManualParameterModeRequested: Bool {
+        selectedISOPreset != .auto
+            || selectedShutterPreset != .auto
+            || selectedWhiteBalancePreset != .auto
+    }
+
+    private var shouldUsePhysicalLensProfiles: Bool {
+        isManualParameterModeRequested || captureDeviceOperatingMode.shouldUsePhysicalLensProfiles
+    }
+
+    private func nextManualParameterWriteToken(
+        for device: AVCaptureDevice,
+        scope: ManualParameterWriteScope
+    ) -> ManualParameterWriteToken {
+        let parameterGeneration: UInt64
+        switch scope {
+        case .exposure:
+            exposureParameterWriteGeneration += 1
+            parameterGeneration = exposureParameterWriteGeneration
+        case .whiteBalance:
+            whiteBalanceParameterWriteGeneration += 1
+            parameterGeneration = whiteBalanceParameterWriteGeneration
+        }
+        return ManualParameterWriteToken(
+            scope: scope,
+            deviceGeneration: deviceSwitchGeneration,
+            parameterGeneration: parameterGeneration,
+            deviceID: device.uniqueID
+        )
+    }
+
+    private func invalidateManualParameterWrites(scope: ManualParameterWriteScope) {
+        switch scope {
+        case .exposure:
+            exposureParameterWriteGeneration += 1
+        case .whiteBalance:
+            whiteBalanceParameterWriteGeneration += 1
+        }
+    }
+
+    private func isCurrentManualParameterWrite(_ token: ManualParameterWriteToken) -> Bool {
+        let currentParameterGeneration: UInt64
+        switch token.scope {
+        case .exposure:
+            currentParameterGeneration = exposureParameterWriteGeneration
+        case .whiteBalance:
+            currentParameterGeneration = whiteBalanceParameterWriteGeneration
+        }
+        return token.deviceGeneration == deviceSwitchGeneration
+            && token.parameterGeneration == currentParameterGeneration
+            && token.deviceID == currentVideoInput?.device.uniqueID
+    }
+
+    private func physicalProfile(for focal: CaptureSemanticFocal?) -> PhysicalCameraProfile {
+        switch focal {
+        case .mm13:
+            return .ultraWide
+        case .mm77:
+            return .telephoto
+        case .mm24, .mm48, .none:
+            return .wide
+        }
+    }
+
+    private func physicalLensID(for focal: CaptureSemanticFocal?, profile: PhysicalCameraProfile) -> String? {
+        switch (focal, profile) {
+        case (.mm13, .ultraWide):
+            return "ultra-13"
+        case (.mm48, .wide):
+            return "wide-48-derived"
+        case (.mm24, .wide), (.none, .wide):
+            return "wide-24"
+        case (.mm77, .telephoto):
+            return "tele-77"
+        default:
+            return nil
+        }
+    }
+
+    @discardableResult
+    private func requestManualPhysicalModeIfNeeded(
+        reason: String,
+        completion: @escaping () -> Void
+    ) -> Bool {
+        guard activeCameraPosition == .back else { return false }
+        let focal = selectedSemanticFocal ?? .mm24
+        let profile = physicalProfile(for: focal)
+        let targetDeviceType = profile.preferredDeviceType
+        guard activeCameraDeviceType != targetDeviceType else {
+            captureDeviceOperatingMode = .manualPhysical(profile: profile)
+            return false
+        }
+
+        let preferredLensID = physicalLensID(for: focal, profile: profile)
+        captureHintText = "切换\(focal.displayText)手动镜头..."
+        switchToCamera(
+            position: .back,
+            preferredDeviceType: targetDeviceType,
+            preferredLensID: preferredLensID,
+            reason: reason,
+            completion: completion
+        )
+        return true
+    }
+
+    private func restoreAutomaticVirtualModeIfReady(reason: String) {
+        guard activeCameraPosition == .back else { return }
+        guard !isManualParameterModeRequested else { return }
+        guard !isSwitchingCamera else { return }
+        guard !Self.isVirtualBackCameraDeviceType(activeCameraDeviceType) else {
+            captureDeviceOperatingMode = .automaticVirtual
+            return
+        }
+
+        switchToCamera(
+            position: .back,
+            preferredDeviceType: nil,
+            preferredLensID: nil,
+            reason: reason
+        )
+    }
+
     func selectLensProfile(_ lensID: String) {
         guard let profile = availableLensProfiles.first(where: { $0.id == lensID }) else { return }
 
@@ -2083,6 +2501,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     "switchOver=[\(switchFactors)]"
                 )
 #endif
+                self.logManualParameterCompatibility(device: device, reason: "zoom:\(reason)", lockProbe: "success")
                 device.unlockForConfiguration()
                 DispatchQueue.main.async {
                     self.currentZoomFactor = clamped
@@ -2985,6 +3404,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     self.updateShutterCapabilityState(with: backCamera)
                     self.updateWhiteBalanceCapabilityState(with: backCamera)
                     self.updateFocusCapabilityState(with: backCamera)
+                    self.logManualParameterCompatibility(device: backCamera, reason: "configureSessionCapability", lockProbe: nil)
                     self.productAutoWhiteBalanceOptimizer.reset()
                     self.productAutoWhiteBalanceAppliedTemperature = nil
                     self.productAutoWhiteBalanceStatusText = self.isWhiteBalanceAutoSupported && self.isWhiteBalancePresetSupported
@@ -3027,21 +3447,34 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private func switchToCamera(
         position: AVCaptureDevice.Position,
         preferredDeviceType: AVCaptureDevice.DeviceType? = nil,
-        preferredLensID: String? = nil
+        preferredLensID: String? = nil,
+        reason: String = "user",
+        completion: (() -> Void)? = nil
     ) {
+        isSwitchingCamera = true
+        isoManualAvailability = .temporarilyUnavailable(reason: "ISO: deviceSwitching")
+        shutterManualAvailability = .temporarilyUnavailable(reason: "Shutter: deviceSwitching")
+        whiteBalanceManualAvailability = .temporarilyUnavailable(reason: "WB: deviceSwitching")
+        let sourceIdentity = currentVideoInput.map { CaptureDeviceIdentity(device: $0.device) }
         sessionQueue.async { [weak self] in
             guard let self else { return }
             let currentDeviceType = self.currentVideoInput?.device.deviceType
             let requiresDeviceTypeSwitch = self.activeCameraPosition == position
                 && preferredDeviceType != nil
                 && currentDeviceType != preferredDeviceType
+            let requiresAutomaticVirtualSwitch = self.activeCameraPosition == position
+                && position == .back
+                && preferredDeviceType == nil
+                && !self.isManualParameterModeRequested
+                && !Self.isVirtualBackCameraDeviceType(currentDeviceType)
 
-            guard self.activeCameraPosition != position || requiresDeviceTypeSwitch else {
+            guard self.activeCameraPosition != position || requiresDeviceTypeSwitch || requiresAutomaticVirtualSwitch else {
                 DispatchQueue.main.async {
                     if let preferredLensID {
                         self.selectLensProfile(preferredLensID)
                     }
                     self.isSwitchingCamera = false
+                    completion?()
                 }
                 return
             }
@@ -3049,9 +3482,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                   let newInput = try? AVCaptureDeviceInput(device: camera) else {
                 DispatchQueue.main.async {
                     self.isSwitchingCamera = false
+                    self.captureDeviceOperatingMode = .unavailable(reason: "switchTargetUnavailable:\(reason)")
                     self.captureHintText = "摄像头切换失败"
                 }
                 return
+            }
+            let targetIdentity = CaptureDeviceIdentity(device: camera)
+            let switchGeneration = self.deviceSwitchGeneration + 1
+            self.deviceSwitchGeneration = switchGeneration
+            DispatchQueue.main.async {
+                self.captureDeviceOperatingMode = .switching(
+                    from: sourceIdentity,
+                    to: targetIdentity,
+                    reason: reason
+                )
             }
 
             self.session.beginConfiguration()
@@ -3066,6 +3510,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.session.commitConfiguration()
                 DispatchQueue.main.async {
                     self.isSwitchingCamera = false
+                    self.captureDeviceOperatingMode = .unavailable(reason: "switchAddRejected:\(reason)")
                     self.captureHintText = "当前无法切换摄像头"
                 }
                 return
@@ -3084,9 +3529,20 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             }
 
             DispatchQueue.main.async {
+                guard self.deviceSwitchGeneration == switchGeneration else {
+                    print("[CaptureDeviceMode] stale switch ignored generation=\(switchGeneration) reason=\(reason)")
+                    return
+                }
                 self.isSwitchingCamera = false
                 self.activeCameraPosition = position
                 self.activeCameraDeviceType = camera.deviceType
+                if position == .back, Self.isVirtualBackCameraDeviceType(camera.deviceType), !self.isManualParameterModeRequested {
+                    self.captureDeviceOperatingMode = .automaticVirtual
+                } else if position == .back {
+                    self.captureDeviceOperatingMode = .manualPhysical(profile: self.physicalProfile(for: self.selectedSemanticFocal))
+                } else {
+                    self.captureDeviceOperatingMode = .unavailable(reason: "frontCamera")
+                }
                 self.minimumZoomFactor = 1.0
                 self.activeDeviceMaximumZoomFactor = maxZoom
                 self.maximumZoomFactor = maxZoom
@@ -3106,6 +3562,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 self.updateShutterCapabilityState(with: camera)
                 self.updateWhiteBalanceCapabilityState(with: camera)
                 self.updateFocusCapabilityState(with: camera)
+                self.logManualParameterCompatibility(device: camera, reason: "switchCameraCapability", lockProbe: nil)
                 self.applyStabilizerModeToConnections(reason: "switchCamera")
                 self.productAutoWhiteBalanceOptimizer.reset()
                 self.productAutoWhiteBalanceAppliedTemperature = nil
@@ -3115,14 +3572,26 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 if !camera.hasFlash {
                     self.selectedFlashMode = .off
                 }
-                self.applyISOPreset(self.selectedISOPreset, shouldShowHint: false)
-                self.applyShutterPreset(self.selectedShutterPreset, shouldShowHint: false)
-                self.applyWhiteBalancePreset(self.selectedWhiteBalancePreset, shouldShowHint: false)
+                let isPreparingManualPhysicalMode = reason.hasPrefix("manual")
+                if !isPreparingManualPhysicalMode {
+                    self.applyISOPreset(self.selectedISOPreset, shouldShowHint: false)
+                    self.applyShutterPreset(self.selectedShutterPreset, shouldShowHint: false)
+                    self.applyWhiteBalancePreset(self.selectedWhiteBalancePreset, shouldShowHint: false)
+                }
                 if let selectedProfile = self.selectedLensProfile {
                     self.captureHintText = "已切换\(selectedProfile.displayText)"
                 } else {
                     self.captureHintText = position == .back ? "已切换后摄" : "已切换前摄"
                 }
+                print(
+                    "[CaptureDeviceMode] switch committed " +
+                    "generation=\(switchGeneration) " +
+                    "reason=\(reason) " +
+                    "from=\(sourceIdentity?.localizedName ?? "nil") " +
+                    "to=\(targetIdentity.localizedName) " +
+                    "mode=\(self.captureDeviceOperatingMode)"
+                )
+                completion?()
             }
         }
     }
@@ -3142,9 +3611,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     private func updateISOCapabilityState(with device: AVCaptureDevice) {
         isISOAutoSupported = device.isExposureModeSupported(.continuousAutoExposure)
-        isISOPresetSupported = device.isExposureModeSupported(.custom)
-        let minISO = device.activeFormat.minISO
-        let maxISO = device.activeFormat.maxISO
+        isoManualAvailability = manualExposureAvailability(for: device, parameter: "ISO")
+        isISOPresetSupported = isoManualAvailability.isWritable
+        let exposureDevice = manualExposureControlDevice(for: device)
+        let minISO = exposureDevice.activeFormat.minISO
+        let maxISO = exposureDevice.activeFormat.maxISO
         if maxISO > minISO {
             minimumISOValue = minISO
             maximumISOValue = maxISO
@@ -3153,7 +3624,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             maximumISOValue = max(minISO + 1, minISO)
         }
 
-        let currentISO = clampedISOValue(device.iso, device: device)
+        let currentISO = clampedISOValue(exposureDevice.iso, device: exposureDevice)
         currentISOValue = currentISO
         currentManualISOValue = currentISO
 
@@ -3177,9 +3648,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     private func updateShutterCapabilityState(with device: AVCaptureDevice) {
         isShutterAutoSupported = device.isExposureModeSupported(.continuousAutoExposure)
-        isShutterPresetSupported = device.isExposureModeSupported(.custom)
-        let minSeconds = CMTimeGetSeconds(device.activeFormat.minExposureDuration)
-        let maxSeconds = CMTimeGetSeconds(device.activeFormat.maxExposureDuration)
+        shutterManualAvailability = manualExposureAvailability(for: device, parameter: "Shutter")
+        isShutterPresetSupported = shutterManualAvailability.isWritable
+        let exposureDevice = manualExposureControlDevice(for: device)
+        let minSeconds = CMTimeGetSeconds(exposureDevice.activeFormat.minExposureDuration)
+        let maxSeconds = CMTimeGetSeconds(exposureDevice.activeFormat.maxExposureDuration)
         if minSeconds.isFinite, maxSeconds.isFinite, minSeconds > 0, maxSeconds > 0 {
             minimumShutterDurationSeconds = min(minSeconds, maxSeconds)
             maximumShutterDurationSeconds = max(minSeconds, maxSeconds)
@@ -3188,7 +3661,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             maximumShutterDurationSeconds = 1.0 / 30.0
         }
 
-        let seconds = CMTimeGetSeconds(device.exposureDuration)
+        let seconds = CMTimeGetSeconds(exposureDevice.exposureDuration)
         let currentSeconds: Double
         if seconds.isFinite, seconds > 0 {
             currentSeconds = max(minimumShutterDurationSeconds, min(maximumShutterDurationSeconds, seconds))
@@ -3207,7 +3680,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
 
         if selectedShutterPreset.durationSeconds != nil {
-            let legacyDuration = clampedShutterDuration(for: selectedShutterPreset, device: device)
+            let legacyDuration = clampedShutterDuration(for: selectedShutterPreset, device: exposureDevice)
             let legacySeconds = CMTimeGetSeconds(legacyDuration)
             if legacySeconds.isFinite, legacySeconds > 0 {
                 currentManualShutterDurationSeconds = legacySeconds
@@ -3218,8 +3691,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     private func updateWhiteBalanceCapabilityState(with device: AVCaptureDevice) {
         isWhiteBalanceAutoSupported = device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance)
-        isWhiteBalancePresetSupported = device.isLockingWhiteBalanceWithCustomDeviceGainsSupported
-        let tempTint = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains)
+        whiteBalanceManualAvailability = manualWhiteBalanceAvailability(for: device)
+        isWhiteBalancePresetSupported = whiteBalanceManualAvailability.isWritable
+        let whiteBalanceDevice = manualWhiteBalanceControlDevice(for: device)
+        let tempTint = whiteBalanceDevice.temperatureAndTintValues(for: whiteBalanceDevice.deviceWhiteBalanceGains)
         currentWhiteBalanceTemperature = clampedWhiteBalanceTemperature(tempTint.temperature)
         currentWhiteBalanceTint = clampedWhiteBalanceTint(tempTint.tint)
 
@@ -3237,6 +3712,79 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         } else if selectedWhiteBalancePreset == .auto {
             currentWhiteBalanceTint = 0
         }
+    }
+
+    private func manualExposureAvailability(
+        for device: AVCaptureDevice,
+        parameter: String
+    ) -> ManualParameterAvailability {
+        let exposureDevice = manualExposureControlDevice(for: device)
+        guard exposureDevice.isConnected else {
+            return .temporarilyUnavailable(reason: "\(parameter): deviceDisconnected")
+        }
+        if device.isVirtualDevice, exposureDevice === device, !device.constituentDevices.isEmpty {
+            return .temporarilyUnavailable(reason: "\(parameter): activeConstituentPending")
+        }
+        guard exposureDevice.isExposureModeSupported(.custom) else {
+            return .unsupported(reason: "\(parameter): customExposureUnsupported")
+        }
+        let minISO = exposureDevice.activeFormat.minISO
+        let maxISO = exposureDevice.activeFormat.maxISO
+        guard minISO.isFinite, maxISO.isFinite, minISO > 0, maxISO > minISO else {
+            return .unsupported(reason: "\(parameter): invalidISORange \(minISO)-\(maxISO)")
+        }
+        let minDuration = exposureDevice.activeFormat.minExposureDuration
+        let maxDuration = exposureDevice.activeFormat.maxExposureDuration
+        guard isValidExposureDuration(minDuration),
+              isValidExposureDuration(maxDuration),
+              CMTimeCompare(maxDuration, minDuration) > 0 else {
+            return .unsupported(reason: "\(parameter): invalidDurationRange")
+        }
+        if isSwitchingCamera || device.isRampingVideoZoom || exposureDevice.isRampingVideoZoom {
+            return .temporarilyUnavailable(reason: "\(parameter): lensSwitching")
+        }
+        return .available
+    }
+
+    private func manualExposureControlDevice(for device: AVCaptureDevice) -> AVCaptureDevice {
+        if device.isExposureModeSupported(.custom) {
+            return device
+        }
+        if let activeConstituent = device.activePrimaryConstituent,
+           activeConstituent.isExposureModeSupported(.custom) {
+            return activeConstituent
+        }
+        return device
+    }
+
+    private func manualWhiteBalanceAvailability(for device: AVCaptureDevice) -> ManualParameterAvailability {
+        let whiteBalanceDevice = manualWhiteBalanceControlDevice(for: device)
+        guard whiteBalanceDevice.isConnected else {
+            return .temporarilyUnavailable(reason: "WB: deviceDisconnected")
+        }
+        if device.isVirtualDevice, whiteBalanceDevice === device, !device.constituentDevices.isEmpty {
+            return .temporarilyUnavailable(reason: "WB: activeConstituentPending")
+        }
+        guard whiteBalanceDevice.isWhiteBalanceModeSupported(.locked) else {
+            return .unsupported(reason: "WB: lockedModeUnsupported")
+        }
+        guard whiteBalanceDevice.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
+            return .unsupported(reason: "WB: customGainsUnsupported")
+        }
+        return isSwitchingCamera ? .temporarilyUnavailable(reason: "WB: lensSwitching") : .available
+    }
+
+    private func manualWhiteBalanceControlDevice(for device: AVCaptureDevice) -> AVCaptureDevice {
+        if device.isWhiteBalanceModeSupported(.locked),
+           device.isLockingWhiteBalanceWithCustomDeviceGainsSupported {
+            return device
+        }
+        if let activeConstituent = device.activePrimaryConstituent,
+           activeConstituent.isWhiteBalanceModeSupported(.locked),
+           activeConstituent.isLockingWhiteBalanceWithCustomDeviceGainsSupported {
+            return activeConstituent
+        }
+        return device
     }
 
     private func updateFocusCapabilityState(with device: AVCaptureDevice) {
@@ -3550,6 +4098,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         activeDevice: AVCaptureDevice,
         preferredLensID: String?
     ) {
+        let previousSemanticFocal = selectedSemanticFocal
         let profiles = buildLensProfiles(position: position)
         availableLensProfiles = profiles
 
@@ -3563,6 +4112,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         if let preferredLensID,
            let preferred = profiles.first(where: { $0.id == preferredLensID }) {
             selectedProfile = preferred
+        } else if Self.isVirtualBackCameraDeviceType(activeDevice.deviceType),
+                  let previousSemanticFocal,
+                  let matchedVirtualFocal = profiles.first(where: { $0.source == .virtual && $0.semanticFocal == previousSemanticFocal }) {
+            selectedProfile = matchedVirtualFocal
         } else if Self.isVirtualBackCameraDeviceType(activeDevice.deviceType),
                   let defaultVirtualWide = profiles.first(where: { $0.source == .virtual && $0.semanticFocal == .mm24 }) {
             selectedProfile = defaultVirtualWide
@@ -3715,7 +4268,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let backDevices = discoverCameras(position: .back)
         var profiles: [CaptureLensProfile] = []
 
-        if let virtualBack = preferredVirtualBackCamera(in: backDevices) {
+        if let virtualBack = preferredVirtualBackCamera(in: backDevices),
+           !shouldUsePhysicalLensProfiles {
             let virtualMaxZoom = normalizedDeviceMaxZoom(for: virtualBack)
             let teleTarget = min(max(3.0, virtualBack.maxAvailableVideoZoomFactor >= 3.0 ? 3.0 : virtualMaxZoom), virtualMaxZoom)
             let virtualProfiles: [CaptureLensProfile] = [
@@ -3772,6 +4326,12 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             return virtualProfiles.filter { profile in
                 profile.baseZoomFactor <= virtualMaxZoom + 0.01 || profile.semanticFocal == .mm13
             }
+        } else if let virtualBack = preferredVirtualBackCamera(in: backDevices) {
+            logManualParameterCompatibility(
+                device: virtualBack,
+                reason: "virtualBackSkippedForPhysicalManualProfiles",
+                lockProbe: nil
+            )
         }
 
         if let ultraWide = backDevices.first(where: { $0.deviceType == .builtInUltraWideCamera }) {
@@ -3911,6 +4471,101 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 #endif
     }
 
+    func logManualParameterCompatibilityForPanel(reason: String) {
+#if DEBUG
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.currentVideoInput?.device else { return }
+            let lockProbe: String
+            do {
+                try device.lockForConfiguration()
+                lockProbe = "success"
+                device.unlockForConfiguration()
+            } catch {
+                lockProbe = "failed:\(error.localizedDescription)"
+            }
+            self.logManualParameterCompatibility(device: device, reason: reason, lockProbe: lockProbe)
+            DispatchQueue.main.async {
+                self.updateISOCapabilityState(with: device)
+                self.updateShutterCapabilityState(with: device)
+                self.updateWhiteBalanceCapabilityState(with: device)
+            }
+        }
+#endif
+    }
+
+    private func logManualParameterCompatibility(
+        device: AVCaptureDevice,
+        reason: String,
+        lockProbe: String?
+    ) {
+#if DEBUG
+        let dimensions = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+        let durationSeconds = CMTimeGetSeconds(device.exposureDuration)
+        let minDurationSeconds = CMTimeGetSeconds(device.activeFormat.minExposureDuration)
+        let maxDurationSeconds = CMTimeGetSeconds(device.activeFormat.maxExposureDuration)
+        let gains = device.deviceWhiteBalanceGains
+        let grayGains = device.grayWorldDeviceWhiteBalanceGains
+        let constituents = device.constituentDevices.map {
+            "\($0.localizedName)|\($0.deviceType.rawValue)|\($0.uniqueID)"
+        }.joined(separator: ";")
+        let activePrimary: String
+        if let active = device.activePrimaryConstituent {
+            activePrimary = "\(active.localizedName)|\(active.deviceType.rawValue)|\(active.uniqueID)"
+        } else {
+            activePrimary = "nil"
+        }
+        let switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors
+            .map { String(format: "%.2f", CGFloat(truncating: $0)) }
+            .joined(separator: ",")
+        let exposureDevice = manualExposureControlDevice(for: device)
+        let exposureTarget = "\(exposureDevice.localizedName)|\(exposureDevice.deviceType.rawValue)|\(exposureDevice.uniqueID)"
+        let whiteBalanceDevice = manualWhiteBalanceControlDevice(for: device)
+        let whiteBalanceTarget = "\(whiteBalanceDevice.localizedName)|\(whiteBalanceDevice.deviceType.rawValue)|\(whiteBalanceDevice.uniqueID)"
+        print(
+            "[ManualParamCompat] " +
+            "reason=\(reason) " +
+            "sessionRunning=\(session.isRunning) " +
+            "lockProbe=\(lockProbe ?? "n/a") " +
+            "uniqueID=\(device.uniqueID) " +
+            "name=\(device.localizedName) " +
+            "type=\(device.deviceType.rawValue) " +
+            "position=\(device.position.rawValue) " +
+            "isVirtual=\(device.isVirtualDevice) " +
+            "constituents=[\(constituents)] " +
+            "activePrimary=\(activePrimary) " +
+            "manualExposureTarget=\(exposureTarget) " +
+            "manualWhiteBalanceTarget=\(whiteBalanceTarget) " +
+            "activeFormat=\(dimensions.width)x\(dimensions.height) " +
+            "formats=\(device.formats.count) " +
+            "zoom=\(String(format: "%.3f", device.videoZoomFactor)) " +
+            "switchOver=[\(switchFactors)] " +
+            "connected=\(device.isConnected) " +
+            "suspended=\(device.isSuspended) " +
+            "exposureMode=\(device.exposureMode.rawValue) " +
+            "expAuto=\(device.isExposureModeSupported(.continuousAutoExposure)) " +
+            "expCustom=\(device.isExposureModeSupported(.custom)) " +
+            "minISO=\(String(format: "%.2f", Double(device.activeFormat.minISO))) " +
+            "maxISO=\(String(format: "%.2f", Double(device.activeFormat.maxISO))) " +
+            "iso=\(String(format: "%.2f", Double(device.iso))) " +
+            "minDuration=\(String(format: "%.8f", minDurationSeconds)) " +
+            "maxDuration=\(String(format: "%.8f", maxDurationSeconds)) " +
+            "duration=\(String(format: "%.8f", durationSeconds)) " +
+            "adjustingExposure=\(device.isAdjustingExposure) " +
+            "wbMode=\(device.whiteBalanceMode.rawValue) " +
+            "wbAuto=\(device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance)) " +
+            "wbLocked=\(device.isWhiteBalanceModeSupported(.locked)) " +
+            "wbCustomGains=\(device.isLockingWhiteBalanceWithCustomDeviceGainsSupported) " +
+            "wbGains=(\(String(format: "%.3f", gains.redGain)),\(String(format: "%.3f", gains.greenGain)),\(String(format: "%.3f", gains.blueGain))) " +
+            "grayGains=(\(String(format: "%.3f", grayGains.redGain)),\(String(format: "%.3f", grayGains.greenGain)),\(String(format: "%.3f", grayGains.blueGain))) " +
+            "maxWBGain=\(String(format: "%.3f", device.maxWhiteBalanceGain)) " +
+            "adjustingWB=\(device.isAdjustingWhiteBalance) " +
+            "isoAvailability=\(manualExposureAvailability(for: device, parameter: "ISO").reasonText) " +
+            "shutterAvailability=\(manualExposureAvailability(for: device, parameter: "Shutter").reasonText) " +
+            "wbAvailability=\(manualWhiteBalanceAvailability(for: device).reasonText)"
+        )
+#endif
+    }
+
     private static func isVirtualBackCameraDeviceType(_ deviceType: AVCaptureDevice.DeviceType?) -> Bool {
         guard let deviceType else { return false }
         return deviceType == .builtInTripleCamera
@@ -3922,6 +4577,11 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         devices.first(where: { $0.deviceType == .builtInTripleCamera })
             ?? devices.first(where: { $0.deviceType == .builtInDualWideCamera })
             ?? devices.first(where: { $0.deviceType == .builtInDualCamera })
+    }
+
+    private func shouldPreferVirtualBackCameraForManualParameters(_ device: AVCaptureDevice) -> Bool {
+        manualExposureAvailability(for: device, parameter: "virtualExposure").isWritable
+            && manualWhiteBalanceAvailability(for: device).isWritable
     }
 
     private func maximumSupportedPhotoLongEdge(for device: AVCaptureDevice) -> Int {
@@ -4046,10 +4706,15 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
 
         if position == .back {
-            return preferredVirtualBackCamera(in: cameras)
-                ?? cameras.first(where: { $0.deviceType == .builtInWideAngleCamera })
+            if preferredDeviceType == nil,
+               !isManualParameterModeRequested,
+               let virtualBack = preferredVirtualBackCamera(in: cameras) {
+                return virtualBack
+            }
+            return cameras.first(where: { $0.deviceType == .builtInWideAngleCamera })
                 ?? cameras.first(where: { $0.deviceType == .builtInUltraWideCamera })
                 ?? cameras.first(where: { $0.deviceType == .builtInTelephotoCamera })
+                ?? preferredVirtualBackCamera(in: cameras)
                 ?? cameras.first
         }
 
@@ -4530,38 +5195,42 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let wb = analysis.whiteBalanceMetrics
         let focus = analysis.sharpnessMetrics
         let frame = analysis.frameDiagnostics
-        print(
-            "[ProductAutoScene] " +
-            "sceneId=unlabeled " +
-            "t=\(String(format: "%.1f", now.timeIntervalSince1970)) " +
-            "EV(" +
-            "\(productAutoExposureOptimizer.debugStateSummary) " +
-            "applied=\(String(format: "%+.2f", currentExposureBias)) " +
-            "mean=\(String(format: "%.3f", ev.meanLuma)) " +
-            "shadow=\(String(format: "%.3f", ev.shadowRatio)) " +
-            "hi=\(String(format: "%.3f", ev.highlightRatio)) " +
-            "clip=\(String(format: "%.3f", ev.clippedRatio)) " +
-            "white=\(String(format: "%.3f", ev.nearWhiteRatio)) " +
-            "whiteY=\(String(format: "%.3f", ev.nearWhiteMeanLuma))" +
-            ") " +
-            "WB(" +
-            "\(productAutoWhiteBalanceOptimizer.debugStateSummary) " +
-            "current=\(Int(currentWhiteBalanceTemperature.rounded()))K " +
-            "whiteRatio=\(String(format: "%.3f", wb.nearWhiteRatio)) " +
-            "whiteCount=\(wb.nearWhiteSampleCount) " +
-            "rb=\(String(format: "%+.3f", wb.redBlueDelta)) " +
-            "green=\(String(format: "%+.3f", wb.greenCast)) " +
-            "conf=\(String(format: "%.2f", wb.confidence)) " +
-            "confReason=\(productAutoWhiteBalanceConfidenceReason(for: wb))" +
-            ") " +
-            "Focus(" +
-            "state=\(focus.state.rawValue) " +
-            "score=\(String(format: "%.2f", focus.sharpnessScore)) " +
-            "edge=\(String(format: "%.3f", focus.edgeDensity)) " +
-            "conf=\(String(format: "%.2f", focus.confidence)) " +
-            "reason=\(focus.reason)" +
-            ")"
-        )
+        let evSummary = [
+            productAutoExposureOptimizer.debugStateSummary,
+            "applied=\(String(format: "%+.2f", currentExposureBias))",
+            "mean=\(String(format: "%.3f", ev.meanLuma))",
+            "shadow=\(String(format: "%.3f", ev.shadowRatio))",
+            "hi=\(String(format: "%.3f", ev.highlightRatio))",
+            "clip=\(String(format: "%.3f", ev.clippedRatio))",
+            "white=\(String(format: "%.3f", ev.nearWhiteRatio))",
+            "whiteY=\(String(format: "%.3f", ev.nearWhiteMeanLuma))"
+        ].joined(separator: " ")
+        let wbSummary = [
+            productAutoWhiteBalanceOptimizer.debugStateSummary,
+            "current=\(Int(currentWhiteBalanceTemperature.rounded()))K",
+            "whiteRatio=\(String(format: "%.3f", wb.nearWhiteRatio))",
+            "whiteCount=\(wb.nearWhiteSampleCount)",
+            "rb=\(String(format: "%+.3f", wb.redBlueDelta))",
+            "green=\(String(format: "%+.3f", wb.greenCast))",
+            "conf=\(String(format: "%.2f", wb.confidence))",
+            "confReason=\(productAutoWhiteBalanceConfidenceReason(for: wb))"
+        ].joined(separator: " ")
+        let focusSummary = [
+            "state=\(focus.state.rawValue)",
+            "score=\(String(format: "%.2f", focus.sharpnessScore))",
+            "edge=\(String(format: "%.3f", focus.edgeDensity))",
+            "conf=\(String(format: "%.2f", focus.confidence))",
+            "reason=\(focus.reason)"
+        ].joined(separator: " ")
+        let sceneSummary = [
+            "[ProductAutoScene]",
+            "sceneId=unlabeled",
+            "t=\(String(format: "%.1f", now.timeIntervalSince1970))",
+            "EV(\(evSummary))",
+            "WB(\(wbSummary))",
+            "Focus(\(focusSummary))"
+        ].joined(separator: " ")
+        print(sceneSummary)
         print(
             "[ProductAutoSceneFrame] " +
             "format=\(frame.pixelFormatName) " +

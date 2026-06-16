@@ -257,6 +257,7 @@ struct CaptureScreen: View {
             activePanel: activeBottomParameterKind,
             blockedReason: isAvailable ? nil : state.hintText
         )
+        cameraRuntime.logManualParameterCompatibilityForPanel(reason: "panelOpen:\(kind.rawValue)")
         guard isAvailable else {
             cameraRuntime.captureHintText = state.hintText
             logParameterGuard(parameter: kind, reason: "disabled")
@@ -273,6 +274,11 @@ struct CaptureScreen: View {
             return
         }
 
+        if !state.isAdjustable {
+            clearPendingValue(for: kind)
+            logParameterGuard(parameter: kind, reason: "notAdjustable panelOnly \(state.hintText)")
+        }
+
         withAnimation(.easeOut(duration: 0.18)) {
             isMoreOptionsPanelPresented = false
             isManualFocusRulerPresented = false
@@ -284,6 +290,10 @@ struct CaptureScreen: View {
                 isBottomParameterPanelExpanded = true
             }
         }
+
+        cameraRuntime.captureHintText = state.isAdjustable
+            ? "\(bottomParameterTitle(for: kind))：横拖下方刻度可手动调整"
+            : state.hintText
     }
 
     private func dismissInlineControls() {
@@ -3254,6 +3264,36 @@ private extension CaptureScreen {
         logShutterWheel("dispatch shutter auto")
         logExposureTriangle("action=shutterAuto isoMode=\(cameraRuntime.selectedISOPreset == .auto ? "auto" : "manual") shutterMode=auto evState=\(cameraRuntime.selectedISOPreset == .auto ? "enabled" : "locked") reason=autoRestore")
         cameraRuntime.applyShutterAuto()
+    }
+
+    private func clearPendingValue(for kind: CaptureProfessionalParameterKind) {
+        switch kind {
+        case .exposureCompensation:
+            pendingExposureBiasWheelValue = nil
+            pendingExposureBiasUpdatedAt = nil
+            lastDispatchedExposureBiasValue = nil
+        case .whiteBalance:
+            pendingWhiteBalanceWheelValue = nil
+            pendingWhiteBalanceUpdatedAt = nil
+            lastDispatchedWhiteBalanceValue = nil
+        case .tint:
+            pendingTintWheelValue = nil
+            pendingTintUpdatedAt = nil
+            lastDispatchedTintValue = nil
+        case .iso:
+            pendingISOWheelValue = nil
+            pendingISOUpdatedAt = nil
+            lastDispatchedISOValue = nil
+        case .shutter:
+            pendingShutterWheelDurationSeconds = nil
+            pendingShutterUpdatedAt = nil
+            lastDispatchedShutterDurationSeconds = nil
+            lastDispatchedShutterTickIndex = nil
+        case .focus:
+            clearManualFocusPending()
+        default:
+            break
+        }
     }
 
     private func exposureCompensationWheelValues() -> [Double] {
