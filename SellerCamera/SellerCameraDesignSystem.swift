@@ -285,3 +285,19 @@ extension View {
         )
     }
 }
+
+struct SellerCameraPressButtonStyle: ButtonStyle {
+    var pressedScale: CGFloat = 0.94
+    var disabledScale: CGFloat = 0.98
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? pressedScale : (isEnabled ? 1 : disabledScale))
+            .opacity(isEnabled ? 1 : 0.58)
+            .animation(reduceMotion ? SellerCameraMotionToken.reducedMotion : SellerCameraMotionToken.press, value: configuration.isPressed)
+            .animation(SellerCameraMotionToken.selection, value: isEnabled)
+    }
+}

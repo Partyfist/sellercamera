@@ -1085,7 +1085,7 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var lastScrubSensitivity: CGFloat = 1
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
-    private let accent = Color(red: 0.46, green: 0.78, blue: 1.0)
+    private let accent = SellerCameraColorToken.accent
     private let tickSpacing: CGFloat = ManualFocusRulerTuning.tickSpacing
     private let dragStepThreshold: CGFloat = ManualFocusRulerTuning.dragStepThreshold
 
@@ -1095,12 +1095,12 @@ private struct CaptureManualFocusRulerPanel: View {
             let centerX = width / 2
 
             ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: SellerCameraShapeToken.compactPanelRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(red: 0.036, green: 0.044, blue: 0.058).opacity(0.88),
-                                Color(red: 0.014, green: 0.018, blue: 0.026).opacity(0.92)
+                                SellerCameraColorToken.canvasElevated.opacity(0.90),
+                                SellerCameraColorToken.canvas.opacity(0.94)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -1112,8 +1112,8 @@ private struct CaptureManualFocusRulerPanel: View {
                     Spacer()
                     Text("远")
                 }
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(isEnabled ? 0.46 : 0.22))
+                .font(SellerCameraTypographyToken.caption.weight(.semibold))
+                .foregroundStyle(isEnabled ? SellerCameraColorToken.textTertiary : SellerCameraColorToken.disabled.opacity(0.74))
                 .padding(.horizontal, 13)
                 .position(x: centerX, y: 58)
                 .allowsHitTesting(false)
@@ -1157,7 +1157,7 @@ private struct CaptureManualFocusRulerPanel: View {
         .frame(height: 76)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(.black.opacity(isEnabled ? 0.18 : 0.12), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+        .background(SellerCameraColorToken.controlSurface.opacity(isEnabled ? 0.56 : 0.36), in: RoundedRectangle(cornerRadius: SellerCameraShapeToken.compactPanelRadius, style: .continuous))
         .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 8)
         .opacity(isEnabled ? 1 : 0.58)
     }
@@ -1180,7 +1180,7 @@ private struct CaptureManualFocusRulerPanel: View {
                     }
 
                     Text(shouldShowFocusTickLabel(index: index, value: value) ? focusTickLabel(value) : "")
-                        .font(.system(size: 7, weight: .medium))
+                        .font(SellerCameraTypographyToken.rulerMinor)
                         .monospacedDigit()
                         .foregroundStyle(tickLabelColor(isSelected: isSelected))
                         .lineLimit(1)
@@ -1190,7 +1190,7 @@ private struct CaptureManualFocusRulerPanel: View {
                 .frame(width: tickSpacing, height: 43, alignment: .bottom)
             }
         }
-        .animation(.easeOut(duration: 0.14), value: selectedIndex)
+        .animation(SellerCameraMotionToken.selection, value: selectedIndex)
     }
 
     private var centerPointer: some View {
@@ -1210,9 +1210,9 @@ private struct CaptureManualFocusRulerPanel: View {
 
     private var valueBadge: some View {
         Text(currentValueText)
-            .font(.system(size: 11, weight: .bold))
+            .font(SellerCameraTypographyToken.label.weight(.bold))
             .monospacedDigit()
-            .foregroundStyle(.white.opacity(isEnabled ? 0.98 : 0.48))
+            .foregroundStyle(isEnabled ? SellerCameraColorToken.textPrimary : SellerCameraColorToken.disabled)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 8)
@@ -1222,7 +1222,7 @@ private struct CaptureManualFocusRulerPanel: View {
             .shadow(color: accent.opacity(isEnabled ? 0.18 : 0), radius: 8, x: 0, y: 0)
             .id(currentValueText)
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            .animation(.easeOut(duration: 0.13), value: currentValueText)
+            .animation(SellerCameraMotionToken.panelDismiss, value: currentValueText)
             .allowsHitTesting(false)
     }
 
@@ -1368,7 +1368,7 @@ private struct CaptureManualFocusRulerPanel: View {
         lastDragDirection = 0
         lastScrubSensitivity = 1
         if animateOffset {
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(SellerCameraMotionToken.snap) {
                 dragOffset = 0
             }
         } else {
@@ -1449,7 +1449,7 @@ private struct CaptureManualFocusRulerPanel: View {
         guard now.timeIntervalSince(lastHapticAt) >= 0.09 else { return }
         lastHapticSignature = signature
         lastHapticAt = now
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        SellerCameraHaptic.play(.selection, signature: signature, minimumInterval: 0.09)
     }
 
     private func isMajorTick(_ value: Double) -> Bool {
@@ -1482,15 +1482,15 @@ private struct CaptureManualFocusRulerPanel: View {
     }
 
     private func tickColor(isSelected: Bool, isMajor: Bool) -> Color {
-        guard isEnabled else { return .white.opacity(0.20) }
+        guard isEnabled else { return SellerCameraColorToken.disabled.opacity(0.66) }
         if isSelected { return accent }
-        return .white.opacity(isMajor ? 0.34 : 0.16)
+        return SellerCameraColorToken.textPrimary.opacity(isMajor ? 0.34 : 0.16)
     }
 
     private func tickLabelColor(isSelected: Bool) -> Color {
-        guard isEnabled else { return .white.opacity(0.22) }
-        if isSelected { return .white.opacity(0.94) }
-        return .white.opacity(0.42)
+        guard isEnabled else { return SellerCameraColorToken.disabled.opacity(0.74) }
+        if isSelected { return SellerCameraColorToken.textPrimary }
+        return SellerCameraColorToken.textTertiary
     }
 }
 
@@ -2443,9 +2443,7 @@ private struct CaptureLensControlStrip: View {
     let isManualFocusModeActive: Bool
     let onToggleExposureLock: () -> Void
     let onToggleManualFocusMode: () -> Void
-    private let accent = Color(red: 0.20, green: 0.88, blue: 0.76)
-    private let lockAccent = Color(red: 1.0, green: 0.70, blue: 0.28)
-    private let manualAccent = Color(red: 0.46, green: 0.78, blue: 1.0)
+    private let accent = SellerCameraColorToken.accent
 
     private var availableCapabilities: [CaptureSemanticFocalCapability] {
         cameraRuntime.availableSemanticFocalCapabilities
@@ -2466,7 +2464,7 @@ private struct CaptureLensControlStrip: View {
                     text: "AE-L",
                     isActive: isExposureLocked,
                     isEnabled: cameraRuntime.isExposureLockSupported,
-                    accentColor: lockAccent
+                    accentColor: accent
                 )
             }
             .buttonStyle(.plain)
@@ -2474,11 +2472,11 @@ private struct CaptureLensControlStrip: View {
 
             if availableCapabilities.isEmpty {
                 Text(cameraRuntime.activeCameraPosition == .front ? "前置镜头" : "当前机型无可用镜头焦段")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.66))
+                    .font(SellerCameraTypographyToken.control)
+                    .foregroundStyle(SellerCameraColorToken.textSecondary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
-                    .background(.white.opacity(0.06), in: Capsule())
+                    .background(SellerCameraColorToken.controlSurface.opacity(0.56), in: Capsule())
             } else {
                 HStack(spacing: focalSpacing) {
                     ForEach(availableCapabilities) { capability in
@@ -2494,8 +2492,8 @@ private struct CaptureLensControlStrip: View {
                             }
                         } label: {
                             Text(focal.displayText)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(isSelected ? accent : .white.opacity(0.76))
+                                .font(SellerCameraTypographyToken.control)
+                                .foregroundStyle(isSelected ? accent : SellerCameraColorToken.textSecondary)
                                 .padding(.horizontal, focalHorizontalPadding)
                                 .padding(.vertical, 6)
                                 .frame(minWidth: focalButtonMinWidth)
@@ -2504,7 +2502,7 @@ private struct CaptureLensControlStrip: View {
                                         .fill(
                                             isSelected
                                                 ? accent.opacity(0.14)
-                                                : Color.white.opacity(0.045)
+                                                : SellerCameraColorToken.controlSurface.opacity(0.50)
                                         )
                                 )
                                 .overlay(
@@ -2512,13 +2510,13 @@ private struct CaptureLensControlStrip: View {
                                         .stroke(
                                             isSelected
                                                 ? accent.opacity(0.34)
-                                                : Color.white.opacity(0.055),
+                                                : SellerCameraColorToken.glassStroke.opacity(0.56),
                                             lineWidth: 1
                                         )
                                 )
                                 .shadow(color: isSelected ? accent.opacity(0.18) : .clear, radius: 9, x: 0, y: 0)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
                     }
                 }
             }
@@ -2528,10 +2526,10 @@ private struct CaptureLensControlStrip: View {
                     text: "MF",
                     isActive: isManualFocusModeActive,
                     isEnabled: !isManualFocusDisabled,
-                    accentColor: manualAccent
+                    accentColor: accent
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
         }
         .frame(maxWidth: .infinity)
     }
@@ -2571,18 +2569,18 @@ private struct CaptureLensControlStrip: View {
         accentColor: Color
     ) -> some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(isActive ? accentColor : .white.opacity(isEnabled ? 0.76 : 0.32))
+            .font(SellerCameraTypographyToken.control)
+            .foregroundStyle(isActive ? accentColor : (isEnabled ? SellerCameraColorToken.textSecondary : SellerCameraColorToken.disabled))
             .padding(.horizontal, auxiliaryHorizontalPadding)
             .padding(.vertical, 6)
             .frame(minWidth: auxiliaryControlMinWidth)
             .background(
                 Capsule(style: .continuous)
-                    .fill(isActive ? accentColor.opacity(0.14) : Color.white.opacity(isEnabled ? 0.045 : 0.025))
+                    .fill(isActive ? accentColor.opacity(0.14) : SellerCameraColorToken.controlSurface.opacity(isEnabled ? 0.50 : 0.30))
             )
             .overlay(
                 Capsule(style: .continuous)
-                    .stroke(isActive ? accentColor.opacity(0.34) : Color.white.opacity(isEnabled ? 0.055 : 0.035), lineWidth: 1)
+                    .stroke(isActive ? accentColor.opacity(0.34) : SellerCameraColorToken.glassStroke.opacity(isEnabled ? 0.56 : 0.36), lineWidth: 1)
             )
             .shadow(color: isActive ? accentColor.opacity(0.18) : .clear, radius: 9, x: 0, y: 0)
     }
@@ -2624,7 +2622,7 @@ private struct CaptureZoomDialView: View {
     @State private var lastHapticSignature: String?
     @State private var dragBaselineValue: Double?
     @State private var lastEmittedZoomValue: Double?
-    private let accent = Color(red: 0.20, green: 0.88, blue: 0.76)
+    private let accent = SellerCameraColorToken.accent
     private let tickSpacing: CGFloat = Tuning.tickSpacing
 
     var body: some View {
@@ -2633,8 +2631,8 @@ private struct CaptureZoomDialView: View {
             let centerX = width / 2
 
             ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.black.opacity(isEnabled ? 0.36 : 0.26))
+                RoundedRectangle(cornerRadius: SellerCameraShapeToken.compactPanelRadius, style: .continuous)
+                    .fill(SellerCameraColorToken.controlSurface.opacity(isEnabled ? 0.74 : 0.44))
 
                 lensRulerTicks
                     .offset(x: centerX - CGFloat(selectedIndex) * tickSpacing - tickSpacing / 2 + dragOffset)
@@ -2675,8 +2673,8 @@ private struct CaptureZoomDialView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.black.opacity(isEnabled ? 0.18 : 0.12))
+            RoundedRectangle(cornerRadius: SellerCameraShapeToken.compactPanelRadius, style: .continuous)
+                .fill(SellerCameraColorToken.controlSurface.opacity(isEnabled ? 0.42 : 0.28))
         )
     }
 
@@ -2691,7 +2689,7 @@ private struct CaptureZoomDialView: View {
                         .frame(width: isSelected ? 1.6 : 0.9, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
                         .shadow(color: isSelected ? accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
                     Text(isMajor ? formatMultiplier(value) : "")
-                        .font(.system(size: isSelected ? 8.5 : 7, weight: isSelected ? .semibold : .medium))
+                        .font(isSelected ? SellerCameraTypographyToken.rulerMajor : SellerCameraTypographyToken.rulerMinor)
                         .monospacedDigit()
                         .foregroundStyle(tickLabelColor(isSelected: isSelected))
                         .lineLimit(1)
@@ -2701,7 +2699,7 @@ private struct CaptureZoomDialView: View {
                 .frame(width: tickSpacing, height: 43, alignment: .bottom)
             }
         }
-        .animation(.easeOut(duration: 0.14), value: selectedIndex)
+        .animation(SellerCameraMotionToken.selection, value: selectedIndex)
     }
 
     private var centerPointer: some View {
@@ -2721,9 +2719,9 @@ private struct CaptureZoomDialView: View {
 
     private var valueBadge: some View {
         Text(currentValueText)
-            .font(.system(size: 11, weight: .bold))
+            .font(SellerCameraTypographyToken.label.weight(.bold))
             .monospacedDigit()
-            .foregroundStyle(.white.opacity(isEnabled ? 0.98 : 0.48))
+            .foregroundStyle(isEnabled ? SellerCameraColorToken.textPrimary : SellerCameraColorToken.disabled)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 8)
@@ -2739,7 +2737,7 @@ private struct CaptureZoomDialView: View {
             .shadow(color: accent.opacity(isEnabled ? 0.18 : 0), radius: 8, x: 0, y: 0)
             .id(currentValueText)
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            .animation(.easeOut(duration: 0.13), value: currentValueText)
+            .animation(SellerCameraMotionToken.panelDismiss, value: currentValueText)
             .allowsHitTesting(false)
     }
 
@@ -2749,15 +2747,15 @@ private struct CaptureZoomDialView: View {
     }
 
     private func tickColor(isSelected: Bool, isMajor: Bool) -> Color {
-        guard isEnabled else { return .white.opacity(0.20) }
+        guard isEnabled else { return SellerCameraColorToken.disabled.opacity(0.66) }
         if isSelected { return accent }
-        return .white.opacity(isMajor ? 0.34 : 0.16)
+        return SellerCameraColorToken.textPrimary.opacity(isMajor ? 0.34 : 0.16)
     }
 
     private func tickLabelColor(isSelected: Bool) -> Color {
-        guard isEnabled else { return .white.opacity(0.22) }
-        if isSelected { return .white.opacity(0.94) }
-        return .white.opacity(0.42)
+        guard isEnabled else { return SellerCameraColorToken.disabled.opacity(0.74) }
+        if isSelected { return SellerCameraColorToken.textPrimary }
+        return SellerCameraColorToken.textTertiary
     }
 
     private func handleDrag(_ translation: CGSize) {
@@ -2808,7 +2806,7 @@ private struct CaptureZoomDialView: View {
         dragBaselineValue = nil
         lastEmittedZoomValue = nil
         if animateOffset {
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(SellerCameraMotionToken.snap) {
                 dragOffset = 0
             }
         } else {
@@ -2909,7 +2907,7 @@ private struct CaptureZoomDialView: View {
         guard now.timeIntervalSince(lastHapticAt) >= Tuning.hapticMinInterval else { return }
         lastHapticSignature = signature
         lastHapticAt = now
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        SellerCameraHaptic.play(.selection, signature: signature, minimumInterval: Tuning.hapticMinInterval)
     }
 
     private func formatMultiplier(_ multiplier: Double) -> String {
@@ -4660,20 +4658,23 @@ private struct CaptureBottomActionBar: View {
 
             Spacer(minLength: 14)
 
-            Button(action: onShutterTap) {
+            Button {
+                SellerCameraHaptic.play(.capture, minimumInterval: 0.18)
+                onShutterTap()
+            } label: {
                 ZStack {
                     Circle()
-                        .fill(.white.opacity(0.95))
+                        .fill(SellerCameraColorToken.textPrimary)
                         .frame(width: 70, height: 70)
                     Circle()
-                        .stroke(.black.opacity(0.25), lineWidth: 2.4)
+                        .stroke(SellerCameraColorToken.canvas.opacity(0.44), lineWidth: SellerCameraShapeToken.shutterRingWidth)
                         .frame(width: 56, height: 56)
                     Circle()
-                        .stroke(.white.opacity(0.24), lineWidth: 1)
+                        .stroke(SellerCameraColorToken.accent.opacity(0.28), lineWidth: 1)
                         .frame(width: 80, height: 80)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.92))
             .accessibilityLabel("Shutter")
             .contentShape(Circle())
             .frame(width: 86, height: 86)
@@ -4686,7 +4687,7 @@ private struct CaptureBottomActionBar: View {
                     title: "图册"
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SellerCameraPressButtonStyle())
         }
         .frame(height: 86)
     }
@@ -4694,18 +4695,18 @@ private struct CaptureBottomActionBar: View {
     private func sideControlCard(symbol: String, title: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
+                .font(SellerCameraTypographyToken.valueLarge)
             Text(title)
-                .font(.caption2)
+                .font(SellerCameraTypographyToken.caption)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
-        .foregroundStyle(.white.opacity(0.92))
+        .foregroundStyle(SellerCameraColorToken.textPrimary)
         .frame(width: 64, height: 58)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background(SellerCameraColorToken.controlSurface.opacity(0.58), in: RoundedRectangle(cornerRadius: SellerCameraShapeToken.controlRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(.white.opacity(0.14), lineWidth: 1)
+            RoundedRectangle(cornerRadius: SellerCameraShapeToken.controlRadius, style: .continuous)
+                .stroke(SellerCameraColorToken.glassStroke, lineWidth: 1)
         )
     }
 }
@@ -4729,23 +4730,23 @@ private struct CaptureBottomLatestResultButton: View {
                             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                     } else {
                         Image(systemName: latestResult == nil ? "photo" : "photo.fill")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(SellerCameraTypographyToken.value)
                     }
                 }
                 Text(latestResult == nil ? "最近" : "最新")
-                    .font(.caption2)
+                    .font(SellerCameraTypographyToken.caption)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }
-            .foregroundStyle(.white.opacity(latestResult == nil ? 0.72 : 0.92))
+            .foregroundStyle(latestResult == nil ? SellerCameraColorToken.textTertiary : SellerCameraColorToken.textPrimary)
             .frame(width: 64, height: 58)
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .background(SellerCameraColorToken.controlSurface.opacity(latestResult == nil ? 0.40 : 0.58), in: RoundedRectangle(cornerRadius: SellerCameraShapeToken.controlRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(.white.opacity(0.14), lineWidth: 1)
+                RoundedRectangle(cornerRadius: SellerCameraShapeToken.controlRadius, style: .continuous)
+                    .stroke(SellerCameraColorToken.glassStroke.opacity(latestResult == nil ? 0.62 : 1), lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SellerCameraPressButtonStyle())
         .disabled(latestResult == nil)
         .task(id: latestResult?.id) {
             await refreshPreview()
