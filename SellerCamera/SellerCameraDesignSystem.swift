@@ -9,7 +9,7 @@ enum SellerCameraColorToken {
     static let glassStroke = Color.white.opacity(0.10)
     static let textPrimary = Color.white.opacity(0.94)
     static let textSecondary = Color.white.opacity(0.66)
-    static let textTertiary = Color.white.opacity(0.42)
+    static let textTertiary = Color.white.opacity(0.54)
     static let accent = Color(red: 1.00, green: 0.72, blue: 0.34)
     static let accentPressed = Color(red: 1.00, green: 0.64, blue: 0.24)
     static let success = Color(red: 0.42, green: 0.92, blue: 0.66)
@@ -92,6 +92,9 @@ enum SellerCameraTypography {
     static let rulerPrimaryValue = SellerCameraTypographyToken.label.weight(.bold)
     static let rulerSecondaryValue = SellerCameraTypographyToken.rulerMajor
     static let statusLabel = SellerCameraTypographyToken.status
+    static let previewCountdown = Font.system(size: 40, weight: .bold, design: .rounded)
+    static let glyphMicroLabel = Font.system(size: 6, weight: .bold)
+    static let glyphNanoLabel = Font.system(size: 5.5, weight: .bold)
 }
 
 enum SellerCameraSpacingToken {
@@ -175,7 +178,7 @@ struct SellerCameraControlVisualStyle {
         case .normal:
             return SellerCameraControlVisualStyle(
                 foreground: SellerCameraColor.textSecondary,
-                secondaryForeground: SellerCameraColor.textTertiary,
+                secondaryForeground: SellerCameraColor.textSecondary,
                 fill: SellerCameraColor.controlSurfacePrimary.opacity(0.46),
                 stroke: SellerCameraColor.divider.opacity(0.56),
                 underline: .clear,
@@ -298,6 +301,133 @@ struct SellerCameraRulerStyle {
         valueBadgeHeight: 24,
         activeLift: 1
     )
+}
+
+enum SellerCameraGlyphProminence {
+    case compact
+    case standard
+    case emphasized
+    case status
+}
+
+enum SellerCameraGlyphMetrics {
+    static let compactSize: CGFloat = 10
+    static let standardSize: CGFloat = 12
+    static let emphasizedSize: CGFloat = 16
+    static let statusSize: CGFloat = 9
+    static let compactFrame: CGFloat = 14
+    static let standardFrame: CGFloat = 18
+    static let largeFrame: CGFloat = 30
+    static let regularWeight: Font.Weight = .semibold
+    static let selectedWeight: Font.Weight = .bold
+    static let statusWeight: Font.Weight = .semibold
+    static let hairlineWidth: CGFloat = 1
+    static let standardStrokeWidth: CGFloat = 1.2
+    static let emphasizedStrokeWidth: CGFloat = 1.45
+    static let compactDot: CGFloat = 2
+    static let standardDot: CGFloat = 3
+    static let emphasizedDot: CGFloat = 4
+}
+
+struct SellerCameraGlyphStyleModifier: ViewModifier {
+    let state: SellerCameraControlState
+    let prominence: SellerCameraGlyphProminence
+
+    func body(content: Content) -> some View {
+        let controlStyle = SellerCameraControlVisualStyle.style(for: state)
+        content
+            .font(.system(size: symbolSize, weight: symbolWeight))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(state == .normal ? controlStyle.secondaryForeground : controlStyle.foreground)
+            .frame(width: frameSize, height: frameSize)
+    }
+
+    private var symbolSize: CGFloat {
+        switch prominence {
+        case .compact:
+            return SellerCameraGlyphMetrics.compactSize
+        case .standard:
+            return SellerCameraGlyphMetrics.standardSize
+        case .emphasized:
+            return SellerCameraGlyphMetrics.emphasizedSize
+        case .status:
+            return SellerCameraGlyphMetrics.statusSize
+        }
+    }
+
+    private var symbolWeight: Font.Weight {
+        switch state {
+        case .selected, .active, .locked, .warning:
+            return SellerCameraGlyphMetrics.selectedWeight
+        case .normal, .disabled:
+            return prominence == .status ? SellerCameraGlyphMetrics.statusWeight : SellerCameraGlyphMetrics.regularWeight
+        }
+    }
+
+    private var frameSize: CGFloat {
+        switch prominence {
+        case .compact, .status:
+            return SellerCameraGlyphMetrics.compactFrame
+        case .standard:
+            return SellerCameraGlyphMetrics.standardFrame
+        case .emphasized:
+            return SellerCameraGlyphMetrics.largeFrame
+        }
+    }
+}
+
+enum SellerCameraPreviewMetrics {
+    static let hairlineWidth: CGFloat = 0.8
+    static let standardLineWidth: CGFloat = 1.1
+    static let emphasizedLineWidth: CGFloat = 1.6
+    static let contrastOutlineWidth: CGFloat = 3.2
+    static let gridOpacity: Double = 0.30
+    static let guideMaskOpacity: Double = 0.28
+    static let guideBorderOpacity: Double = 0.0
+    static let levelInactiveOpacity: Double = 0.78
+    static let levelActiveOpacity: Double = 0.92
+    static let levelReferenceOpacity: Double = 0.34
+    static let hudBackgroundOpacity: Double = 0.56
+    static let hudActiveBackgroundOpacity: Double = 0.42
+    static let focusOuterFrame: CGFloat = 84
+    static let focusOuterPathSize: CGFloat = 80
+    static let focusInnerFrame: CGFloat = 70
+    static let focusInnerPathSize: CGFloat = 66
+    static let focusCornerLength: CGFloat = 18
+    static let focusInnerCornerLength: CGFloat = 13
+    static let focusInset: CGFloat = 2
+    static let focusBadgeOffset: CGFloat = 0
+    static let focusIconOffset: CGFloat = -47
+    static let focusLineWidth: CGFloat = 1.6
+    static let focusWarningLineWidth: CGFloat = 1.9
+    static let focusInnerLineWidth: CGFloat = 1.1
+    static let levelShortTickWidth: CGFloat = 1.4
+    static let levelCenterTickWidth: CGFloat = 1.6
+    static let levelShortTickHeight: CGFloat = 8
+    static let levelHorizontalWidth: CGFloat = 96
+    static let levelHorizontalHeight: CGFloat = 2
+    static let levelCrossSize: CGFloat = 24
+    static let guideBorderWidth: CGFloat = 0.0
+}
+
+enum SellerCameraPreviewStyle {
+    static let overlayPrimary = SellerCameraColor.textPrimary
+    static let overlaySecondary = SellerCameraColor.textSecondary
+    static let overlayMuted = SellerCameraColor.textTertiary
+    static let contrastOutline = Color.black.opacity(0.42)
+    static let maskFill = Color.black.opacity(SellerCameraPreviewMetrics.guideMaskOpacity)
+    static let gridLine = SellerCameraColor.textPrimary.opacity(SellerCameraPreviewMetrics.gridOpacity)
+    static let guideBorder = SellerCameraColor.textPrimary.opacity(SellerCameraPreviewMetrics.guideBorderOpacity)
+    static let hudSurface = Color.black.opacity(SellerCameraPreviewMetrics.hudBackgroundOpacity)
+    static let hudStroke = SellerCameraColor.divider.opacity(0.70)
+    static let focusNormal = SellerCameraColor.accentPrimary
+    static let focusConfirmed = SellerCameraColor.accentSuccess
+    static let focusLocked = SellerCameraColor.accentSuccess
+    static let focusUnlocked = Color(red: 0.48, green: 0.75, blue: 1.0)
+    static let focusWarning = SellerCameraColor.accentWarning
+    static let levelNeutral = SellerCameraColor.textPrimary
+    static let levelAligned = SellerCameraColor.accentSuccess
+    static let levelWarning = SellerCameraColor.accentWarning
 }
 
 enum SellerCameraHapticToken: Hashable {
@@ -568,6 +698,13 @@ struct SellerCameraGlassPanelModifier: ViewModifier {
 }
 
 extension View {
+    func sellerCameraGlyphStyle(
+        state: SellerCameraControlState = .normal,
+        prominence: SellerCameraGlyphProminence = .standard
+    ) -> some View {
+        modifier(SellerCameraGlyphStyleModifier(state: state, prominence: prominence))
+    }
+
     func sellerCameraGlassPanel(
         radius: CGFloat = SellerCameraShapeToken.panelRadius,
         baseOpacity: Double = 0.74,

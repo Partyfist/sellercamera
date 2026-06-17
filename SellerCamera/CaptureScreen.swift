@@ -1702,8 +1702,7 @@ private struct CaptureTopStatusBar: View {
         return HStack(spacing: SellerCameraSpacing.sm) {
             if showsSymbol {
                 Image(systemName: symbol)
-                    .font(SellerCameraTypography.toolLabel)
-                    .frame(width: 13, height: 13)
+                    .sellerCameraGlyphStyle(state: state, prominence: .compact)
             }
             Text(text)
                 .font(SellerCameraTypography.toolLabel)
@@ -2253,9 +2252,7 @@ private struct CaptureMoreOptionsPanel: View {
         return Button(action: action) {
             HStack(spacing: SellerCameraSpacing.lg - 2) {
                 Image(systemName: systemImage)
-                    .font(SellerCameraTypography.toolLabel)
-                    .foregroundStyle(isActive ? style.foreground : style.secondaryForeground)
-                    .frame(width: 18)
+                    .sellerCameraGlyphStyle(state: state, prominence: .standard)
 
                 VStack(alignment: .leading, spacing: SellerCameraSpacing.xxs) {
                     Text(title)
@@ -2994,6 +2991,8 @@ private struct CaptureAssistHintSlot: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "sparkles")
+                .sellerCameraGlyphStyle(state: .normal, prominence: .status)
+                .accessibilityHidden(true)
             Text(text)
                 .font(SellerCameraTypography.toolLabel)
                 .lineLimit(1)
@@ -4760,7 +4759,7 @@ private struct CaptureBottomActionBar: View {
     private func sideControlCard(symbol: String, title: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: symbol)
-                .font(SellerCameraTypographyToken.valueLarge)
+                .sellerCameraGlyphStyle(state: .normal, prominence: .emphasized)
             Text(title)
                 .font(SellerCameraTypographyToken.caption)
                 .lineLimit(1)
@@ -4795,7 +4794,10 @@ private struct CaptureBottomLatestResultButton: View {
                             .clipShape(RoundedRectangle(cornerRadius: SellerCameraRadius.compact, style: .continuous))
                     } else {
                         Image(systemName: latestResult == nil ? "photo" : "photo.fill")
-                            .font(SellerCameraTypographyToken.value)
+                            .sellerCameraGlyphStyle(
+                                state: latestResult == nil ? .normal : .selected,
+                                prominence: .emphasized
+                            )
                     }
                 }
                 Text("照片")

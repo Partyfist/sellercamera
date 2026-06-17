@@ -782,6 +782,7 @@ private struct CaptureParameterGlyph: View {
     let kind: CaptureProfessionalParameterKind
     let isActive: Bool
     let isAvailable: Bool
+    private let metrics = SellerCameraGlyphMetrics.self
 
     private var stroke: Color {
         guard isAvailable else { return SellerCameraColor.textDisabled.opacity(0.92) }
@@ -808,7 +809,7 @@ private struct CaptureParameterGlyph: View {
                 shutterGlyph
             default:
                 Circle()
-                    .stroke(stroke, lineWidth: 1.3)
+                    .stroke(stroke, lineWidth: metrics.standardStrokeWidth)
             }
         }
         .shadow(color: isActive ? CaptureParameterConsoleStyle.accent.opacity(0.28) : .clear, radius: 6, x: 0, y: 0)
@@ -820,18 +821,18 @@ private struct CaptureParameterGlyph: View {
                 .fill(fill)
             Circle()
                 .trim(from: 0.25, to: 0.75)
-                .stroke(stroke, style: StrokeStyle(lineWidth: 1.35, lineCap: .round))
+                .stroke(stroke, style: StrokeStyle(lineWidth: metrics.emphasizedStrokeWidth, lineCap: .round))
                 .rotationEffect(.degrees(90))
             Circle()
-                .stroke(stroke.opacity(0.90), lineWidth: 1.15)
+                .stroke(stroke.opacity(0.90), lineWidth: metrics.standardStrokeWidth)
             Rectangle()
                 .fill(stroke.opacity(0.80))
-                .frame(width: 1, height: 12)
+                .frame(width: metrics.hairlineWidth, height: 12)
             HStack(spacing: 8) {
                 Text("-")
                 Text("+")
             }
-            .font(.system(size: 6, weight: .bold))
+            .font(SellerCameraTypography.glyphMicroLabel)
             .foregroundStyle(stroke)
         }
     }
@@ -839,13 +840,13 @@ private struct CaptureParameterGlyph: View {
     private var whiteBalanceGlyph: some View {
         ZStack {
             Circle()
-                .stroke(stroke, lineWidth: 1.25)
+                .stroke(stroke, lineWidth: metrics.standardStrokeWidth)
             Rectangle()
                 .fill(stroke.opacity(0.78))
-                .frame(width: 1, height: 14)
+                .frame(width: metrics.hairlineWidth, height: 14)
             HStack(spacing: 8) {
-                Circle().fill(stroke.opacity(0.42)).frame(width: 3, height: 3)
-                Circle().fill(stroke).frame(width: 3, height: 3)
+                Circle().fill(stroke.opacity(0.42)).frame(width: metrics.standardDot, height: metrics.standardDot)
+                Circle().fill(stroke).frame(width: metrics.standardDot, height: metrics.standardDot)
             }
         }
     }
@@ -853,14 +854,14 @@ private struct CaptureParameterGlyph: View {
     private var tintGlyph: some View {
         ZStack {
             Capsule()
-                .stroke(stroke.opacity(0.82), lineWidth: 1.2)
+                .stroke(stroke.opacity(0.82), lineWidth: metrics.standardStrokeWidth)
                 .frame(width: 20, height: 7)
             Rectangle()
                 .fill(stroke.opacity(0.70))
-                .frame(width: 1, height: 14)
+                .frame(width: metrics.hairlineWidth, height: 14)
             HStack(spacing: 10) {
-                Circle().fill(stroke.opacity(0.45)).frame(width: 4, height: 4)
-                Circle().fill(stroke).frame(width: 4, height: 4)
+                Circle().fill(stroke.opacity(0.45)).frame(width: metrics.emphasizedDot, height: metrics.emphasizedDot)
+                Circle().fill(stroke).frame(width: metrics.emphasizedDot, height: metrics.emphasizedDot)
             }
         }
     }
@@ -868,15 +869,15 @@ private struct CaptureParameterGlyph: View {
     private var isoGlyph: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .stroke(stroke, lineWidth: 1.15)
+                .stroke(stroke, lineWidth: metrics.standardStrokeWidth)
             VStack(spacing: 1) {
                 Text("ISO")
-                    .font(.system(size: 5.5, weight: .bold))
+                    .font(SellerCameraTypography.glyphNanoLabel)
                     .foregroundStyle(stroke)
                 HStack(spacing: 2) {
-                    Circle().fill(stroke.opacity(0.58)).frame(width: 1.7, height: 1.7)
-                    Circle().fill(stroke.opacity(0.90)).frame(width: 1.7, height: 1.7)
-                    Circle().fill(stroke.opacity(0.58)).frame(width: 1.7, height: 1.7)
+                    Circle().fill(stroke.opacity(0.58)).frame(width: metrics.compactDot, height: metrics.compactDot)
+                    Circle().fill(stroke.opacity(0.90)).frame(width: metrics.compactDot, height: metrics.compactDot)
+                    Circle().fill(stroke.opacity(0.58)).frame(width: metrics.compactDot, height: metrics.compactDot)
                 }
             }
         }
@@ -885,17 +886,17 @@ private struct CaptureParameterGlyph: View {
     private var shutterGlyph: some View {
         ZStack {
             Circle()
-                .stroke(stroke.opacity(0.88), lineWidth: 1.1)
+                .stroke(stroke.opacity(0.88), lineWidth: metrics.standardStrokeWidth)
             ForEach(0..<5, id: \.self) { index in
                 Capsule()
                     .fill(stroke.opacity(index == 0 ? 1 : 0.64))
-                    .frame(width: 2.1, height: 8)
+                    .frame(width: metrics.compactDot, height: 8)
                     .offset(y: -3)
                     .rotationEffect(.degrees(Double(index) * 72))
             }
             Circle()
-                .fill(Color.black.opacity(0.24))
-                .frame(width: 4, height: 4)
+                .fill(SellerCameraPreviewStyle.contrastOutline.opacity(0.58))
+                .frame(width: metrics.emphasizedDot, height: metrics.emphasizedDot)
         }
     }
 }

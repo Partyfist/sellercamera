@@ -6552,9 +6552,6 @@ struct CaptureLivePreviewView: View {
                         .allowsHitTesting(false)
                 }
 
-                CaptureAspectRatioGuideOverlay(aspectRatio: cameraRuntime.previewAspectRatioValue)
-                    .allowsHitTesting(false)
-
                 if cameraRuntime.isLevelIndicatorEnabled {
                     CaptureLevelOverlay(
                         rollDegrees: cameraRuntime.levelRollDegrees,
@@ -6574,23 +6571,21 @@ struct CaptureLivePreviewView: View {
                 }
 
                 if cameraRuntime.isFocusExposureLocked {
-                    Text("AE/AF 锁定中")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.green.opacity(0.42), in: Capsule())
+                    CapturePreviewStatusBadge(
+                        text: "AE/AF 锁定中",
+                        systemImage: "lock.fill",
+                        state: .locked
+                    )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(.top, 46)
                         .padding(.leading, 14)
                         .allowsHitTesting(false)
                 } else if cameraRuntime.isExposureLocked {
-                    Text("AE 锁定中")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.blue.opacity(0.42), in: Capsule())
+                    CapturePreviewStatusBadge(
+                        text: "AE 锁定中",
+                        systemImage: "lock.fill",
+                        state: .active
+                    )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(.top, 46)
                         .padding(.leading, 14)
@@ -6610,12 +6605,11 @@ struct CaptureLivePreviewView: View {
                 }
 
                 if cameraRuntime.isBurstCapturing, let burstProgressText = cameraRuntime.burstProgressText {
-                    Text(burstProgressText)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.55), in: Capsule())
+                    CapturePreviewStatusBadge(
+                        text: burstProgressText,
+                        systemImage: "square.stack.3d.up.fill",
+                        state: .active
+                    )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .padding(.top, 14)
                         .allowsHitTesting(false)
@@ -6634,6 +6628,45 @@ struct CaptureLivePreviewView: View {
     }
 }
 
+private struct CapturePreviewStatusBadge: View {
+    let text: String
+    let systemImage: String?
+    let state: SellerCameraControlState
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let controlStyle = SellerCameraControlVisualStyle.style(for: state)
+
+        HStack(spacing: SellerCameraSpacing.xs) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .sellerCameraGlyphStyle(state: state, prominence: .status)
+                    .accessibilityHidden(true)
+            }
+
+            Text(text)
+                .font(SellerCameraTypography.statusLabel.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+        }
+        .foregroundStyle(SellerCameraPreviewStyle.overlayPrimary)
+        .padding(.horizontal, SellerCameraSpacing.md + 2)
+        .padding(.vertical, SellerCameraSpacing.sm)
+        .background(
+            Capsule(style: .continuous)
+                .fill(reduceTransparency ? SellerCameraColor.controlSurfaceSecondary : SellerCameraPreviewStyle.hudSurface)
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(controlStyle.stroke.opacity(0.92), lineWidth: SellerCameraPreviewMetrics.hairlineWidth)
+        )
+        .shadow(color: SellerCameraPreviewStyle.contrastOutline.opacity(0.42), radius: 4, x: 0, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
+        .accessibilityValue(state.accessibilityText)
+    }
+}
+
 private struct CaptureAspectRatioGuideOverlay: View {
     let aspectRatio: CGFloat
 
@@ -6641,7 +6674,7 @@ private struct CaptureAspectRatioGuideOverlay: View {
         GeometryReader { proxy in
             let canvasSize = proxy.size
             let safeAspectRatio = max(0.01, aspectRatio)
-            let targetFrame = fittedRect(for: canvasSize, targetRatio: safeAspectRatio)
+            let targetFrame = pixelAligned(fittedRect(for: canvasSize, targetRatio: safeAspectRatio))
 
             ZStack {
                 Path { path in
@@ -6649,16 +6682,28 @@ private struct CaptureAspectRatioGuideOverlay: View {
                     path.addRect(targetFrame)
                 }
                 .fill(
-                    .black.opacity(0.28),
+                    SellerCameraPreviewStyle.maskFill,
                     style: FillStyle(eoFill: true, antialiased: true)
                 )
 
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .stroke(.white.opacity(0.07), lineWidth: 0.6)
-                    .frame(width: targetFrame.width, height: targetFrame.height)
-                    .position(x: targetFrame.midX, y: targetFrame.midY)
+                if SellerCameraPreviewMetrics.guideBorderWidth > 0 {
+                    RoundedRectangle(cornerRadius: SellerCameraRadius.compact, style: .continuous)
+                        .stroke(SellerCameraPreviewStyle.guideBorder, lineWidth: SellerCameraPreviewMetrics.guideBorderWidth)
+                        .frame(width: targetFrame.width, height: targetFrame.height)
+                        .position(x: targetFrame.midX, y: targetFrame.midY)
+                }
             }
+            .accessibilityHidden(true)
         }
+    }
+
+    private func pixelAligned(_ rect: CGRect, scale: CGFloat = UIScreen.main.scale) -> CGRect {
+        guard scale > 0 else { return rect }
+        let minX = (rect.minX * scale).rounded(.toNearestOrAwayFromZero) / scale
+        let minY = (rect.minY * scale).rounded(.toNearestOrAwayFromZero) / scale
+        let maxX = (rect.maxX * scale).rounded(.toNearestOrAwayFromZero) / scale
+        let maxY = (rect.maxY * scale).rounded(.toNearestOrAwayFromZero) / scale
+        return CGRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
     }
 
     private func fittedRect(for size: CGSize, targetRatio: CGFloat) -> CGRect {
@@ -6791,8 +6836,9 @@ private struct CaptureGridOverlay: View {
                 path.move(to: CGPoint(x: 0, y: y2))
                 path.addLine(to: CGPoint(x: width, y: y2))
             }
-            .stroke(Color.white.opacity(0.34), lineWidth: 0.8)
+            .stroke(SellerCameraPreviewStyle.gridLine, lineWidth: SellerCameraPreviewMetrics.hairlineWidth)
         }
+        .accessibilityHidden(true)
     }
 }
 
@@ -6930,39 +6976,53 @@ private struct CaptureLevelOverlay: View {
     }
 
     private var uprightGuide: some View {
-        let strokeColor = isNearLevelVisual ? Color.green.opacity(0.92) : Color.white.opacity(0.82)
+        let strokeColor = isNearLevelVisual
+            ? SellerCameraPreviewStyle.levelAligned.opacity(SellerCameraPreviewMetrics.levelActiveOpacity)
+            : SellerCameraPreviewStyle.levelNeutral.opacity(SellerCameraPreviewMetrics.levelInactiveOpacity)
         return ZStack {
             HStack(spacing: 8) {
                 Rectangle()
-                    .fill(strokeColor.opacity(0.92))
-                    .frame(width: 1.4, height: 8)
+                    .fill(strokeColor)
+                    .frame(width: SellerCameraPreviewMetrics.levelShortTickWidth, height: SellerCameraPreviewMetrics.levelShortTickHeight)
                 Rectangle()
                     .fill(strokeColor)
-                    .frame(width: 96, height: 2)
+                    .frame(width: SellerCameraPreviewMetrics.levelHorizontalWidth, height: SellerCameraPreviewMetrics.levelHorizontalHeight)
                     .overlay(alignment: .center) {
                         Rectangle()
                             .fill(strokeColor)
-                            .frame(width: 1.6, height: 8)
+                            .frame(width: SellerCameraPreviewMetrics.levelCenterTickWidth, height: SellerCameraPreviewMetrics.levelShortTickHeight)
                     }
                 Rectangle()
-                    .fill(strokeColor.opacity(0.92))
-                    .frame(width: 1.4, height: 8)
+                    .fill(strokeColor)
+                    .frame(width: SellerCameraPreviewMetrics.levelShortTickWidth, height: SellerCameraPreviewMetrics.levelShortTickHeight)
             }
             .rotationEffect(.degrees(-smoothedUprightTiltDegrees))
             .rotationEffect(.degrees(-uprightBaseRotationDegrees))
-            .shadow(color: strokeColor.opacity(isNearLevelVisual ? 0.32 : 0.12), radius: isNearLevelVisual ? 4 : 1.5)
+            .shadow(color: SellerCameraPreviewStyle.contrastOutline.opacity(0.28), radius: isNearLevelVisual ? 4 : 2)
         }
+        .accessibilityHidden(true)
     }
 
     private var flatGuide: some View {
-        let dynamicColor = isNearLevelVisual ? Color.green.opacity(0.94) : Color.white.opacity(0.86)
+        let dynamicColor = isNearLevelVisual
+            ? SellerCameraPreviewStyle.levelAligned.opacity(SellerCameraPreviewMetrics.levelActiveOpacity)
+            : SellerCameraPreviewStyle.levelNeutral.opacity(SellerCameraPreviewMetrics.levelInactiveOpacity)
         return ZStack {
-            crossSymbol(color: .white.opacity(0.34), lineWidth: 1, size: 24)
+            crossSymbol(
+                color: SellerCameraPreviewStyle.levelNeutral.opacity(SellerCameraPreviewMetrics.levelReferenceOpacity),
+                lineWidth: SellerCameraPreviewMetrics.hairlineWidth,
+                size: SellerCameraPreviewMetrics.levelCrossSize
+            )
 
-            crossSymbol(color: dynamicColor, lineWidth: 1.4, size: 24)
+            crossSymbol(
+                color: dynamicColor,
+                lineWidth: SellerCameraPreviewMetrics.standardLineWidth,
+                size: SellerCameraPreviewMetrics.levelCrossSize
+            )
                 .offset(smoothedCrossOffset)
-                .shadow(color: dynamicColor.opacity(isNearLevelVisual ? 0.24 : 0.08), radius: isNearLevelVisual ? 4 : 1.5)
+                .shadow(color: SellerCameraPreviewStyle.contrastOutline.opacity(0.24), radius: isNearLevelVisual ? 4 : 2)
         }
+        .accessibilityHidden(true)
     }
 
     private func crossSymbol(color: Color, lineWidth: CGFloat, size: CGFloat) -> some View {
@@ -7082,6 +7142,7 @@ private struct CaptureFocusMarkerOverlay: View {
     let normalizedPoint: CGPoint
     let mode: CaptureFocusMarker.Mode
     @State private var hasAppeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { proxy in
@@ -7094,10 +7155,10 @@ private struct CaptureFocusMarkerOverlay: View {
 
                 statusBadge
             }
-            .scaleEffect(hasAppeared ? 1.0 : 0.84)
+            .scaleEffect(reduceMotion ? 1 : (hasAppeared ? 1.0 : 0.84))
             .opacity(hasAppeared ? 1.0 : 0.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: hasAppeared)
-            .animation(.easeInOut(duration: 0.14), value: mode)
+            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.focus, reduceMotion: reduceMotion), value: hasAppeared)
+            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.warning, reduceMotion: reduceMotion), value: mode)
             .onAppear {
                 hasAppeared = true
             }
@@ -7111,19 +7172,38 @@ private struct CaptureFocusMarkerOverlay: View {
             }
             .position(point)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
     }
 
     private var focusCorners: some View {
         ZStack {
-            cornerPath(size: 80, length: 18, inset: 2)
+            cornerPath(
+                size: SellerCameraPreviewMetrics.focusOuterPathSize,
+                length: SellerCameraPreviewMetrics.focusCornerLength,
+                inset: SellerCameraPreviewMetrics.focusInset
+            )
+                .stroke(SellerCameraPreviewStyle.contrastOutline, style: StrokeStyle(lineWidth: SellerCameraPreviewMetrics.contrastOutlineWidth, lineCap: .round, lineJoin: .round))
+                .frame(width: SellerCameraPreviewMetrics.focusOuterFrame, height: SellerCameraPreviewMetrics.focusOuterFrame)
+
+            cornerPath(
+                size: SellerCameraPreviewMetrics.focusOuterPathSize,
+                length: SellerCameraPreviewMetrics.focusCornerLength,
+                inset: SellerCameraPreviewMetrics.focusInset
+            )
                 .stroke(strokeColor.opacity(0.98), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-                .frame(width: 84, height: 84)
+                .frame(width: SellerCameraPreviewMetrics.focusOuterFrame, height: SellerCameraPreviewMetrics.focusOuterFrame)
                 .shadow(color: strokeColor.opacity(shadowOpacity), radius: shadowRadius)
 
             if mode == .focusing {
-                cornerPath(size: 66, length: 13, inset: 0)
-                    .stroke(strokeColor.opacity(0.34), style: StrokeStyle(lineWidth: 1.1, lineCap: .round, lineJoin: .round))
-                    .frame(width: 70, height: 70)
+                cornerPath(
+                    size: SellerCameraPreviewMetrics.focusInnerPathSize,
+                    length: SellerCameraPreviewMetrics.focusInnerCornerLength,
+                    inset: 0
+                )
+                    .stroke(strokeColor.opacity(0.34), style: StrokeStyle(lineWidth: SellerCameraPreviewMetrics.focusInnerLineWidth, lineCap: .round, lineJoin: .round))
+                    .frame(width: SellerCameraPreviewMetrics.focusInnerFrame, height: SellerCameraPreviewMetrics.focusInnerFrame)
             }
         }
     }
@@ -7134,25 +7214,26 @@ private struct CaptureFocusMarkerOverlay: View {
             case .focused:
                 Circle()
                     .fill(strokeColor.opacity(0.92))
-                    .frame(width: 5, height: 5)
-                    .offset(y: -45)
+                    .frame(width: SellerCameraGlyphMetrics.standardDot, height: SellerCameraGlyphMetrics.standardDot)
+                    .offset(y: SellerCameraPreviewMetrics.focusBadgeOffset)
             case .warning:
                 Circle()
-                    .stroke(strokeColor.opacity(0.94), lineWidth: 1.5)
-                    .frame(width: 9, height: 9)
-                    .offset(y: -45)
+                    .stroke(strokeColor.opacity(0.94), lineWidth: SellerCameraGlyphMetrics.standardStrokeWidth)
+                    .frame(width: SellerCameraGlyphMetrics.compactFrame, height: SellerCameraGlyphMetrics.compactFrame)
+                    .offset(y: SellerCameraPreviewMetrics.focusBadgeOffset)
             case .locked, .unlocked:
                 Image(systemName: mode == .locked ? "lock.fill" : "lock.open.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.95))
-                    .padding(4)
+                    .sellerCameraGlyphStyle(state: mode == .locked ? .locked : .active, prominence: .status)
+                    .foregroundStyle(SellerCameraPreviewStyle.overlayPrimary)
+                    .padding(SellerCameraSpacing.xs)
                     .background(strokeColor.opacity(0.78), in: Circle())
-                    .offset(y: -47)
+                    .overlay(Circle().stroke(SellerCameraPreviewStyle.contrastOutline, lineWidth: SellerCameraPreviewMetrics.hairlineWidth))
+                    .offset(y: SellerCameraPreviewMetrics.focusIconOffset)
             case .focusing:
                 Circle()
                     .fill(strokeColor.opacity(0.72))
-                    .frame(width: 4, height: 4)
-                    .offset(y: -45)
+                    .frame(width: SellerCameraGlyphMetrics.emphasizedDot, height: SellerCameraGlyphMetrics.emphasizedDot)
+                    .offset(y: SellerCameraPreviewMetrics.focusBadgeOffset)
             }
         }
     }
@@ -7182,26 +7263,26 @@ private struct CaptureFocusMarkerOverlay: View {
     private var strokeColor: Color {
         switch mode {
         case .focusing:
-            return Color(red: 1.0, green: 0.86, blue: 0.34)
+            return SellerCameraPreviewStyle.focusNormal
         case .focused:
-            return Color(red: 0.30, green: 0.95, blue: 0.76)
+            return SellerCameraPreviewStyle.focusConfirmed
         case .warning:
-            return Color(red: 1.0, green: 0.62, blue: 0.22)
+            return SellerCameraPreviewStyle.focusWarning
         case .locked:
-            return Color(red: 0.30, green: 0.95, blue: 0.76)
+            return SellerCameraPreviewStyle.focusLocked
         case .unlocked:
-            return Color(red: 0.48, green: 0.75, blue: 1.0)
+            return SellerCameraPreviewStyle.focusUnlocked
         }
     }
 
     private var lineWidth: CGFloat {
         switch mode {
         case .focusing:
-            return 1.8
+            return SellerCameraPreviewMetrics.emphasizedLineWidth
         case .focused, .locked, .unlocked:
-            return 1.6
+            return SellerCameraPreviewMetrics.focusLineWidth
         case .warning:
-            return 1.9
+            return SellerCameraPreviewMetrics.focusWarningLineWidth
         }
     }
 
@@ -7212,6 +7293,34 @@ private struct CaptureFocusMarkerOverlay: View {
     private var shadowRadius: CGFloat {
         mode == .focusing ? 6 : 4
     }
+
+    private var accessibilityLabel: String {
+        switch mode {
+        case .focusing:
+            return "正在对焦"
+        case .focused:
+            return "对焦完成"
+        case .warning:
+            return "对焦可能失败"
+        case .locked:
+            return "对焦与曝光已锁定"
+        case .unlocked:
+            return "对焦与曝光已解锁"
+        }
+    }
+
+    private var accessibilityValue: String {
+        switch mode {
+        case .locked:
+            return SellerCameraControlState.locked.accessibilityText
+        case .warning:
+            return SellerCameraControlState.warning.accessibilityText
+        case .focusing:
+            return SellerCameraControlState.active.accessibilityText
+        case .focused, .unlocked:
+            return SellerCameraControlState.selected.accessibilityText
+        }
+    }
 }
 
 private struct CaptureCountdownOverlay: View {
@@ -7220,12 +7329,21 @@ private struct CaptureCountdownOverlay: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(.black.opacity(0.45))
+                .fill(SellerCameraPreviewStyle.hudSurface)
                 .frame(width: 86, height: 86)
+                .overlay(
+                    Circle()
+                        .stroke(SellerCameraPreviewStyle.hudStroke, lineWidth: SellerCameraPreviewMetrics.hairlineWidth)
+                )
+                .shadow(color: SellerCameraPreviewStyle.contrastOutline.opacity(0.36), radius: 8, x: 0, y: 4)
             Text("\(remainingSeconds)")
-                .font(.system(size: 40, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .font(SellerCameraTypography.previewCountdown)
+                .monospacedDigit()
+                .foregroundStyle(SellerCameraPreviewStyle.overlayPrimary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("倒计时")
+        .accessibilityValue("\(remainingSeconds) 秒")
     }
 }
 
@@ -7236,7 +7354,7 @@ private struct CaptureQuickPreviewOverlay: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("拍后快速预览")
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.88))
+                .foregroundStyle(SellerCameraPreviewStyle.overlaySecondary)
 
             Image(uiImage: image)
                 .resizable()
@@ -7246,6 +7364,16 @@ private struct CaptureQuickPreviewOverlay: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .padding(8)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            SellerCameraPreviewStyle.hudSurface,
+            in: RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
+                .stroke(SellerCameraPreviewStyle.hudStroke, lineWidth: SellerCameraPreviewMetrics.hairlineWidth)
+        )
+        .shadow(color: SellerCameraPreviewStyle.contrastOutline.opacity(0.30), radius: 8, x: 0, y: 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("拍后快速预览")
     }
 }
