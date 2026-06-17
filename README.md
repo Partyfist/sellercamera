@@ -102,3 +102,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R80B iOS 27 拍摄主界面视觉设计系统接入报告：`docs/reports/r80b_ios27_capture_interface_design_system.md`
 - R80C 专业参数 Ruler 交互统一报告：`docs/reports/r80c_professional_ruler_interaction_unification.md`
 - R80D iOS 27 UI 动效性能与无障碍收口报告：`docs/reports/r80d_ios27_ui_motion_performance_closure.md`
+- R81 iOS 27 专业相机视觉统一与控件组件化报告：`docs/reports/r81_ios27_camera_design_system_and_control_unification.md`

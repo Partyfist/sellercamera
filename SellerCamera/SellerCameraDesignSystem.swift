@@ -43,6 +43,35 @@ enum SellerCameraColorToken {
     }
 }
 
+enum SellerCameraColor {
+    static let canvasBackground = SellerCameraColorToken.canvas
+    static let controlSurfacePrimary = SellerCameraColorToken.controlSurface
+    static let controlSurfaceSecondary = SellerCameraColorToken.canvasElevated
+    static let controlSurfacePressed = SellerCameraColorToken.controlSurfacePressed
+    static let controlSurfaceDisabled = SellerCameraColorToken.controlSurface.opacity(0.30)
+    static let textPrimary = SellerCameraColorToken.textPrimary
+    static let textSecondary = SellerCameraColorToken.textSecondary
+    static let textTertiary = SellerCameraColorToken.textTertiary
+    static let textDisabled = SellerCameraColorToken.disabled
+    static let accentPrimary = SellerCameraColorToken.accent
+    static let accentWarning = SellerCameraColorToken.warning
+    static let accentLocked = SellerCameraColorToken.accent
+    static let accentSuccess = SellerCameraColorToken.success
+    static let divider = SellerCameraColorToken.glassStroke
+    static let viewfinderBorder = Color.white.opacity(0.10)
+    static let focusNormal = SellerCameraColorToken.focus
+    static let focusLocked = SellerCameraColorToken.accent
+    static let focusWarning = SellerCameraColorToken.warning
+
+    static func controlSurfacePrimary(reduceTransparency: Bool) -> Color {
+        SellerCameraColorToken.controlSurface(reduceTransparency: reduceTransparency)
+    }
+
+    static func divider(increaseContrast: Bool) -> Color {
+        SellerCameraColorToken.glassStroke(increaseContrast: increaseContrast)
+    }
+}
+
 enum SellerCameraTypographyToken {
     static let caption = Font.system(size: 10, weight: .medium)
     static let label = Font.system(size: 11, weight: .semibold)
@@ -56,6 +85,15 @@ enum SellerCameraTypographyToken {
     static let control = Font.caption2.weight(.semibold)
 }
 
+enum SellerCameraTypography {
+    static let toolLabel = SellerCameraTypographyToken.control
+    static let parameterName = SellerCameraTypographyToken.parameter
+    static let parameterValue = SellerCameraTypographyToken.value
+    static let rulerPrimaryValue = SellerCameraTypographyToken.label.weight(.bold)
+    static let rulerSecondaryValue = SellerCameraTypographyToken.rulerMajor
+    static let statusLabel = SellerCameraTypographyToken.status
+}
+
 enum SellerCameraSpacingToken {
     static let xxs: CGFloat = 2
     static let xs: CGFloat = 4
@@ -67,6 +105,17 @@ enum SellerCameraSpacingToken {
     static let hitTarget: CGFloat = 44
 }
 
+enum SellerCameraSpacing {
+    static let xxs = SellerCameraSpacingToken.xxs
+    static let xs = SellerCameraSpacingToken.xs
+    static let sm = SellerCameraSpacingToken.sm
+    static let md = SellerCameraSpacingToken.md
+    static let lg = SellerCameraSpacingToken.lg
+    static let xl = SellerCameraSpacingToken.xl
+    static let xxl = SellerCameraSpacingToken.xxl
+    static let hitTarget = SellerCameraSpacingToken.hitTarget
+}
+
 enum SellerCameraShapeToken {
     static let smallRadius: CGFloat = 7
     static let controlRadius: CGFloat = 12
@@ -75,6 +124,122 @@ enum SellerCameraShapeToken {
     static let capsuleRadius: CGFloat = 999
     static let shutterRingWidth: CGFloat = 2.4
     static let focusCornerLength: CGFloat = 18
+}
+
+enum SellerCameraRadius {
+    static let compact = SellerCameraShapeToken.smallRadius
+    static let control = SellerCameraShapeToken.controlRadius
+    static let capsule = SellerCameraShapeToken.capsuleRadius
+    static let panel = SellerCameraShapeToken.panelRadius
+    static let viewfinder: CGFloat = 16
+}
+
+enum SellerCameraControlState: Equatable {
+    case normal
+    case selected
+    case active
+    case locked
+    case warning
+    case disabled
+
+    var accessibilityText: String {
+        switch self {
+        case .normal:
+            return "可用"
+        case .selected:
+            return "已选中"
+        case .active:
+            return "正在调节"
+        case .locked:
+            return "已锁定"
+        case .warning:
+            return "需要注意"
+        case .disabled:
+            return "不可用"
+        }
+    }
+}
+
+struct SellerCameraControlVisualStyle {
+    let foreground: Color
+    let secondaryForeground: Color
+    let fill: Color
+    let stroke: Color
+    let underline: Color
+    let shadow: Color
+    let titleFont: Font
+    let valueFont: Font
+
+    static func style(for state: SellerCameraControlState) -> SellerCameraControlVisualStyle {
+        switch state {
+        case .normal:
+            return SellerCameraControlVisualStyle(
+                foreground: SellerCameraColor.textSecondary,
+                secondaryForeground: SellerCameraColor.textTertiary,
+                fill: SellerCameraColor.controlSurfacePrimary.opacity(0.46),
+                stroke: SellerCameraColor.divider.opacity(0.56),
+                underline: .clear,
+                shadow: .clear,
+                titleFont: SellerCameraTypography.parameterName,
+                valueFont: SellerCameraTypography.parameterValue
+            )
+        case .selected:
+            return SellerCameraControlVisualStyle(
+                foreground: SellerCameraColor.accentPrimary,
+                secondaryForeground: SellerCameraColor.textPrimary,
+                fill: SellerCameraColor.accentPrimary.opacity(0.12),
+                stroke: SellerCameraColor.accentPrimary.opacity(0.34),
+                underline: SellerCameraColor.accentPrimary,
+                shadow: SellerCameraColor.accentPrimary.opacity(0.14),
+                titleFont: SellerCameraTypographyToken.parameterActive,
+                valueFont: SellerCameraTypography.parameterValue.weight(.bold)
+            )
+        case .active:
+            return SellerCameraControlVisualStyle(
+                foreground: SellerCameraColor.accentPrimary,
+                secondaryForeground: SellerCameraColor.textPrimary,
+                fill: SellerCameraColor.accentPrimary.opacity(0.16),
+                stroke: SellerCameraColor.accentPrimary.opacity(0.44),
+                underline: SellerCameraColor.accentPrimary,
+                shadow: SellerCameraColor.accentPrimary.opacity(0.18),
+                titleFont: SellerCameraTypographyToken.parameterActive,
+                valueFont: SellerCameraTypography.parameterValue.weight(.bold)
+            )
+        case .locked:
+            return SellerCameraControlVisualStyle(
+                foreground: SellerCameraColor.accentLocked,
+                secondaryForeground: SellerCameraColor.textPrimary,
+                fill: SellerCameraColor.accentLocked.opacity(0.12),
+                stroke: SellerCameraColor.accentLocked.opacity(0.32),
+                underline: SellerCameraColor.accentLocked.opacity(0.82),
+                shadow: SellerCameraColor.accentLocked.opacity(0.12),
+                titleFont: SellerCameraTypographyToken.parameterActive,
+                valueFont: SellerCameraTypography.parameterValue.weight(.semibold)
+            )
+        case .warning:
+            return SellerCameraControlVisualStyle(
+                foreground: SellerCameraColor.accentWarning,
+                secondaryForeground: SellerCameraColor.textPrimary,
+                fill: SellerCameraColor.accentWarning.opacity(0.13),
+                stroke: SellerCameraColor.accentWarning.opacity(0.36),
+                underline: SellerCameraColor.accentWarning,
+                shadow: SellerCameraColor.accentWarning.opacity(0.12),
+                titleFont: SellerCameraTypographyToken.parameterActive,
+                valueFont: SellerCameraTypography.parameterValue.weight(.semibold)
+            )
+        case .disabled:
+            return SellerCameraControlVisualStyle(
+                foreground: SellerCameraColor.textDisabled,
+                secondaryForeground: SellerCameraColor.textDisabled,
+                fill: SellerCameraColor.controlSurfaceDisabled,
+                stroke: SellerCameraColor.divider.opacity(0.34),
+                underline: .clear,
+                shadow: .clear,
+                titleFont: SellerCameraTypography.parameterName,
+                valueFont: SellerCameraTypography.parameterValue
+            )
+        }
+    }
 }
 
 enum SellerCameraMotionToken {
@@ -91,6 +256,48 @@ enum SellerCameraMotionToken {
     static func resolved(_ animation: Animation, reduceMotion: Bool) -> Animation {
         reduceMotion ? reducedMotion : animation
     }
+}
+
+struct SellerCameraRulerStyle {
+    let containerRadius: CGFloat
+    let tickSelectedWidth: CGFloat
+    let tickNormalWidth: CGFloat
+    let majorTickHeight: CGFloat
+    let mediumTickHeight: CGFloat
+    let minorTickHeight: CGFloat
+    let selectedTickHeight: CGFloat
+    let indicatorWidth: CGFloat
+    let indicatorHeight: CGFloat
+    let valueBadgeHeight: CGFloat
+    let activeLift: CGFloat
+
+    static let professional = SellerCameraRulerStyle(
+        containerRadius: SellerCameraRadius.control,
+        tickSelectedWidth: 1.6,
+        tickNormalWidth: 0.9,
+        majorTickHeight: 16,
+        mediumTickHeight: 12,
+        minorTickHeight: 9,
+        selectedTickHeight: 22,
+        indicatorWidth: 1.4,
+        indicatorHeight: 30,
+        valueBadgeHeight: 22,
+        activeLift: 2
+    )
+
+    static let compactOption = SellerCameraRulerStyle(
+        containerRadius: SellerCameraRadius.control,
+        tickSelectedWidth: 1.6,
+        tickNormalWidth: 0.9,
+        majorTickHeight: 18,
+        mediumTickHeight: 13,
+        minorTickHeight: 10,
+        selectedTickHeight: 22,
+        indicatorWidth: 1.4,
+        indicatorHeight: 20,
+        valueBadgeHeight: 24,
+        activeLift: 1
+    )
 }
 
 enum SellerCameraHapticToken: Hashable {

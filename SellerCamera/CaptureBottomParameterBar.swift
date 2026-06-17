@@ -9,16 +9,16 @@ import SwiftUI
 import UIKit
 
 private enum CaptureParameterConsoleStyle {
-    static let accent = SellerCameraColorToken.accent
-    static let warmAccent = SellerCameraColorToken.accent
-    static let panelStroke = SellerCameraColorToken.glassStroke.opacity(0.70)
-    static let panelInnerStroke = SellerCameraColorToken.glassStroke.opacity(0.28)
-    static let panelShadow = Color.black.opacity(0.30)
-    static let baseFill = SellerCameraColorToken.controlSurface.opacity(0.62)
-    static let activeFill = SellerCameraColorToken.accent.opacity(0.10)
-    static let activeStroke = SellerCameraColorToken.accent.opacity(0.30)
-    static let consoleFillTop = SellerCameraColorToken.canvasElevated.opacity(0.98)
-    static let consoleFillBottom = SellerCameraColorToken.canvas.opacity(0.99)
+    static let accent = SellerCameraColor.accentPrimary
+    static let warmAccent = SellerCameraColor.accentPrimary
+    static let panelStroke = SellerCameraColor.divider.opacity(0.70)
+    static let panelInnerStroke = SellerCameraColor.divider.opacity(0.28)
+    static let panelShadow = Color.black.opacity(0.24)
+    static let baseFill = SellerCameraColor.controlSurfacePrimary.opacity(0.58)
+    static let activeFill = SellerCameraControlVisualStyle.style(for: .selected).fill
+    static let activeStroke = SellerCameraControlVisualStyle.style(for: .selected).stroke
+    static let consoleFillTop = SellerCameraColor.controlSurfaceSecondary.opacity(0.96)
+    static let consoleFillBottom = SellerCameraColor.canvasBackground.opacity(0.98)
 }
 
 struct CaptureBottomParameterItem: Identifiable, Equatable {
@@ -64,12 +64,14 @@ struct CaptureBottomParameterBar: View {
                 parameterButton(for: item)
             }
         }
-        .frame(height: 56)
-        .padding(.horizontal, 5)
+        .frame(height: 58)
+        .padding(.horizontal, SellerCameraSpacing.xs)
     }
 
     private func parameterButton(for item: CaptureBottomParameterItem) -> some View {
         let isActive = activeKind == item.kind
+        let state = controlState(for: item, isActive: isActive)
+        let style = SellerCameraControlVisualStyle.style(for: state)
 
         return Button {
             guard item.isAvailable else { return }
@@ -80,60 +82,69 @@ struct CaptureBottomParameterBar: View {
                     .frame(width: 22, height: 15)
 
                 Text(item.title)
-                    .font(isActive ? SellerCameraTypographyToken.parameterActive : SellerCameraTypographyToken.parameter)
+                    .font(style.titleFont)
                     .textCase(.uppercase)
-                    .foregroundStyle(titleColor(isActive: isActive, item: item))
+                    .foregroundStyle(style.foreground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text(item.valueText)
-                    .font(SellerCameraTypographyToken.value)
+                    .font(style.valueFont)
                     .monospacedDigit()
-                    .foregroundStyle(valueColor(isActive: isActive, item: item))
+                    .foregroundStyle(style.secondaryForeground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.64)
-                    .frame(maxWidth: .infinity)
+                    .frame(minWidth: 42, maxWidth: .infinity)
                     .id(item.valueText)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, minHeight: SellerCameraSpacing.hitTarget, maxHeight: .infinity)
             .contentShape(Rectangle())
             .background {
-                if isActive {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(CaptureParameterConsoleStyle.activeFill)
-                        .shadow(color: CaptureParameterConsoleStyle.accent.opacity(0.12), radius: 8, x: 0, y: 0)
-                }
+                RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
+                    .fill(style.fill)
+                    .shadow(color: style.shadow, radius: 8, x: 0, y: 0)
             }
             .overlay(alignment: .bottom) {
-                if isActive {
+                if state != .normal && state != .disabled {
                     Capsule(style: .continuous)
-                        .fill(CaptureParameterConsoleStyle.accent)
+                        .fill(style.underline)
                         .frame(width: 18, height: 2)
-                        .shadow(color: CaptureParameterConsoleStyle.accent.opacity(0.30), radius: 5, x: 0, y: 0)
+                        .shadow(color: style.shadow.opacity(0.8), radius: 5, x: 0, y: 0)
                         .offset(y: 2)
                 }
             }
+            .overlay(
+                RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
+                    .stroke(style.stroke, lineWidth: state == .selected ? 1 : 0.8)
+            )
         }
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
         .accessibilityLabel("\(item.title) \(item.valueText)")
-        .accessibilityValue(item.isManualOrLocked ? "手动或锁定" : "自动")
+        .accessibilityValue(state.accessibilityText)
         .accessibilityHint(item.isAvailable ? "双击打开调节刻度" : "当前参数不可调")
         .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isActive)
         .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: item.valueText)
     }
 
+    private func controlState(for item: CaptureBottomParameterItem, isActive: Bool) -> SellerCameraControlState {
+        guard item.isAvailable else { return .disabled }
+        if isActive { return .selected }
+        if item.isManualOrLocked { return .locked }
+        return .normal
+    }
+
     fileprivate func titleColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
-        guard item.isAvailable else { return SellerCameraColorToken.disabled }
+        guard item.isAvailable else { return SellerCameraColor.textDisabled }
         if isActive { return CaptureParameterConsoleStyle.accent }
-        return SellerCameraColorToken.textSecondary
+        return SellerCameraColor.textSecondary
     }
 
     fileprivate func valueColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
-        guard item.isAvailable else { return SellerCameraColorToken.disabled }
+        guard item.isAvailable else { return SellerCameraColor.textDisabled }
         if isActive { return CaptureParameterConsoleStyle.accent }
-        return SellerCameraColorToken.textPrimary
+        return SellerCameraColor.textPrimary
     }
 }
 
@@ -259,6 +270,9 @@ private struct CaptureRulerParameterEntry: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let state = controlState
+        let style = SellerCameraControlVisualStyle.style(for: state)
+
         Button {
             guard item.isAvailable else { return }
             onSelect(item.kind)
@@ -268,55 +282,65 @@ private struct CaptureRulerParameterEntry: View {
                     .frame(width: 20, height: 14)
 
                 Text(item.title)
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(style.titleFont)
                     .tracking(0.35)
-                    .foregroundStyle(titleColor)
+                    .foregroundStyle(style.foreground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text(item.valueText)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(style.valueFont)
                     .monospacedDigit()
-                    .foregroundStyle(valueColor)
+                    .foregroundStyle(style.secondaryForeground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.58)
+                    .frame(minWidth: 38)
                     .id(item.valueText)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, minHeight: SellerCameraSpacing.hitTarget, maxHeight: .infinity)
             .contentShape(Rectangle())
             .background {
-                if isActive {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(CaptureParameterConsoleStyle.activeFill)
-                        .shadow(color: CaptureParameterConsoleStyle.accent.opacity(0.12), radius: 7, x: 0, y: 0)
-                }
+                RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
+                    .fill(style.fill)
+                    .shadow(color: style.shadow, radius: 7, x: 0, y: 0)
             }
             .overlay(alignment: .bottom) {
-                if isActive {
+                if state != .normal && state != .disabled {
                     Capsule(style: .continuous)
-                        .fill(CaptureParameterConsoleStyle.accent)
+                        .fill(style.underline)
                         .frame(width: 17, height: 2)
                         .offset(y: 2)
                 }
             }
+            .overlay(
+                RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
+                    .stroke(style.stroke, lineWidth: isActive ? 1 : 0.8)
+            )
         }
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
         .accessibilityLabel("\(item.title) \(item.valueText)")
-        .accessibilityValue(item.isManualOrLocked ? "手动或锁定" : "自动")
+        .accessibilityValue(state.accessibilityText)
         .accessibilityHint(item.isAvailable ? "双击切换到此参数" : "当前参数不可调")
         .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isActive)
         .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: item.valueText)
     }
 
+    private var controlState: SellerCameraControlState {
+        guard item.isAvailable else { return .disabled }
+        if isActive { return .selected }
+        if item.isManualOrLocked { return .locked }
+        return .normal
+    }
+
     private var titleColor: Color {
-        guard item.isAvailable else { return .white.opacity(0.34) }
+        guard item.isAvailable else { return SellerCameraColor.textDisabled }
         return isActive ? CaptureParameterConsoleStyle.accent : .white.opacity(0.54)
     }
 
     private var valueColor: Color {
-        guard item.isAvailable else { return .white.opacity(0.34) }
+        guard item.isAvailable else { return SellerCameraColor.textDisabled }
         return isActive ? .white.opacity(0.98) : .white.opacity(0.84)
     }
 }
@@ -341,6 +365,7 @@ private struct CaptureHorizontalParameterRuler: View {
     private var interactionProfile: SellerCameraRulerInteractionProfile {
         SellerCameraRulerInteractionProfile.professionalParameter(item.parameter.kind)
     }
+    private let rulerStyle = SellerCameraRulerStyle.professional
 
     var body: some View {
         HStack(spacing: 8) {
@@ -401,10 +426,10 @@ private struct CaptureHorizontalParameterRuler: View {
             )
             .frame(width: 60)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, SellerCameraSpacing.md)
+        .padding(.vertical, SellerCameraSpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SellerCameraRadius.panel, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
@@ -416,9 +441,9 @@ private struct CaptureHorizontalParameterRuler: View {
                     )
                 )
         )
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: SellerCameraRadius.panel, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SellerCameraRadius.panel, style: .continuous)
                 .stroke(CaptureParameterConsoleStyle.panelStroke, lineWidth: 1)
         )
         .shadow(color: CaptureParameterConsoleStyle.panelShadow, radius: 14, x: 0, y: 9)
@@ -437,7 +462,7 @@ private struct CaptureHorizontalParameterRuler: View {
                 VStack(spacing: 3) {
                     Rectangle()
                         .fill(tickColor(isSelected: isSelected, isMajor: isMajor))
-                        .frame(width: isSelected ? 1.6 : 0.9, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
+                        .frame(width: isSelected ? rulerStyle.tickSelectedWidth : rulerStyle.tickNormalWidth, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
                         .shadow(color: isSelected ? CaptureParameterConsoleStyle.accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
 
                     Text(isMajor ? label : "")
@@ -463,7 +488,7 @@ private struct CaptureHorizontalParameterRuler: View {
 
             Rectangle()
                 .fill(CaptureParameterConsoleStyle.accent)
-                .frame(width: 1.4, height: 30)
+                .frame(width: rulerStyle.indicatorWidth, height: rulerStyle.indicatorHeight)
                 .shadow(color: CaptureParameterConsoleStyle.accent.opacity(0.28), radius: 6, x: 0, y: 0)
         }
         .allowsHitTesting(false)
@@ -471,12 +496,12 @@ private struct CaptureHorizontalParameterRuler: View {
 
     private var valueBadge: some View {
         Text(item.parameter.valueText)
-            .font(SellerCameraTypographyToken.label.weight(.bold))
+            .font(SellerCameraTypography.rulerPrimaryValue)
             .monospacedDigit()
-            .foregroundStyle(.white.opacity(0.98))
+            .foregroundStyle(SellerCameraColor.textPrimary)
             .lineLimit(1)
             .minimumScaleFactor(0.58)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, SellerCameraSpacing.md)
             .padding(.vertical, 3)
             .background(
                 Capsule(style: .continuous)
@@ -494,20 +519,20 @@ private struct CaptureHorizontalParameterRuler: View {
     }
 
     private func tickHeight(isSelected: Bool, isMajor: Bool) -> CGFloat {
-        if isSelected { return 21 }
-        return isMajor ? 16 : 9
+        if isSelected { return rulerStyle.selectedTickHeight }
+        return isMajor ? rulerStyle.majorTickHeight : rulerStyle.minorTickHeight
     }
 
     private func tickColor(isSelected: Bool, isMajor: Bool) -> Color {
-        guard item.parameter.isAvailable else { return SellerCameraColorToken.disabled.opacity(0.66) }
+        guard item.parameter.isAvailable else { return SellerCameraColor.textDisabled.opacity(0.66) }
         if isSelected { return CaptureParameterConsoleStyle.accent }
-        return SellerCameraColorToken.textPrimary.opacity(isMajor ? 0.34 : 0.16)
+        return SellerCameraColor.textPrimary.opacity(isMajor ? 0.34 : 0.16)
     }
 
     private func tickLabelColor(isSelected: Bool) -> Color {
-        guard item.parameter.isAvailable else { return SellerCameraColorToken.disabled.opacity(0.74) }
-        if isSelected { return SellerCameraColorToken.textPrimary }
-        return SellerCameraColorToken.textTertiary
+        guard item.parameter.isAvailable else { return SellerCameraColor.textDisabled.opacity(0.74) }
+        if isSelected { return SellerCameraColor.textPrimary }
+        return SellerCameraColor.textTertiary
     }
 
     private func handleRulerDrag(_ translation: CGSize) {
@@ -655,62 +680,65 @@ private struct CaptureRulerControlCapsule: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let state = visualState
+        let style = SellerCameraControlVisualStyle.style(for: state)
+
         Button(action: onTap) {
             switch controlKind {
             case .auto(let isOn):
-                HStack(spacing: 5) {
+                HStack(spacing: SellerCameraSpacing.xs) {
                     Circle()
-                        .fill(isOn ? CaptureParameterConsoleStyle.accent : .white.opacity(0.34))
+                        .fill(isOn ? style.foreground : SellerCameraColor.textTertiary)
                         .frame(width: 8, height: 8)
                         .overlay(
                             Circle()
-                                .stroke(.white.opacity(isOn ? 0.20 : 0.08), lineWidth: 1)
+                                .stroke(style.stroke, lineWidth: 1)
                         )
 
                     Text("AUTO")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(SellerCameraTypography.toolLabel)
                         .tracking(0.4)
-                        .foregroundStyle(isOn ? CaptureParameterConsoleStyle.accent : .white.opacity(0.68))
+                        .foregroundStyle(isOn ? style.foreground : style.secondaryForeground)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 28)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(isOn ? CaptureParameterConsoleStyle.accent.opacity(0.18) : .white.opacity(0.055))
+                        .fill(style.fill)
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(isOn ? CaptureParameterConsoleStyle.accent.opacity(0.34) : .white.opacity(0.10), lineWidth: 1)
+                        .stroke(style.stroke, lineWidth: 1)
                 )
             case .reset:
                 Text("RESET")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(SellerCameraTypography.toolLabel)
                     .tracking(0.45)
-                    .foregroundStyle(CaptureParameterConsoleStyle.warmAccent)
+                    .foregroundStyle(style.foreground)
                     .frame(maxWidth: .infinity)
                     .frame(height: 28)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(CaptureParameterConsoleStyle.warmAccent.opacity(0.12))
+                            .fill(style.fill)
                     )
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(CaptureParameterConsoleStyle.warmAccent.opacity(0.28), lineWidth: 1)
+                            .stroke(style.stroke, lineWidth: 1)
                     )
             case .lock:
                 Text("LOCK")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(SellerCameraTypography.toolLabel)
                     .tracking(0.45)
-                    .foregroundStyle(.white.opacity(0.38))
+                    .foregroundStyle(style.foreground)
                     .frame(maxWidth: .infinity)
                     .frame(height: 28)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(.white.opacity(0.035))
+                            .fill(style.fill)
                     )
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(.white.opacity(0.075), lineWidth: 1)
+                            .stroke(style.stroke, lineWidth: 1)
                     )
             }
         }
@@ -721,6 +749,21 @@ private struct CaptureRulerControlCapsule: View {
         .accessibilityHint(isEnabled ? "双击切换参数控制模式" : "当前控制不可用")
         .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: controlKind)
         .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isEnabled)
+    }
+
+    private var visualState: SellerCameraControlState {
+        guard isEnabled else {
+            if case .lock = controlKind { return .locked }
+            return .disabled
+        }
+        switch controlKind {
+        case .auto(let isOn):
+            return isOn ? .selected : .normal
+        case .reset:
+            return .selected
+        case .lock:
+            return .locked
+        }
     }
 
     private var accessibilityLabel: String {
@@ -741,13 +784,13 @@ private struct CaptureParameterGlyph: View {
     let isAvailable: Bool
 
     private var stroke: Color {
-        guard isAvailable else { return .white.opacity(0.28) }
-        return isActive ? CaptureParameterConsoleStyle.accent : .white.opacity(0.72)
+        guard isAvailable else { return SellerCameraColor.textDisabled.opacity(0.92) }
+        return isActive ? CaptureParameterConsoleStyle.accent : SellerCameraColor.textSecondary
     }
 
     private var fill: Color {
-        guard isAvailable else { return .white.opacity(0.08) }
-        return isActive ? CaptureParameterConsoleStyle.accent.opacity(0.20) : .white.opacity(0.08)
+        guard isAvailable else { return SellerCameraColor.controlSurfaceDisabled }
+        return isActive ? CaptureParameterConsoleStyle.accent.opacity(0.20) : SellerCameraColor.controlSurfacePrimary.opacity(0.30)
     }
 
     var body: some View {
