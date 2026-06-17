@@ -106,3 +106,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R82 拍摄预览 HUD 与 Glyph 视觉尾项收口报告：`docs/reports/r82_preview_hud_and_glyph_visual_closure.md`
 - R83A1 专业参数 Ruler 物理与中断接管报告：`docs/reports/r83a1_ruler_gesture_physics_and_interruption.md`
 - R83B 移除底部 Zoom 参数刻度入口报告：`docs/reports/r83b_remove_bottom_zoom_ruler.md`
+- R83B1 修复 13mm / 24mm 焦段 target mapping 报告：`docs/reports/r83b1_fix_13mm_24mm_lens_target_mapping.md`

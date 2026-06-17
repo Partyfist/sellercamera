@@ -558,6 +558,19 @@ enum CaptureSemanticFocal: Int, CaseIterable, Identifiable {
 
     var id: Int { rawValue }
 
+    var millimeters: Int {
+        switch self {
+        case .mm13:
+            return 13
+        case .mm24:
+            return 24
+        case .mm48:
+            return 48
+        case .mm77:
+            return 77
+        }
+    }
+
     var displayText: String {
         switch self {
         case .mm13:
@@ -589,6 +602,13 @@ struct CaptureSemanticFocalCapability: Identifiable {
     var isAvailable: Bool {
         availability != .unavailable
     }
+}
+
+struct SellerCameraLensTarget: Equatable {
+    let displayMillimeters: Int
+    let requestedZoomFactor: CGFloat
+    let clampedZoomFactor: CGFloat
+    let preferredDeviceType: AVCaptureDevice.DeviceType?
 }
 
 enum CaptureFocusControlMode {
@@ -781,6 +801,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private var lastLensRulerZoomWriteAt = Date.distantPast
     private var pendingLensRulerZoomTarget: CGFloat?
     private var lastLensRulerInteractionAt = Date.distantPast
+    private var lensZoomReadbackGeneration: UInt64 = 0
     private var deviceSwitchGeneration: UInt64 = 0
     private var exposureParameterWriteGeneration: UInt64 = 0
     private var whiteBalanceParameterWriteGeneration: UInt64 = 0
@@ -2570,6 +2591,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             return
         }
         let clamped = max(minimumZoomFactor, min(maximumZoomFactor, requestedZoom))
+        lensZoomReadbackGeneration += 1
+        let readbackGeneration = lensZoomReadbackGeneration
         lastLensRulerInteractionAt = Date()
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -2593,11 +2616,13 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                     "reason=\(reason) " +
                     "device=\(device.localizedName) " +
                     "type=\(device.deviceType.rawValue) " +
+                    "requested=\(String(format: "%.2f", requestedZoom)) " +
                     "target=\(String(format: "%.2f", clamped)) " +
                     "actual=\(String(format: "%.2f", device.videoZoomFactor)) " +
                     "ramped=\(ramped) " +
                     "min=\(String(format: "%.2f", device.minAvailableVideoZoomFactor)) " +
                     "max=\(String(format: "%.2f", device.maxAvailableVideoZoomFactor)) " +
+                    "selectedLens=\(self.selectedLensProfile?.displayText ?? "nil") " +
                     "switchOver=[\(switchFactors)]"
                 )
 #endif
@@ -2612,7 +2637,53 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 }
             }
         }
+#if DEBUG
+        self.scheduleLensZoomReadback(
+            reason: reason,
+            requestedZoom: requestedZoom,
+            clampedZoom: clamped,
+            generation: readbackGeneration,
+            delay: ramped ? 0.48 : 0.08
+        )
+#endif
     }
+
+#if DEBUG
+    private func scheduleLensZoomReadback(
+        reason: String,
+        requestedZoom: CGFloat,
+        clampedZoom: CGFloat,
+        generation: UInt64,
+        delay: TimeInterval
+    ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.lensZoomReadbackGeneration == generation else { return }
+            let selectedLens = self.selectedLensProfile?.displayText ?? "nil"
+            self.sessionQueue.async { [weak self] in
+                guard let self, let device = self.currentVideoInput?.device else { return }
+                let activePrimary: String
+                if let active = device.activePrimaryConstituent {
+                    activePrimary = self.formattedLensDeviceCapability(active)
+                } else {
+                    activePrimary = "nil"
+                }
+                print(
+                    "[CaptureLensZoomReadback] " +
+                    "reason=\(reason) " +
+                    "generation=\(generation) " +
+                    "selectedLens=\(selectedLens) " +
+                    "requested=\(String(format: "%.3f", requestedZoom)) " +
+                    "clamped=\(String(format: "%.3f", clampedZoom)) " +
+                    "device=\(device.localizedName) " +
+                    "type=\(device.deviceType.rawValue) " +
+                    "videoZoom=\(String(format: "%.3f", device.videoZoomFactor)) " +
+                    "isRamping=\(device.isRampingVideoZoom) " +
+                    "activePrimary=\(activePrimary)"
+                )
+            }
+        }
+    }
+#endif
 
     func applyStabilizerModeToConnections(reason: String = "refresh") {
         let requestedMode = selectedStabilizerMode.requestedVideoStabilizationMode
@@ -3358,6 +3429,9 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
     private func captureSinglePhoto() async throws -> CaptureStillPhotoResult {
         await waitForCaptureStabilizationIfNeeded()
+#if DEBUG
+        await logCurrentLensCaptureState(reason: "beforePhotoCapture")
+#endif
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CaptureStillPhotoResult, Error>) in
             guard self.isSessionConfigured else {
                 continuation.resume(throwing: NSError(domain: "CaptureCameraRuntime", code: -2))
@@ -3421,6 +3495,41 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
 #endif
     }
+
+#if DEBUG
+    private func logCurrentLensCaptureState(reason: String) async {
+        let selectedLens = selectedLensProfile?.displayText ?? "nil"
+        let selectedLensID = selectedLensProfileID
+        let runtimeZoom = currentZoomFactor
+        await withCheckedContinuation { continuation in
+            sessionQueue.async { [weak self] in
+                guard let self, let device = self.currentVideoInput?.device else {
+                    continuation.resume()
+                    return
+                }
+                let activePrimary: String
+                if let active = device.activePrimaryConstituent {
+                    activePrimary = self.formattedLensDeviceCapability(active)
+                } else {
+                    activePrimary = "nil"
+                }
+                print(
+                    "[CaptureLensCaptureState] " +
+                    "reason=\(reason) " +
+                    "selectedLens=\(selectedLens) " +
+                    "selectedLensID=\(selectedLensID) " +
+                    "runtimeZoom=\(String(format: "%.3f", runtimeZoom)) " +
+                    "device=\(device.localizedName) " +
+                    "type=\(device.deviceType.rawValue) " +
+                    "videoZoom=\(String(format: "%.3f", device.videoZoomFactor)) " +
+                    "isRamping=\(device.isRampingVideoZoom) " +
+                    "activePrimary=\(activePrimary)"
+                )
+                continuation.resume()
+            }
+        }
+    }
+#endif
 
     private func preferredPhotoQualityPrioritization() -> AVCapturePhotoOutput.QualityPrioritization {
         switch photoOutput.maxPhotoQualityPrioritization {
@@ -4371,61 +4480,37 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         if let virtualBack = preferredVirtualBackCamera(in: backDevices),
            !shouldUsePhysicalLensProfiles {
             let virtualMaxZoom = normalizedDeviceMaxZoom(for: virtualBack)
-            let teleTarget = min(max(3.0, virtualBack.maxAvailableVideoZoomFactor >= 3.0 ? 3.0 : virtualMaxZoom), virtualMaxZoom)
-            let virtualProfiles: [CaptureLensProfile] = [
-                CaptureLensProfile(
-                    id: "virtual-13",
-                    kind: .ultraWide,
+            let virtualProfiles = CaptureSemanticFocal.allCases.compactMap { focal -> CaptureLensProfile? in
+                guard let target = resolveLensTarget(for: focal, device: virtualBack) else {
+                    logLensTargetResolution(
+                        focal: focal,
+                        target: nil,
+                        device: virtualBack,
+                        reason: "buildVirtualProfile.unavailable"
+                    )
+                    return nil
+                }
+                logLensTargetResolution(
+                    focal: focal,
+                    target: target,
+                    device: virtualBack,
+                    reason: "buildVirtualProfile"
+                )
+                return CaptureLensProfile(
+                    id: "virtual-\(focal.millimeters)",
+                    kind: lensKind(for: focal),
                     source: .virtual,
                     position: .back,
-                    semanticFocal: .mm13,
-                    displayText: "13mm",
-                    menuText: "超广角 13mm",
-                    preferredDeviceType: virtualBack.deviceType,
-                    baseZoomFactor: 0.5,
-                    lensMaxZoomFactor: virtualMaxZoom
-                ),
-                CaptureLensProfile(
-                    id: "virtual-24",
-                    kind: .wide,
-                    source: .virtual,
-                    position: .back,
-                    semanticFocal: .mm24,
-                    displayText: "24mm",
-                    menuText: "主摄 24mm",
-                    preferredDeviceType: virtualBack.deviceType,
-                    baseZoomFactor: 1.0,
-                    lensMaxZoomFactor: virtualMaxZoom
-                ),
-                CaptureLensProfile(
-                    id: "virtual-48",
-                    kind: .wide,
-                    source: .virtual,
-                    position: .back,
-                    semanticFocal: .mm48,
-                    displayText: "48mm",
-                    menuText: "主摄 48mm",
-                    preferredDeviceType: virtualBack.deviceType,
-                    baseZoomFactor: 2.0,
-                    lensMaxZoomFactor: virtualMaxZoom
-                ),
-                CaptureLensProfile(
-                    id: "virtual-77",
-                    kind: .tele,
-                    source: .virtual,
-                    position: .back,
-                    semanticFocal: .mm77,
-                    displayText: "77mm",
-                    menuText: "长焦 77mm",
-                    preferredDeviceType: virtualBack.deviceType,
-                    baseZoomFactor: teleTarget,
+                    semanticFocal: focal,
+                    displayText: focal.displayText,
+                    menuText: lensMenuText(for: focal),
+                    preferredDeviceType: target.preferredDeviceType,
+                    baseZoomFactor: target.clampedZoomFactor,
                     lensMaxZoomFactor: virtualMaxZoom
                 )
-            ]
-
-            return virtualProfiles.filter { profile in
-                profile.baseZoomFactor <= virtualMaxZoom + 0.01 || profile.semanticFocal == .mm13
             }
+
+            return virtualProfiles
         } else if let virtualBack = preferredVirtualBackCamera(in: backDevices) {
             logManualParameterCompatibility(
                 device: virtualBack,
@@ -4523,6 +4608,173 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         return tunedLensProfiles(profiles)
     }
 
+    private func resolveLensTarget(
+        millimeters: Int,
+        device: AVCaptureDevice
+    ) -> SellerCameraLensTarget? {
+        guard let focal = CaptureSemanticFocal.allCases.first(where: { $0.millimeters == millimeters }) else {
+            return nil
+        }
+        return resolveLensTarget(for: focal, device: device)
+    }
+
+    private func resolveLensTarget(
+        for focal: CaptureSemanticFocal,
+        device: AVCaptureDevice
+    ) -> SellerCameraLensTarget? {
+        let lower = minimumAvailableZoom(for: device)
+        let upper = max(lower, normalizedDeviceMaxZoom(for: device))
+
+        let requestedZoomFactor: CGFloat?
+        if device.isVirtualDevice {
+            requestedZoomFactor = resolveVirtualLensZoomFactor(
+                for: focal,
+                device: device,
+                lower: lower,
+                upper: upper
+            )
+        } else {
+            requestedZoomFactor = resolvePhysicalLensZoomFactor(
+                for: focal,
+                device: device,
+                lower: lower,
+                upper: upper
+            )
+        }
+
+        guard let requestedZoomFactor else { return nil }
+        return SellerCameraLensTarget(
+            displayMillimeters: focal.millimeters,
+            requestedZoomFactor: requestedZoomFactor,
+            clampedZoomFactor: clampedZoomFactor(requestedZoomFactor, lower: lower, upper: upper),
+            preferredDeviceType: device.deviceType
+        )
+    }
+
+    private func resolveVirtualLensZoomFactor(
+        for focal: CaptureSemanticFocal,
+        device: AVCaptureDevice,
+        lower: CGFloat,
+        upper: CGFloat
+    ) -> CGFloat? {
+        let constituents = device.constituentDevices
+        let hasUltraWide = constituents.contains { $0.deviceType == .builtInUltraWideCamera }
+            || device.deviceType == .builtInTripleCamera
+            || device.deviceType == .builtInDualWideCamera
+        let hasWide = constituents.contains { $0.deviceType == .builtInWideAngleCamera }
+            || device.deviceType == .builtInTripleCamera
+            || device.deviceType == .builtInDualWideCamera
+            || device.deviceType == .builtInDualCamera
+        let hasTele = constituents.contains { $0.deviceType == .builtInTelephotoCamera }
+            || device.deviceType == .builtInTripleCamera
+            || device.deviceType == .builtInDualCamera
+        let switchFactors = normalizedSwitchOverFactors(for: device, lower: lower, upper: upper)
+        let wideAnchor: CGFloat = {
+            guard hasUltraWide, hasWide else { return lower }
+            if let firstSwitch = switchFactors.first {
+                return firstSwitch
+            }
+            return clampedZoomFactor(lower * CGFloat(24.0 / 13.0), lower: lower, upper: upper)
+        }()
+        let teleAnchor: CGFloat? = {
+            guard hasTele else { return nil }
+            if switchFactors.count >= 2, let lastSwitch = switchFactors.last {
+                return lastSwitch
+            }
+            let fallback = wideAnchor * CGFloat(77.0 / 24.0)
+            return fallback <= upper + 0.01 ? fallback : nil
+        }()
+
+        switch focal {
+        case .mm13:
+            guard hasUltraWide else { return nil }
+            return lower
+        case .mm24:
+            guard hasWide else { return nil }
+            return wideAnchor
+        case .mm48:
+            guard hasWide else { return nil }
+            let target = wideAnchor * 2.0
+            guard target <= upper + 0.01 else { return nil }
+            return target
+        case .mm77:
+            return teleAnchor
+        }
+    }
+
+    private func resolvePhysicalLensZoomFactor(
+        for focal: CaptureSemanticFocal,
+        device: AVCaptureDevice,
+        lower: CGFloat,
+        upper: CGFloat
+    ) -> CGFloat? {
+        switch (focal, device.deviceType) {
+        case (.mm13, .builtInUltraWideCamera),
+             (.mm24, .builtInWideAngleCamera),
+             (.mm77, .builtInTelephotoCamera):
+            return lower
+        case (.mm48, .builtInWideAngleCamera):
+            let target = max(lower, 2.0)
+            return target <= upper + 0.01 ? target : nil
+        default:
+            return nil
+        }
+    }
+
+    private func normalizedSwitchOverFactors(
+        for device: AVCaptureDevice,
+        lower: CGFloat,
+        upper: CGFloat
+    ) -> [CGFloat] {
+        let rawFactors = device.virtualDeviceSwitchOverVideoZoomFactors
+            .map { CGFloat(truncating: $0) }
+            .filter { $0 >= lower - 0.001 && $0 <= upper + 0.001 }
+            .sorted()
+        var uniqueFactors: [CGFloat] = []
+        for factor in rawFactors {
+            if uniqueFactors.last.map({ abs($0 - factor) > 0.001 }) ?? true {
+                uniqueFactors.append(factor)
+            }
+        }
+        return uniqueFactors
+    }
+
+    private func minimumAvailableZoom(for device: AVCaptureDevice) -> CGFloat {
+        max(1.0, device.minAvailableVideoZoomFactor)
+    }
+
+    private func clampedZoomFactor(
+        _ requestedZoomFactor: CGFloat,
+        lower: CGFloat,
+        upper: CGFloat
+    ) -> CGFloat {
+        max(lower, min(upper, requestedZoomFactor))
+    }
+
+    private func lensKind(for focal: CaptureSemanticFocal) -> CaptureLensProfile.Kind {
+        switch focal {
+        case .mm13:
+            return .ultraWide
+        case .mm24, .mm48:
+            return .wide
+        case .mm77:
+            return .tele
+        }
+    }
+
+    private func lensMenuText(for focal: CaptureSemanticFocal) -> String {
+        switch focal {
+        case .mm13:
+            return "超广角 13mm"
+        case .mm24:
+            return "主摄 24mm"
+        case .mm48:
+            return "主摄 48mm"
+        case .mm77:
+            return "长焦 77mm"
+        }
+    }
+
     private func discoverCameras(position: AVCaptureDevice.Position) -> [AVCaptureDevice] {
         let types: [AVCaptureDevice.DeviceType] = [
             .builtInTripleCamera,
@@ -4557,18 +4809,72 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors
             .map { String(format: "%.2f", CGFloat(truncating: $0)) }
             .joined(separator: ",")
+        let constituents = device.constituentDevices.map { constituent in
+            formattedLensDeviceCapability(constituent)
+        }.joined(separator: ";")
+        let activePrimary: String
+        if let active = device.activePrimaryConstituent {
+            activePrimary = formattedLensDeviceCapability(active)
+        } else {
+            activePrimary = "nil"
+        }
         print(
             "[CaptureLensDevice] " +
             "reason=\(reason) " +
+            "uniqueID=\(device.uniqueID) " +
             "activeDevice=\(device.localizedName) " +
             "deviceType=\(device.deviceType.rawValue) " +
+            "isVirtual=\(device.isVirtualDevice) " +
+            "constituents=[\(constituents)] " +
+            "activePrimary=\(activePrimary) " +
             "virtualSwitchOver=[\(switchFactors)] " +
             "minZoom=\(String(format: "%.2f", device.minAvailableVideoZoomFactor)) " +
             "maxZoom=\(String(format: "%.2f", device.maxAvailableVideoZoomFactor)) " +
             "videoZoom=\(String(format: "%.2f", device.videoZoomFactor)) " +
+            "activeFormatFOV=\(String(format: "%.2f", device.activeFormat.videoFieldOfView)) " +
             "uiFocal=\(uiFocalLabel ?? selectedLensProfile?.displayText ?? "nil")"
         )
 #endif
+    }
+
+    private func logLensTargetResolution(
+        focal: CaptureSemanticFocal,
+        target: SellerCameraLensTarget?,
+        device: AVCaptureDevice,
+        reason: String
+    ) {
+#if DEBUG
+        let switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors
+            .map { String(format: "%.2f", CGFloat(truncating: $0)) }
+            .joined(separator: ",")
+        let requested = target.map { String(format: "%.3f", $0.requestedZoomFactor) } ?? "nil"
+        let clamped = target.map { String(format: "%.3f", $0.clampedZoomFactor) } ?? "nil"
+        print(
+            "[CaptureLensTarget] " +
+            "reason=\(reason) " +
+            "focal=\(focal.displayText) " +
+            "requested=\(requested) " +
+            "clamped=\(clamped) " +
+            "device=\(device.localizedName) " +
+            "type=\(device.deviceType.rawValue) " +
+            "isVirtual=\(device.isVirtualDevice) " +
+            "min=\(String(format: "%.3f", minimumAvailableZoom(for: device))) " +
+            "max=\(String(format: "%.3f", normalizedDeviceMaxZoom(for: device))) " +
+            "videoZoom=\(String(format: "%.3f", device.videoZoomFactor)) " +
+            "switchOver=[\(switchFactors)]"
+        )
+#endif
+    }
+
+    private func formattedLensDeviceCapability(_ device: AVCaptureDevice) -> String {
+        [
+            device.localizedName,
+            device.deviceType.rawValue,
+            device.uniqueID,
+            "fov=\(String(format: "%.2f", device.activeFormat.videoFieldOfView))",
+            "min=\(String(format: "%.2f", device.minAvailableVideoZoomFactor))",
+            "max=\(String(format: "%.2f", device.maxAvailableVideoZoomFactor))"
+        ].joined(separator: "|")
     }
 
     func logManualParameterCompatibilityForPanel(reason: String) {
