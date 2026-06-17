@@ -87,6 +87,10 @@ enum SellerCameraMotionToken {
     static let focus = Animation.spring(response: 0.22, dampingFraction: 0.78)
     static let warning = Animation.easeOut(duration: 0.16)
     static let reducedMotion = Animation.easeOut(duration: 0.08)
+
+    static func resolved(_ animation: Animation, reduceMotion: Bool) -> Animation {
+        reduceMotion ? reducedMotion : animation
+    }
 }
 
 enum SellerCameraHapticToken: Hashable {
@@ -385,7 +389,7 @@ struct SellerCameraPressButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? pressedScale : (isEnabled ? 1 : disabledScale))
             .opacity(isEnabled ? 1 : 0.58)
-            .animation(reduceMotion ? SellerCameraMotionToken.reducedMotion : SellerCameraMotionToken.press, value: configuration.isPressed)
-            .animation(SellerCameraMotionToken.selection, value: isEnabled)
+            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.press, reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isEnabled)
     }
 }

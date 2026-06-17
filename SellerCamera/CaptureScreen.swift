@@ -13,6 +13,7 @@ import UIKit
 
 struct CaptureScreen: View {
     @StateObject private var cameraRuntime = CaptureCameraRuntime()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isLatestReviewPresented = false
     @State private var isImportPickerPresented = false
     @State private var selectedImportPhotoItem: PhotosPickerItem?
@@ -176,7 +177,7 @@ struct CaptureScreen: View {
                     activeKind: activeBottomParameterKind,
                     onSelect: handleBottomParameterSelection,
                     onControlTap: { kind in
-                        withAnimation(.easeOut(duration: 0.14)) {
+                        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion)) {
                             activeBottomParameterKind = kind
                         }
                         if kind == .exposureCompensation {
@@ -246,7 +247,7 @@ struct CaptureScreen: View {
         }
         .frame(height: bottomControlDeckHeight)
         .padding(.bottom, 4)
-        .animation(.easeOut(duration: 0.18), value: isBottomOverlayControlPresented)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion), value: isBottomOverlayControlPresented)
     }
 
     private func handleBottomParameterSelection(_ kind: CaptureProfessionalParameterKind) {
@@ -280,7 +281,7 @@ struct CaptureScreen: View {
             logParameterGuard(parameter: kind, reason: "notAdjustable panelOnly \(state.hintText)")
         }
 
-        withAnimation(.easeOut(duration: 0.18)) {
+        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
             isMoreOptionsPanelPresented = false
             isManualFocusRulerPresented = false
             if isBottomParameterPanelExpanded, activeBottomParameterKind == kind {
@@ -299,7 +300,7 @@ struct CaptureScreen: View {
 
     private func dismissInlineControls() {
         guard isBottomParameterPanelExpanded || activeControlTarget != .none || isManualFocusRulerPresented || isCaptureOptionPanelPresented else { return }
-        withAnimation(.easeOut(duration: 0.18)) {
+        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
             isBottomParameterPanelExpanded = false
             activeControlTarget = .none
             isManualFocusRulerPresented = false
@@ -309,13 +310,13 @@ struct CaptureScreen: View {
 
     private func dismissMoreOptionsPanel() {
         guard isMoreOptionsPanelPresented else { return }
-        withAnimation(.easeOut(duration: 0.16)) {
+        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion)) {
             isMoreOptionsPanelPresented = false
         }
     }
 
     private func handleMoreOptionsTap() {
-        withAnimation(.easeOut(duration: 0.16)) {
+        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelPresent, reduceMotion: reduceMotion)) {
             if isMoreOptionsPanelPresented {
                 isMoreOptionsPanelPresented = false
             } else {
@@ -329,7 +330,7 @@ struct CaptureScreen: View {
     }
 
     private func handleCaptureOptionTap() {
-        withAnimation(.easeOut(duration: 0.16)) {
+        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelPresent, reduceMotion: reduceMotion)) {
             if isCaptureOptionPanelPresented {
                 isCaptureOptionPanelPresented = false
             } else {
@@ -356,7 +357,7 @@ struct CaptureScreen: View {
             return true
         }
         if isManualFocusRulerPresented {
-            withAnimation(.easeOut(duration: 0.18)) {
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
                 isManualFocusRulerPresented = false
             }
             return true
@@ -377,7 +378,7 @@ struct CaptureScreen: View {
             cameraRuntime.captureHintText = "当前镜头不支持手动对焦"
             return
         }
-        withAnimation(.easeOut(duration: 0.18)) {
+        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
             isBottomParameterPanelExpanded = false
             activeControlTarget = .none
             isMoreOptionsPanelPresented = false
@@ -449,7 +450,7 @@ struct CaptureScreen: View {
                 .padding(.top, 6)
                 .padding(.bottom, 6)
                 .opacity(isAnyFloatingControlPresented ? 0.86 : 1)
-                .animation(SellerCameraMotionToken.modeSwitch, value: isAnyFloatingControlPresented)
+                .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion), value: isAnyFloatingControlPresented)
 
                 ZStack(alignment: .top) {
                     CapturePreviewContainer(
@@ -496,7 +497,7 @@ struct CaptureScreen: View {
                     .padding(.top, 1)
                     .padding(.bottom, 3)
                     .opacity(isAnyFloatingControlPresented ? 0.6 : 1)
-                    .animation(SellerCameraMotionToken.modeSwitch, value: isAnyFloatingControlPresented)
+                    .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion), value: isAnyFloatingControlPresented)
                 .simultaneousGesture(
                     TapGesture().onEnded {
                         dismissInlineControls()
@@ -795,8 +796,8 @@ struct CaptureScreen: View {
             }
 
         }
-        .animation(SellerCameraMotionToken.modeSwitch, value: activeBottomParameterKind)
-        .animation(SellerCameraMotionToken.modeSwitch, value: isBottomParameterPanelExpanded)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion), value: activeBottomParameterKind)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion), value: isBottomParameterPanelExpanded)
     }
 
     @MainActor
@@ -1085,6 +1086,7 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var lastScrubSensitivity: CGFloat = 1
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let accent = SellerCameraColorToken.accent
     private let tickSpacing: CGFloat = ManualFocusRulerTuning.tickSpacing
     private let dragStepThreshold: CGFloat = ManualFocusRulerTuning.dragStepThreshold
@@ -1161,6 +1163,10 @@ private struct CaptureManualFocusRulerPanel: View {
         .background(SellerCameraColorToken.controlSurface.opacity(isEnabled ? 0.56 : 0.36), in: RoundedRectangle(cornerRadius: SellerCameraShapeToken.compactPanelRadius, style: .continuous))
         .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 8)
         .opacity(isEnabled ? 1 : 0.58)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("手动对焦刻度")
+        .accessibilityValue(currentValueText)
+        .accessibilityHint(isEnabled ? "左右拖动调节对焦，手指上移可精细微调" : "当前手动对焦不可用")
     }
 
     private var focusRulerTicks: some View {
@@ -1191,7 +1197,7 @@ private struct CaptureManualFocusRulerPanel: View {
                 .frame(width: tickSpacing, height: 43, alignment: .bottom)
             }
         }
-        .animation(SellerCameraMotionToken.selection, value: selectedIndex)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: selectedIndex)
     }
 
     private var centerPointer: some View {
@@ -1223,7 +1229,7 @@ private struct CaptureManualFocusRulerPanel: View {
             .shadow(color: accent.opacity(isEnabled ? 0.18 : 0), radius: 8, x: 0, y: 0)
             .id(currentValueText)
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            .animation(SellerCameraMotionToken.panelDismiss, value: currentValueText)
+            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: currentValueText)
             .allowsHitTesting(false)
     }
 
@@ -1369,7 +1375,7 @@ private struct CaptureManualFocusRulerPanel: View {
         lastDragDirection = 0
         lastScrubSensitivity = 1
         if animateOffset {
-            withAnimation(SellerCameraMotionToken.snap) {
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 dragOffset = 0
             }
         } else {
@@ -1623,6 +1629,8 @@ private struct CaptureTopStatusBar: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!isFlashModeSupported)
+                .accessibilityLabel("闪光灯，\(flashMode.shortText)")
+                .accessibilityHint(isFlashModeSupported ? "双击切换闪光灯模式" : "当前设备不支持闪光灯")
 
                 Button(action: onTapCaptureOptions) {
                     topToolButtonContent(
@@ -1634,6 +1642,9 @@ private struct CaptureTopStatusBar: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("拍摄比例和输出像素")
+                .accessibilityValue("\(selectedAspectRatioPreset.displayText)，\(pixelMenuText(for: selectedPixelPreset))")
+                .accessibilityHint(isCaptureOptionsPresented ? "双击关闭比例和像素面板" : "双击打开比例和像素面板")
 
                 Spacer(minLength: 0)
 
@@ -1646,6 +1657,8 @@ private struct CaptureTopStatusBar: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSwitchCamera)
+                .accessibilityLabel(cameraPosition == .back ? "当前后置相机" : "当前前置相机")
+                .accessibilityHint(canSwitchCamera ? "双击切换前后摄像头" : "当前不可切换摄像头")
 
                 Button(action: onTapMoreOptions) {
                     topToolButtonContent(
@@ -1656,6 +1669,8 @@ private struct CaptureTopStatusBar: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("更多拍摄选项")
+                .accessibilityHint(isMoreOptionsPresented ? "双击关闭更多选项" : "双击打开更多选项")
             }
 
             Text(memoryStatusText)
@@ -1845,6 +1860,7 @@ private struct CaptureDiscreteOptionRuler: View {
     @State private var lastCandidateIndex: Int?
     @State private var lastHapticIndex: Int?
     @State private var snapGeneration: UInt64 = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let interactionProfile = SellerCameraRulerInteractionProfile.ratioOutputQuality
 
     var body: some View {
@@ -1901,10 +1917,14 @@ private struct CaptureDiscreteOptionRuler: View {
         )
         .onChange(of: selectedIndex) { _ in
             guard !isDragging else { return }
-            withAnimation(SellerCameraMotionToken.snap) {
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 visualOffset = 0
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .accessibilityValue(selectedItemTitle)
+        .accessibilityHint("左右拖动或双击选项切换")
     }
 
     private var selectedItemTitle: String {
@@ -1985,12 +2005,16 @@ private struct CaptureDiscreteOptionRuler: View {
                 .tap,
                 CaptureOptionSelectionContext(startIndex: selectedIndex)
             )
-            withAnimation(SellerCameraMotionToken.snap) {
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 visualOffset = 0
             }
         }
-        .animation(SellerCameraMotionToken.selection, value: isSelected)
-        .animation(SellerCameraMotionToken.selection, value: isCandidate)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)，\(item.title)")
+        .accessibilityValue(item.warnsOnSelect ? "\(item.subtitle)，可能回退" : item.subtitle)
+        .accessibilityHint(item.isSelectable ? "双击选择" : "当前不可选")
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isSelected)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isCandidate)
     }
 
     private func beginDragIfNeeded() {
@@ -2041,7 +2065,7 @@ private struct CaptureDiscreteOptionRuler: View {
             lastCandidateIndex = nil
         }
         if animated {
-            withAnimation(SellerCameraMotionToken.snap, updates)
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion), updates)
         } else {
             updates()
         }
@@ -2259,6 +2283,7 @@ private struct CapturePreviewContainer: View {
     let onTapPreviewBeforeFocus: () -> Bool
     @State private var transientLensFeedback: String?
     @State private var lensFeedbackToken = UUID()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geometry in
@@ -2337,7 +2362,7 @@ private struct CapturePreviewContainer: View {
                                 ? (isAnyFloatingControlPresented ? 0.42 : 0.74)
                                 : 0.9
                         )
-                        .animation(.easeInOut(duration: 0.18), value: isAnyFloatingControlPresented)
+                        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion), value: isAnyFloatingControlPresented)
                         .allowsHitTesting(false)
                 }
             }
@@ -2472,6 +2497,8 @@ private struct CaptureLensControlStrip: View {
             }
             .buttonStyle(.plain)
             .disabled(!cameraRuntime.isExposureLockSupported)
+            .accessibilityLabel(isExposureLocked ? "曝光锁定，已开启" : "曝光锁定，已关闭")
+            .accessibilityHint(cameraRuntime.isExposureLockSupported ? "双击切换曝光锁定" : "当前镜头不支持曝光锁定")
 
             if availableCapabilities.isEmpty {
                 Text(cameraRuntime.activeCameraPosition == .front ? "前置镜头" : "当前机型无可用镜头焦段")
@@ -2520,6 +2547,9 @@ private struct CaptureLensControlStrip: View {
                                 .shadow(color: isSelected ? accent.opacity(0.18) : .clear, radius: 9, x: 0, y: 0)
                         }
                         .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
+                        .accessibilityLabel("\(focal.displayText) 焦段")
+                        .accessibilityValue(isSelected ? "已选中" : "未选中")
+                        .accessibilityHint(isSelected ? "双击打开或关闭变焦刻度" : "双击切换到此焦段")
                     }
                 }
             }
@@ -2533,6 +2563,8 @@ private struct CaptureLensControlStrip: View {
                 )
             }
             .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
+            .accessibilityLabel(isManualFocusModeActive ? "手动对焦，已开启" : "手动对焦，已关闭")
+            .accessibilityHint(isManualFocusDisabled ? "当前不可开启手动对焦" : "双击切换手动对焦")
         }
         .frame(maxWidth: .infinity)
     }
@@ -2625,6 +2657,7 @@ private struct CaptureZoomDialView: View {
     @State private var lastHapticSignature: String?
     @State private var dragBaselineValue: Double?
     @State private var lastEmittedZoomValue: Double?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let accent = SellerCameraColorToken.accent
     private let tickSpacing: CGFloat = Tuning.tickSpacing
     private let interactionProfile = SellerCameraRulerInteractionProfile.zoomPrecision
@@ -2680,6 +2713,10 @@ private struct CaptureZoomDialView: View {
             RoundedRectangle(cornerRadius: SellerCameraShapeToken.compactPanelRadius, style: .continuous)
                 .fill(SellerCameraColorToken.controlSurface.opacity(isEnabled ? 0.42 : 0.28))
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("变焦刻度")
+        .accessibilityValue(currentValueText)
+        .accessibilityHint(isEnabled ? "左右拖动调节变焦，手指上移可精细微调" : "当前变焦不可用")
     }
 
     private var lensRulerTicks: some View {
@@ -2703,7 +2740,7 @@ private struct CaptureZoomDialView: View {
                 .frame(width: tickSpacing, height: 43, alignment: .bottom)
             }
         }
-        .animation(SellerCameraMotionToken.selection, value: selectedIndex)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: selectedIndex)
     }
 
     private var centerPointer: some View {
@@ -2741,7 +2778,7 @@ private struct CaptureZoomDialView: View {
             .shadow(color: accent.opacity(isEnabled ? 0.18 : 0), radius: 8, x: 0, y: 0)
             .id(currentValueText)
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            .animation(SellerCameraMotionToken.panelDismiss, value: currentValueText)
+            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: currentValueText)
             .allowsHitTesting(false)
     }
 
@@ -2810,7 +2847,7 @@ private struct CaptureZoomDialView: View {
         dragBaselineValue = nil
         lastEmittedZoomValue = nil
         if animateOffset {
-            withAnimation(SellerCameraMotionToken.snap) {
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 dragOffset = 0
             }
         } else {
@@ -4679,7 +4716,8 @@ private struct CaptureBottomActionBar: View {
                 }
             }
             .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.92))
-            .accessibilityLabel("Shutter")
+            .accessibilityLabel("快门")
+            .accessibilityHint("双击拍照")
             .contentShape(Circle())
             .frame(width: 86, height: 86)
 
@@ -4692,6 +4730,8 @@ private struct CaptureBottomActionBar: View {
                 )
             }
             .buttonStyle(SellerCameraPressButtonStyle())
+            .accessibilityLabel("图册")
+            .accessibilityHint("双击打开图册")
         }
         .frame(height: 86)
     }
@@ -4752,6 +4792,8 @@ private struct CaptureBottomLatestResultButton: View {
         }
         .buttonStyle(SellerCameraPressButtonStyle())
         .disabled(latestResult == nil)
+        .accessibilityLabel(latestResult == nil ? "最近照片，暂无照片" : "最新照片")
+        .accessibilityHint(latestResult == nil ? "拍照后可查看最新照片" : "双击查看最新拍摄结果")
         .task(id: latestResult?.id) {
             await refreshPreview()
         }

@@ -101,3 +101,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R80A 现有拍摄 UI 与动效手感审计报告：`docs/reports/r80a_existing_ui_motion_audit.md`
 - R80B iOS 27 拍摄主界面视觉设计系统接入报告：`docs/reports/r80b_ios27_capture_interface_design_system.md`
 - R80C 专业参数 Ruler 交互统一报告：`docs/reports/r80c_professional_ruler_interaction_unification.md`
+- R80D iOS 27 UI 动效性能与无障碍收口报告：`docs/reports/r80d_ios27_ui_motion_performance_closure.md`

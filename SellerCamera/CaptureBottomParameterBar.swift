@@ -56,6 +56,7 @@ struct CaptureBottomParameterBar: View {
     let items: [CaptureBottomParameterItem]
     let activeKind: CaptureProfessionalParameterKind?
     let onSelect: (CaptureProfessionalParameterKind) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 4) {
@@ -117,8 +118,10 @@ struct CaptureBottomParameterBar: View {
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
         .accessibilityLabel("\(item.title) \(item.valueText)")
-        .animation(SellerCameraMotionToken.selection, value: isActive)
-        .animation(SellerCameraMotionToken.panelDismiss, value: item.valueText)
+        .accessibilityValue(item.isManualOrLocked ? "手动或锁定" : "自动")
+        .accessibilityHint(item.isAvailable ? "双击打开调节刻度" : "当前参数不可调")
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isActive)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: item.valueText)
     }
 
     fileprivate func titleColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
@@ -144,6 +147,7 @@ struct CaptureHorizontalParameterRulerPanel: View {
     let onDismiss: () -> Void
     @State private var isRulerDragging = false
     @State private var lastRulerDragEndedAt: Date = .distantPast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var activeItem: CaptureHorizontalParameterRulerItem? {
         items.first { $0.parameter.kind == activeKind } ?? items.first
@@ -207,7 +211,7 @@ struct CaptureHorizontalParameterRulerPanel: View {
                     }
                 }
         )
-        .animation(SellerCameraMotionToken.panelPresent, value: activeKind)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelPresent, reduceMotion: reduceMotion), value: activeKind)
         .onChange(of: activeKind) { _ in
             resetRulerDragTracking(markEnded: true)
         }
@@ -252,6 +256,7 @@ private struct CaptureRulerParameterEntry: View {
     let item: CaptureBottomParameterItem
     let isActive: Bool
     let onSelect: (CaptureProfessionalParameterKind) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
@@ -298,8 +303,11 @@ private struct CaptureRulerParameterEntry: View {
         }
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
-        .animation(.easeOut(duration: 0.15), value: isActive)
-        .animation(.easeOut(duration: 0.13), value: item.valueText)
+        .accessibilityLabel("\(item.title) \(item.valueText)")
+        .accessibilityValue(item.isManualOrLocked ? "手动或锁定" : "自动")
+        .accessibilityHint(item.isAvailable ? "双击切换到此参数" : "当前参数不可调")
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isActive)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: item.valueText)
     }
 
     private var titleColor: Color {
@@ -327,6 +335,7 @@ private struct CaptureHorizontalParameterRuler: View {
     @State private var lastScrubSensitivity: CGFloat = 1
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tickSpacing: CGFloat { item.tickSpacing }
     private var interactionProfile: SellerCameraRulerInteractionProfile {
@@ -413,6 +422,10 @@ private struct CaptureHorizontalParameterRuler: View {
                 .stroke(CaptureParameterConsoleStyle.panelStroke, lineWidth: 1)
         )
         .shadow(color: CaptureParameterConsoleStyle.panelShadow, radius: 14, x: 0, y: 9)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(item.parameter.title) 刻度")
+        .accessibilityValue(item.parameter.valueText)
+        .accessibilityHint(item.isRulerInteractive ? "左右拖动调节，手指上移可精细微调" : "当前刻度不可调")
     }
 
     private var rulerTicks: some View {
@@ -438,7 +451,7 @@ private struct CaptureHorizontalParameterRuler: View {
                 .frame(width: tickSpacing, height: 43, alignment: .bottom)
             }
         }
-        .animation(.easeOut(duration: 0.14), value: item.selectedIndex)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: item.selectedIndex)
     }
 
     private var centerPointer: some View {
@@ -476,7 +489,7 @@ private struct CaptureHorizontalParameterRuler: View {
             .shadow(color: CaptureParameterConsoleStyle.accent.opacity(0.18), radius: 9, x: 0, y: 0)
             .id(item.parameter.valueText)
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            .animation(SellerCameraMotionToken.panelDismiss, value: item.parameter.valueText)
+            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: item.parameter.valueText)
             .allowsHitTesting(false)
     }
 
@@ -574,7 +587,7 @@ private struct CaptureHorizontalParameterRuler: View {
         lastDragStepTranslation = 0
         lastRulerDragDirection = 0
         if animateOffset {
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 dragOffset = 0
             }
         } else {
@@ -639,6 +652,7 @@ private struct CaptureRulerControlCapsule: View {
     let controlKind: CaptureRulerControlKind
     let isEnabled: Bool
     let onTap: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: onTap) {
@@ -703,8 +717,21 @@ private struct CaptureRulerControlCapsule: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .scaleEffect(isEnabled ? 1 : 0.98)
-        .animation(SellerCameraMotionToken.selection, value: controlKind)
-        .animation(SellerCameraMotionToken.selection, value: isEnabled)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(isEnabled ? "双击切换参数控制模式" : "当前控制不可用")
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: controlKind)
+        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isEnabled)
+    }
+
+    private var accessibilityLabel: String {
+        switch controlKind {
+        case .auto(let isOn):
+            return isOn ? "自动，开启" : "自动，关闭"
+        case .reset:
+            return "重置"
+        case .lock:
+            return "锁定"
+        }
     }
 }
 
