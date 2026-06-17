@@ -9,14 +9,11 @@ import SwiftUI
 import UIKit
 
 private enum CaptureParameterConsoleStyle {
-    static let accent = SellerCameraColor.accentPrimary
-    static let warmAccent = SellerCameraColor.accentPrimary
+    static let accent = SellerCameraColor.accentSuccess
     static let panelStroke = SellerCameraColor.divider.opacity(0.70)
     static let panelInnerStroke = SellerCameraColor.divider.opacity(0.28)
     static let panelShadow = Color.black.opacity(0.24)
     static let baseFill = SellerCameraColor.controlSurfacePrimary.opacity(0.58)
-    static let activeFill = SellerCameraControlVisualStyle.style(for: .selected).fill
-    static let activeStroke = SellerCameraControlVisualStyle.style(for: .selected).stroke
     static let consoleFillTop = SellerCameraColor.controlSurfaceSecondary.opacity(0.96)
     static let consoleFillBottom = SellerCameraColor.canvasBackground.opacity(0.98)
 }
@@ -42,6 +39,7 @@ struct CaptureHorizontalParameterRulerItem: Identifiable, Equatable {
     let tickLabels: [String]
     let selectedIndex: Int
     let majorTickIndexes: Set<Int>
+    let labelTickIndexes: Set<Int>
     let controlKind: CaptureRulerControlKind
     let isRulerInteractive: Bool
     let dragThreshold: CGFloat
@@ -71,7 +69,11 @@ struct CaptureBottomParameterBar: View {
     private func parameterButton(for item: CaptureBottomParameterItem) -> some View {
         let isActive = activeKind == item.kind
         let state = controlState(for: item, isActive: isActive)
-        let style = SellerCameraControlVisualStyle.style(for: state)
+        let textStyle = SellerCameraControlVisualStyle.style(for: isActive ? .selected : .normal)
+        let titleForeground = parameterTitleColor(isActive: isActive, item: item)
+        let valueForeground = parameterValueColor(isActive: isActive, item: item)
+        let activeFill = item.isAvailable && isActive ? CaptureParameterConsoleStyle.accent.opacity(0.10) : Color.clear
+        let activeShadow = item.isAvailable && isActive ? CaptureParameterConsoleStyle.accent.opacity(0.16) : Color.clear
 
         return Button {
             guard item.isAvailable else { return }
@@ -82,16 +84,16 @@ struct CaptureBottomParameterBar: View {
                     .frame(width: 22, height: 15)
 
                 Text(item.title)
-                    .font(style.titleFont)
+                    .font(textStyle.titleFont)
                     .textCase(.uppercase)
-                    .foregroundStyle(style.foreground)
+                    .foregroundStyle(titleForeground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text(item.valueText)
-                    .font(style.valueFont)
+                    .font(textStyle.valueFont)
                     .monospacedDigit()
-                    .foregroundStyle(style.secondaryForeground)
+                    .foregroundStyle(valueForeground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.64)
                     .frame(minWidth: 42, maxWidth: .infinity)
@@ -102,22 +104,18 @@ struct CaptureBottomParameterBar: View {
             .contentShape(Rectangle())
             .background {
                 RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
-                    .fill(style.fill)
-                    .shadow(color: style.shadow, radius: 8, x: 0, y: 0)
+                    .fill(activeFill)
+                    .shadow(color: activeShadow, radius: 8, x: 0, y: 0)
             }
             .overlay(alignment: .bottom) {
-                if state != .normal && state != .disabled {
+                if item.isAvailable && isActive {
                     Capsule(style: .continuous)
-                        .fill(style.underline)
+                        .fill(CaptureParameterConsoleStyle.accent)
                         .frame(width: 18, height: 2)
-                        .shadow(color: style.shadow.opacity(0.8), radius: 5, x: 0, y: 0)
+                        .shadow(color: CaptureParameterConsoleStyle.accent.opacity(0.28), radius: 5, x: 0, y: 0)
                         .offset(y: 2)
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
-                    .stroke(style.stroke, lineWidth: state == .selected ? 1 : 0.8)
-            )
         }
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
@@ -135,16 +133,16 @@ struct CaptureBottomParameterBar: View {
         return .normal
     }
 
-    fileprivate func titleColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
+    fileprivate func parameterTitleColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
         guard item.isAvailable else { return SellerCameraColor.textDisabled }
         if isActive { return CaptureParameterConsoleStyle.accent }
         return SellerCameraColor.textSecondary
     }
 
-    fileprivate func valueColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
+    fileprivate func parameterValueColor(isActive: Bool, item: CaptureBottomParameterItem) -> Color {
         guard item.isAvailable else { return SellerCameraColor.textDisabled }
         if isActive { return CaptureParameterConsoleStyle.accent }
-        return SellerCameraColor.textPrimary
+        return SellerCameraColor.textPrimary.opacity(0.86)
     }
 }
 
@@ -271,7 +269,11 @@ private struct CaptureRulerParameterEntry: View {
 
     var body: some View {
         let state = controlState
-        let style = SellerCameraControlVisualStyle.style(for: state)
+        let textStyle = SellerCameraControlVisualStyle.style(for: isActive ? .selected : .normal)
+        let titleForeground = titleColor
+        let valueForeground = valueColor
+        let activeFill = item.isAvailable && isActive ? CaptureParameterConsoleStyle.accent.opacity(0.10) : Color.clear
+        let activeShadow = item.isAvailable && isActive ? CaptureParameterConsoleStyle.accent.opacity(0.14) : Color.clear
 
         Button {
             guard item.isAvailable else { return }
@@ -282,16 +284,16 @@ private struct CaptureRulerParameterEntry: View {
                     .frame(width: 20, height: 14)
 
                 Text(item.title)
-                    .font(style.titleFont)
+                    .font(textStyle.titleFont)
                     .tracking(0.35)
-                    .foregroundStyle(style.foreground)
+                    .foregroundStyle(titleForeground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text(item.valueText)
-                    .font(style.valueFont)
+                    .font(textStyle.valueFont)
                     .monospacedDigit()
-                    .foregroundStyle(style.secondaryForeground)
+                    .foregroundStyle(valueForeground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.58)
                     .frame(minWidth: 38)
@@ -302,21 +304,17 @@ private struct CaptureRulerParameterEntry: View {
             .contentShape(Rectangle())
             .background {
                 RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
-                    .fill(style.fill)
-                    .shadow(color: style.shadow, radius: 7, x: 0, y: 0)
+                    .fill(activeFill)
+                    .shadow(color: activeShadow, radius: 7, x: 0, y: 0)
             }
             .overlay(alignment: .bottom) {
-                if state != .normal && state != .disabled {
+                if item.isAvailable && isActive {
                     Capsule(style: .continuous)
-                        .fill(style.underline)
+                        .fill(CaptureParameterConsoleStyle.accent)
                         .frame(width: 17, height: 2)
                         .offset(y: 2)
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
-                    .stroke(style.stroke, lineWidth: isActive ? 1 : 0.8)
-            )
         }
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
@@ -336,12 +334,12 @@ private struct CaptureRulerParameterEntry: View {
 
     private var titleColor: Color {
         guard item.isAvailable else { return SellerCameraColor.textDisabled }
-        return isActive ? CaptureParameterConsoleStyle.accent : .white.opacity(0.54)
+        return isActive ? CaptureParameterConsoleStyle.accent : SellerCameraColor.textSecondary
     }
 
     private var valueColor: Color {
         guard item.isAvailable else { return SellerCameraColor.textDisabled }
-        return isActive ? .white.opacity(0.98) : .white.opacity(0.84)
+        return isActive ? CaptureParameterConsoleStyle.accent : SellerCameraColor.textPrimary.opacity(0.86)
     }
 }
 
@@ -481,7 +479,7 @@ private struct CaptureHorizontalParameterRuler: View {
                         .frame(width: isSelected ? rulerStyle.tickSelectedWidth : rulerStyle.tickNormalWidth, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
                         .shadow(color: isSelected ? CaptureParameterConsoleStyle.accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
 
-                    Text(isMajor ? label : "")
+                    Text(item.labelTickIndexes.contains(index) ? label : "")
                         .font(isSelected ? SellerCameraTypographyToken.rulerMajor : SellerCameraTypographyToken.rulerMinor)
                         .monospacedDigit()
                         .foregroundStyle(tickLabelColor(isSelected: isSelected))
@@ -830,65 +828,67 @@ private struct CaptureRulerControlCapsule: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let state = visualState
-        let style = SellerCameraControlVisualStyle.style(for: state)
+        let foreground = controlForeground
+        let secondaryForeground = controlSecondaryForeground
+        let fill = controlFill
+        let stroke = controlStroke
 
         Button(action: onTap) {
             switch controlKind {
             case .auto(let isOn):
                 HStack(spacing: SellerCameraSpacing.xs) {
                     Circle()
-                        .fill(isOn ? style.foreground : SellerCameraColor.textTertiary)
+                        .fill(isOn ? foreground : SellerCameraColor.textTertiary)
                         .frame(width: 8, height: 8)
                         .overlay(
                             Circle()
-                                .stroke(style.stroke, lineWidth: 1)
+                                .stroke(stroke, lineWidth: 1)
                         )
 
                     Text("AUTO")
                         .font(SellerCameraTypography.toolLabel)
                         .tracking(0.4)
-                        .foregroundStyle(isOn ? style.foreground : style.secondaryForeground)
+                        .foregroundStyle(isOn ? foreground : secondaryForeground)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 28)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(style.fill)
+                        .fill(fill)
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(style.stroke, lineWidth: 1)
+                        .stroke(stroke, lineWidth: 1)
                 )
             case .reset:
                 Text("RESET")
                     .font(SellerCameraTypography.toolLabel)
                     .tracking(0.45)
-                    .foregroundStyle(style.foreground)
+                    .foregroundStyle(foreground)
                     .frame(maxWidth: .infinity)
                     .frame(height: 28)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(style.fill)
+                            .fill(fill)
                     )
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(style.stroke, lineWidth: 1)
+                            .stroke(stroke, lineWidth: 1)
                     )
             case .lock:
                 Text("LOCK")
                     .font(SellerCameraTypography.toolLabel)
                     .tracking(0.45)
-                    .foregroundStyle(style.foreground)
+                    .foregroundStyle(foreground)
                     .frame(maxWidth: .infinity)
                     .frame(height: 28)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(style.fill)
+                            .fill(fill)
                     )
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(style.stroke, lineWidth: 1)
+                            .stroke(stroke, lineWidth: 1)
                     )
             }
         }
@@ -901,19 +901,34 @@ private struct CaptureRulerControlCapsule: View {
         .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: isEnabled)
     }
 
-    private var visualState: SellerCameraControlState {
-        guard isEnabled else {
-            if case .lock = controlKind { return .locked }
-            return .disabled
-        }
+    private var isHighlighted: Bool {
+        guard isEnabled else { return false }
         switch controlKind {
         case .auto(let isOn):
-            return isOn ? .selected : .normal
-        case .reset:
-            return .selected
-        case .lock:
-            return .locked
+            return isOn
+        case .reset, .lock:
+            return true
         }
+    }
+
+    private var controlForeground: Color {
+        guard isEnabled else { return SellerCameraColor.textDisabled }
+        return isHighlighted ? CaptureParameterConsoleStyle.accent : SellerCameraColor.textSecondary
+    }
+
+    private var controlSecondaryForeground: Color {
+        guard isEnabled else { return SellerCameraColor.textDisabled }
+        return isHighlighted ? SellerCameraColor.textPrimary : SellerCameraColor.textSecondary
+    }
+
+    private var controlFill: Color {
+        guard isEnabled else { return SellerCameraColor.controlSurfaceDisabled }
+        return isHighlighted ? CaptureParameterConsoleStyle.accent.opacity(0.10) : SellerCameraColor.controlSurfacePrimary.opacity(0.42)
+    }
+
+    private var controlStroke: Color {
+        guard isEnabled else { return SellerCameraColor.divider.opacity(0.30) }
+        return isHighlighted ? CaptureParameterConsoleStyle.accent.opacity(0.34) : SellerCameraColor.divider.opacity(0.48)
     }
 
     private var accessibilityLabel: String {
@@ -932,122 +947,250 @@ private struct CaptureParameterGlyph: View {
     let kind: CaptureProfessionalParameterKind
     let isActive: Bool
     let isAvailable: Bool
-    private let metrics = SellerCameraGlyphMetrics.self
 
-    private var stroke: Color {
+    private var primaryStroke: Color {
         guard isAvailable else { return SellerCameraColor.textDisabled.opacity(0.92) }
         return isActive ? CaptureParameterConsoleStyle.accent : SellerCameraColor.textSecondary
     }
 
-    private var fill: Color {
-        guard isAvailable else { return SellerCameraColor.controlSurfaceDisabled }
-        return isActive ? CaptureParameterConsoleStyle.accent.opacity(0.20) : SellerCameraColor.controlSurfacePrimary.opacity(0.30)
+    private var secondaryStroke: Color {
+        guard isAvailable else { return SellerCameraColor.textDisabled.opacity(0.52) }
+        return isActive ? CaptureParameterConsoleStyle.accent.opacity(0.58) : SellerCameraColor.textTertiary.opacity(0.72)
+    }
+
+    private var tertiaryStroke: Color {
+        guard isAvailable else { return SellerCameraColor.textDisabled.opacity(0.34) }
+        return isActive ? CaptureParameterConsoleStyle.accent.opacity(0.34) : SellerCameraColor.textTertiary.opacity(0.44)
+    }
+
+    private var glowColor: Color {
+        guard isAvailable, isActive else { return .clear }
+        return CaptureParameterConsoleStyle.accent.opacity(0.26)
+    }
+
+    private var primaryLine: StrokeStyle {
+        StrokeStyle(lineWidth: isActive ? 1.35 : 1.15, lineCap: .round, lineJoin: .round)
+    }
+
+    private var secondaryLine: StrokeStyle {
+        StrokeStyle(lineWidth: 0.95, lineCap: .round, lineJoin: .round)
     }
 
     var body: some View {
-        ZStack {
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size).insetBy(dx: 1.4, dy: 1.0)
             switch kind {
             case .exposureCompensation:
-                exposureGlyph
+                drawExposureGlyph(in: &context, rect: rect)
             case .whiteBalance:
-                whiteBalanceGlyph
+                drawWhiteBalanceGlyph(in: &context, rect: rect)
             case .tint:
-                tintGlyph
+                drawTintGlyph(in: &context, rect: rect)
             case .iso:
-                isoGlyph
+                drawISOGlyph(in: &context, rect: rect)
             case .shutter:
-                shutterGlyph
+                drawShutterGlyph(in: &context, rect: rect)
             default:
-                Circle()
-                    .stroke(stroke, lineWidth: metrics.standardStrokeWidth)
+                var path = Path()
+                path.move(to: CGPoint(x: rect.minX + rect.width * 0.22, y: rect.midY))
+                path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.22, y: rect.midY))
+                context.stroke(path, with: .color(primaryStroke), style: primaryLine)
             }
         }
-        .shadow(color: isActive ? CaptureParameterConsoleStyle.accent.opacity(0.28) : .clear, radius: 6, x: 0, y: 0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .shadow(color: glowColor, radius: 6, x: 0, y: 0)
     }
 
-    private var exposureGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(fill)
-            Circle()
-                .trim(from: 0.25, to: 0.75)
-                .stroke(stroke, style: StrokeStyle(lineWidth: metrics.emphasizedStrokeWidth, lineCap: .round))
-                .rotationEffect(.degrees(90))
-            Circle()
-                .stroke(stroke.opacity(0.90), lineWidth: metrics.standardStrokeWidth)
-            Rectangle()
-                .fill(stroke.opacity(0.80))
-                .frame(width: metrics.hairlineWidth, height: 12)
-            HStack(spacing: 8) {
-                Text("-")
-                Text("+")
-            }
-            .font(SellerCameraTypography.glyphMicroLabel)
-            .foregroundStyle(stroke)
+    private func drawExposureGlyph(in context: inout GraphicsContext, rect: CGRect) {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let left = rect.minX + rect.width * 0.12
+        let right = rect.maxX - rect.width * 0.12
+        let railY = rect.midY + rect.height * 0.18
+
+        var rail = Path()
+        rail.move(to: CGPoint(x: left + 4.8, y: railY))
+        rail.addLine(to: CGPoint(x: right - 4.8, y: railY))
+        context.stroke(rail, with: .color(tertiaryStroke), style: secondaryLine)
+
+        for offset in [-0.28, -0.14, 0.14, 0.28] {
+            let x = center.x + rect.width * CGFloat(offset)
+            var tick = Path()
+            tick.move(to: CGPoint(x: x, y: railY - 2.1))
+            tick.addLine(to: CGPoint(x: x, y: railY + 2.1))
+            context.stroke(tick, with: .color(abs(offset) < 0.20 ? secondaryStroke : tertiaryStroke), style: secondaryLine)
         }
+
+        var minus = Path()
+        minus.move(to: CGPoint(x: left, y: rect.midY - rect.height * 0.18))
+        minus.addLine(to: CGPoint(x: left + 5.4, y: rect.midY - rect.height * 0.18))
+        context.stroke(minus, with: .color(secondaryStroke), style: primaryLine)
+
+        var plus = Path()
+        plus.move(to: CGPoint(x: right - 5.4, y: rect.midY - rect.height * 0.18))
+        plus.addLine(to: CGPoint(x: right, y: rect.midY - rect.height * 0.18))
+        plus.move(to: CGPoint(x: right - 2.7, y: rect.midY - rect.height * 0.18 - 2.7))
+        plus.addLine(to: CGPoint(x: right - 2.7, y: rect.midY - rect.height * 0.18 + 2.7))
+        context.stroke(plus, with: .color(primaryStroke), style: primaryLine)
+
+        fillDiamond(in: &context, center: CGPoint(x: center.x, y: railY), radius: 2.45, color: primaryStroke)
+        context.stroke(
+            Path(roundedRect: CGRect(x: center.x - 4.8, y: rect.minY + rect.height * 0.16, width: 9.6, height: 5.0), cornerRadius: 2.5),
+            with: .color(secondaryStroke),
+            style: secondaryLine
+        )
     }
 
-    private var whiteBalanceGlyph: some View {
-        ZStack {
-            Circle()
-                .stroke(stroke, lineWidth: metrics.standardStrokeWidth)
-            Rectangle()
-                .fill(stroke.opacity(0.78))
-                .frame(width: metrics.hairlineWidth, height: 14)
-            HStack(spacing: 8) {
-                Circle().fill(stroke.opacity(0.42)).frame(width: metrics.standardDot, height: metrics.standardDot)
-                Circle().fill(stroke).frame(width: metrics.standardDot, height: metrics.standardDot)
-            }
+    private func drawWhiteBalanceGlyph(in context: inout GraphicsContext, rect: CGRect) {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let coolCenter = CGPoint(x: rect.minX + rect.width * 0.28, y: rect.midY)
+        let warmCenter = CGPoint(x: rect.maxX - rect.width * 0.28, y: rect.midY)
+
+        var axis = Path()
+        axis.move(to: CGPoint(x: center.x, y: rect.minY + rect.height * 0.15))
+        axis.addLine(to: CGPoint(x: center.x, y: rect.maxY - rect.height * 0.15))
+        context.stroke(axis, with: .color(primaryStroke), style: primaryLine)
+
+        var balance = Path()
+        balance.move(to: CGPoint(x: coolCenter.x + 3.3, y: coolCenter.y))
+        balance.addCurve(
+            to: CGPoint(x: warmCenter.x - 3.3, y: warmCenter.y),
+            control1: CGPoint(x: center.x - 2.6, y: rect.minY + rect.height * 0.18),
+            control2: CGPoint(x: center.x + 2.6, y: rect.maxY - rect.height * 0.18)
+        )
+        context.stroke(balance, with: .color(tertiaryStroke), style: secondaryLine)
+
+        for angle in stride(from: 0.0, to: Double.pi * 2, by: Double.pi / 3) {
+            var ray = Path()
+            ray.move(to: polar(center: coolCenter, radius: 1.2, angle: CGFloat(angle)))
+            ray.addLine(to: polar(center: coolCenter, radius: 4.0, angle: CGFloat(angle)))
+            context.stroke(ray, with: .color(secondaryStroke), style: secondaryLine)
         }
+        fillDot(in: &context, center: coolCenter, radius: 1.15, color: secondaryStroke)
+
+        fillDot(in: &context, center: warmCenter, radius: 2.0, color: primaryStroke)
+        for angle in stride(from: 0.0, to: Double.pi * 2, by: Double.pi / 4) {
+            var ray = Path()
+            ray.move(to: polar(center: warmCenter, radius: 3.1, angle: CGFloat(angle)))
+            ray.addLine(to: polar(center: warmCenter, radius: 4.4, angle: CGFloat(angle)))
+            context.stroke(ray, with: .color(secondaryStroke), style: secondaryLine)
+        }
+
+        fillDiamond(in: &context, center: center, radius: 1.55, color: primaryStroke)
     }
 
-    private var tintGlyph: some View {
-        ZStack {
-            Capsule()
-                .stroke(stroke.opacity(0.82), lineWidth: metrics.standardStrokeWidth)
-                .frame(width: 20, height: 7)
-            Rectangle()
-                .fill(stroke.opacity(0.70))
-                .frame(width: metrics.hairlineWidth, height: 14)
-            HStack(spacing: 10) {
-                Circle().fill(stroke.opacity(0.45)).frame(width: metrics.emphasizedDot, height: metrics.emphasizedDot)
-                Circle().fill(stroke).frame(width: metrics.emphasizedDot, height: metrics.emphasizedDot)
-            }
-        }
+    private func drawTintGlyph(in context: inout GraphicsContext, rect: CGRect) {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let left = CGPoint(x: rect.minX + rect.width * 0.14, y: center.y)
+        let right = CGPoint(x: rect.maxX - rect.width * 0.14, y: center.y)
+        let topY = rect.minY + rect.height * 0.22
+        let bottomY = rect.maxY - rect.height * 0.22
+
+        var upperRail = Path()
+        upperRail.move(to: CGPoint(x: left.x + 2.8, y: topY))
+        upperRail.addLine(to: CGPoint(x: center.x - 1.2, y: topY))
+        upperRail.addLine(to: CGPoint(x: center.x + 2.8, y: center.y))
+        upperRail.addLine(to: CGPoint(x: right.x - 2.8, y: center.y))
+        context.stroke(upperRail, with: .color(secondaryStroke), style: primaryLine)
+
+        var lowerRail = Path()
+        lowerRail.move(to: CGPoint(x: left.x + 2.8, y: center.y))
+        lowerRail.addLine(to: CGPoint(x: center.x - 2.8, y: center.y))
+        lowerRail.addLine(to: CGPoint(x: center.x + 1.2, y: bottomY))
+        lowerRail.addLine(to: CGPoint(x: right.x - 2.8, y: bottomY))
+        context.stroke(lowerRail, with: .color(tertiaryStroke), style: secondaryLine)
+
+        fillDiamond(in: &context, center: left, radius: 2.35, color: secondaryStroke)
+        fillDiamond(in: &context, center: right, radius: 2.35, color: primaryStroke)
+
+        let knob = CGRect(x: center.x - 2.1, y: center.y - 3.7, width: 4.2, height: 7.4)
+        context.fill(Path(roundedRect: knob, cornerRadius: 1.2), with: .color(primaryStroke))
+        context.stroke(Path(roundedRect: knob.insetBy(dx: -1.3, dy: -0.6), cornerRadius: 1.8), with: .color(tertiaryStroke), style: secondaryLine)
     }
 
-    private var isoGlyph: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .stroke(stroke, lineWidth: metrics.standardStrokeWidth)
-            VStack(spacing: 1) {
-                Text("ISO")
-                    .font(SellerCameraTypography.glyphNanoLabel)
-                    .foregroundStyle(stroke)
-                HStack(spacing: 2) {
-                    Circle().fill(stroke.opacity(0.58)).frame(width: metrics.compactDot, height: metrics.compactDot)
-                    Circle().fill(stroke.opacity(0.90)).frame(width: metrics.compactDot, height: metrics.compactDot)
-                    Circle().fill(stroke.opacity(0.58)).frame(width: metrics.compactDot, height: metrics.compactDot)
-                }
+    private func drawISOGlyph(in context: inout GraphicsContext, rect: CGRect) {
+        let chip = CGRect(
+            x: rect.minX + rect.width * 0.16,
+            y: rect.minY + rect.height * 0.10,
+            width: rect.width * 0.68,
+            height: rect.height * 0.72
+        )
+
+        for row in 0..<2 {
+            for column in 0..<3 {
+                let x = chip.minX + chip.width * (0.20 + CGFloat(column) * 0.30)
+                let y = chip.minY + chip.height * (0.28 + CGFloat(row) * 0.40)
+                let color: Color = row == 0 && column == 1 ? primaryStroke : (row + column).isMultiple(of: 2) ? secondaryStroke : tertiaryStroke
+                context.fill(
+                    Path(roundedRect: CGRect(x: x - 1.25, y: y - 1.25, width: 2.5, height: 2.5), cornerRadius: 0.8),
+                    with: .color(color)
+                )
             }
         }
+
+        var leftRail = Path()
+        leftRail.move(to: CGPoint(x: chip.minX - 1.2, y: chip.minY + 1.0))
+        leftRail.addLine(to: CGPoint(x: chip.minX - 1.2, y: chip.maxY - 1.0))
+        context.stroke(leftRail, with: .color(tertiaryStroke), style: secondaryLine)
+
+        var rightRail = Path()
+        rightRail.move(to: CGPoint(x: chip.maxX + 1.2, y: chip.minY + 1.0))
+        rightRail.addLine(to: CGPoint(x: chip.maxX + 1.2, y: chip.maxY - 1.0))
+        context.stroke(rightRail, with: .color(tertiaryStroke), style: secondaryLine)
+
+        var signal = Path()
+        signal.move(to: CGPoint(x: rect.minX + rect.width * 0.14, y: rect.maxY - rect.height * 0.08))
+        signal.addCurve(
+            to: CGPoint(x: rect.maxX - rect.width * 0.14, y: rect.maxY - rect.height * 0.08),
+            control1: CGPoint(x: rect.minX + rect.width * 0.36, y: rect.maxY + rect.height * 0.04),
+            control2: CGPoint(x: rect.maxX - rect.width * 0.36, y: rect.maxY - rect.height * 0.24)
+        )
+        context.stroke(signal, with: .color(secondaryStroke), style: secondaryLine)
     }
 
-    private var shutterGlyph: some View {
-        ZStack {
-            Circle()
-                .stroke(stroke.opacity(0.88), lineWidth: metrics.standardStrokeWidth)
-            ForEach(0..<5, id: \.self) { index in
-                Capsule()
-                    .fill(stroke.opacity(index == 0 ? 1 : 0.64))
-                    .frame(width: metrics.compactDot, height: 8)
-                    .offset(y: -3)
-                    .rotationEffect(.degrees(Double(index) * 72))
-            }
-            Circle()
-                .fill(SellerCameraPreviewStyle.contrastOutline.opacity(0.58))
-                .frame(width: metrics.emphasizedDot, height: metrics.emphasizedDot)
+    private func drawShutterGlyph(in context: inout GraphicsContext, rect: CGRect) {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) * 0.47
+        let inner = radius * 0.35
+
+        for index in 0..<6 {
+            let angle = CGFloat(index) * CGFloat.pi / 3 - CGFloat.pi / 2
+            let nextAngle = angle + CGFloat.pi / 3
+            let p1 = polar(center: center, radius: inner, angle: angle + 0.18)
+            let p2 = polar(center: center, radius: radius, angle: angle + 0.44)
+            let p3 = polar(center: center, radius: radius * 0.88, angle: nextAngle - 0.08)
+
+            var blade = Path()
+            blade.move(to: p1)
+            blade.addLine(to: p2)
+            blade.addQuadCurve(to: p3, control: polar(center: center, radius: radius * 1.05, angle: angle + 0.70))
+            context.stroke(blade, with: .color(index == 0 ? primaryStroke : secondaryStroke), style: primaryLine)
         }
+
+        fillDot(in: &context, center: center, radius: 1.35, color: SellerCameraPreviewStyle.contrastOutline.opacity(isActive ? 0.78 : 0.60))
+    }
+
+    private func fillDot(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat, color: Color) {
+        context.fill(
+            Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)),
+            with: .color(color)
+        )
+    }
+
+    private func fillDiamond(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat, color: Color) {
+        var path = Path()
+        path.move(to: CGPoint(x: center.x, y: center.y - radius))
+        path.addLine(to: CGPoint(x: center.x + radius, y: center.y))
+        path.addLine(to: CGPoint(x: center.x, y: center.y + radius))
+        path.addLine(to: CGPoint(x: center.x - radius, y: center.y))
+        path.closeSubpath()
+        context.fill(path, with: .color(color))
+    }
+
+    private func polar(center: CGPoint, radius: CGFloat, angle: CGFloat) -> CGPoint {
+        CGPoint(
+            x: center.x + CGFloat(cos(Double(angle))) * radius,
+            y: center.y + CGFloat(sin(Double(angle))) * radius
+        )
     }
 }
 

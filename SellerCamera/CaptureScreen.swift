@@ -124,6 +124,18 @@ struct CaptureScreen: View {
         shutterPrimaryAnchorDenominators.map { 1.0 / $0 }
     }
 
+    private var shutterRulerSlowestDurationSeconds: Double {
+        1.0 / 30.0
+    }
+
+    private var shutterLabelAnchorDenominators: [Double] {
+        [30, 60, 125, 250, 500, 1000, 4000]
+    }
+
+    private var shutterLabelAnchorDurations: [Double] {
+        shutterLabelAnchorDenominators.map { 1.0 / $0 }
+    }
+
     private var selectedManualFocusRulerIndex: Int {
         nearestManualFocusRulerIndex(to: manualFocusDisplayPosition, in: manualFocusRulerValues)
     }
@@ -138,7 +150,7 @@ struct CaptureScreen: View {
             VStack(spacing: 2) {
                 CaptureBottomParameterBar(
                     items: bottomParameterItems,
-                    activeKind: activeBottomParameterKind,
+                    activeKind: isBottomParameterPanelExpanded ? activeBottomParameterKind : nil,
                     onSelect: handleBottomParameterSelection
                 )
                 .padding(.horizontal, 14)
@@ -268,6 +280,7 @@ struct CaptureScreen: View {
             isManualFocusRulerPresented = false
             if isBottomParameterPanelExpanded, activeBottomParameterKind == kind {
                 isBottomParameterPanelExpanded = false
+                activeBottomParameterKind = nil
             } else {
                 activeBottomParameterKind = kind
                 isBottomParameterPanelExpanded = true
@@ -283,6 +296,7 @@ struct CaptureScreen: View {
         guard isBottomParameterPanelExpanded || isManualFocusRulerPresented || isCaptureOptionPanelPresented else { return }
         withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
             isBottomParameterPanelExpanded = false
+            activeBottomParameterKind = nil
             isManualFocusRulerPresented = false
             isCaptureOptionPanelPresented = false
         }
@@ -302,6 +316,7 @@ struct CaptureScreen: View {
             } else {
                 isCaptureOptionPanelPresented = false
                 isBottomParameterPanelExpanded = false
+                activeBottomParameterKind = nil
                 isManualFocusRulerPresented = false
                 isMoreOptionsPanelPresented = true
             }
@@ -315,6 +330,7 @@ struct CaptureScreen: View {
             } else {
                 isMoreOptionsPanelPresented = false
                 isBottomParameterPanelExpanded = false
+                activeBottomParameterKind = nil
                 isManualFocusRulerPresented = false
                 isCaptureOptionPanelPresented = true
             }
@@ -358,6 +374,7 @@ struct CaptureScreen: View {
         }
         withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
             isBottomParameterPanelExpanded = false
+            activeBottomParameterKind = nil
             isMoreOptionsPanelPresented = false
         }
 
@@ -867,15 +884,15 @@ private enum ManualFocusRulerStepResult {
 }
 
 private enum ManualFocusRulerTuning {
-    static let dragStepThreshold: CGFloat = 12
-    static let tickSpacing: CGFloat = 9
+    static let dragStepThreshold: CGFloat = 10
+    static let tickSpacing: CGFloat = 7
 
     static let normalMaxStepPerUpdate: Int = 6
     static let fineMaxStepPerUpdate: Int = 2
     static let ultraFineMaxStepPerUpdate: Int = 1
 
     static let lensPositionStep: Double = 0.005
-    static let gestureStepCooldown: TimeInterval = 0.055
+    static let gestureStepCooldown: TimeInterval = 0.045
     static let writeMinInterval: TimeInterval = 0.04
 }
 
@@ -2706,11 +2723,18 @@ private extension CaptureScreen {
     func horizontalRulerItem(for state: CaptureProfessionalParameterState) -> CaptureHorizontalParameterRulerItem {
         let ticks = horizontalRulerTicks(for: state)
         let selectedIndex = horizontalRulerSelectedIndex(for: state, ticks: ticks)
+        let majorTickIndexes = horizontalRulerMajorTickIndexes(for: state.kind, ticks: ticks, selectedIndex: selectedIndex)
         return CaptureHorizontalParameterRulerItem(
             parameter: bottomParameterItem(for: state),
             tickLabels: ticks.map(\.label),
             selectedIndex: selectedIndex,
-            majorTickIndexes: horizontalRulerMajorTickIndexes(for: state.kind, ticks: ticks, selectedIndex: selectedIndex),
+            majorTickIndexes: majorTickIndexes,
+            labelTickIndexes: horizontalRulerLabelTickIndexes(
+                for: state.kind,
+                ticks: ticks,
+                selectedIndex: selectedIndex,
+                majorTickIndexes: majorTickIndexes
+            ),
             controlKind: horizontalRulerControlKind(for: state),
             isRulerInteractive: (
                 (state.kind == .exposureCompensation && state.isAdjustable) ||
@@ -2816,6 +2840,25 @@ private extension CaptureScreen {
         return indexes
     }
 
+    private func horizontalRulerLabelTickIndexes(
+        for kind: CaptureProfessionalParameterKind,
+        ticks: [HorizontalRulerTick],
+        selectedIndex: Int,
+        majorTickIndexes: Set<Int>
+    ) -> Set<Int> {
+        guard !ticks.isEmpty else { return [] }
+        var indexes: Set<Int> = [0, max(0, ticks.count - 1), min(max(0, selectedIndex), ticks.count - 1)]
+
+        switch kind {
+        case .shutter:
+            addMajorIndexes(for: shutterLabelAnchorDurations, ticks: ticks, into: &indexes)
+        default:
+            indexes.formUnion(majorTickIndexes)
+        }
+
+        return indexes
+    }
+
     private func addMajorIndexes(for values: [Double], ticks: [HorizontalRulerTick], into indexes: inout Set<Int>) {
         for value in values {
             guard let nearest = ticks.enumerated().min(by: { lhs, rhs in
@@ -2843,15 +2886,15 @@ private extension CaptureScreen {
     private func rulerDragThreshold(for kind: CaptureProfessionalParameterKind) -> CGFloat {
         switch kind {
         case .exposureCompensation:
-            return 42
+            return 36
         case .whiteBalance:
-            return 28
+            return 20
         case .tint:
-            return 26
+            return 23
         case .iso:
-            return 40
+            return 30
         case .shutter:
-            return 44
+            return 36
         default:
             return 42
         }
@@ -2860,7 +2903,7 @@ private extension CaptureScreen {
     private func rulerMaximumStepCount(for kind: CaptureProfessionalParameterKind) -> Int {
         switch kind {
         case .whiteBalance, .iso:
-            return 2
+            return 4
         case .exposureCompensation, .tint:
             return 1
         case .shutter:
@@ -2873,7 +2916,7 @@ private extension CaptureScreen {
     private func rulerTickSpacing(for kind: CaptureProfessionalParameterKind) -> CGFloat {
         switch kind {
         case .shutter:
-            return 18
+            return 24
         case .whiteBalance:
             return 14
         case .tint:
@@ -3315,7 +3358,7 @@ private extension CaptureScreen {
         }
 
         let targetISO = values[takeoverTarget.index]
-        let valueTolerance: Double = 1.0
+        let valueTolerance: Double = 0.25
         if !takeoverTarget.forceWrite,
            abs(targetISO - (pendingISOWheelValue ?? runtimeISO)) < valueTolerance {
             logISOWheel("skip ISO write duplicated tick \(formattedISOTick(targetISO))")
@@ -3538,7 +3581,34 @@ private extension CaptureScreen {
         values.append(Double(lowerBound))
         values.append(Double(upperBound))
         values.append(Double(cameraRuntime.currentWhiteBalanceTemperature.rounded()))
-        return Array(Set(values)).sorted()
+        return deduplicatedWhiteBalanceWheelValues(values, snapStep: Double(snapStep))
+    }
+
+    private func deduplicatedWhiteBalanceWheelValues(_ values: [Double], snapStep: Double) -> [Double] {
+        let mergeDistance = max(1, snapStep * 0.5)
+        let sortedValues = values
+            .filter { $0.isFinite }
+            .sorted()
+        var result: [Double] = []
+        for value in sortedValues {
+            guard let lastValue = result.last else {
+                result.append(value)
+                continue
+            }
+
+            guard abs(value - lastValue) < mergeDistance else {
+                result.append(value)
+                continue
+            }
+
+            let currentDistance = abs(value.remainder(dividingBy: snapStep))
+            let lastDistance = abs(lastValue.remainder(dividingBy: snapStep))
+            if currentDistance < lastDistance ||
+                (abs(currentDistance - lastDistance) < 0.0001 && value > lastValue) {
+                result[result.count - 1] = value
+            }
+        }
+        return result
     }
 
     private func tintWheelValues() -> [Double] {
@@ -3573,30 +3643,57 @@ private extension CaptureScreen {
         var values = preferredISOValues
             .filter { $0 >= minISO - 0.01 && $0 <= maxISO + 0.01 }
             .map { $0.rounded() }
-        values.append(minISO.rounded())
-        values.append(maxISO.rounded())
-        values.append(Double(cameraRuntime.currentISOValue.rounded()))
-        values.append(Double(cameraRuntime.currentManualISOValue.rounded()))
+        values.append(minISO)
+        values.append(maxISO)
+        values.append(max(minISO, min(maxISO, Double(cameraRuntime.currentISOValue))))
+        values.append(max(minISO, min(maxISO, Double(cameraRuntime.currentManualISOValue))))
 
-        let uniqueSorted = Array(Set(values)).sorted()
-        return uniqueSorted
+        let boundedValues = values.filter { value in
+            value.isFinite && value >= minISO - 0.01 && value <= maxISO + 0.01
+        }
+        return deduplicatedISOWheelValues(boundedValues)
+    }
+
+    private func deduplicatedISOWheelValues(_ values: [Double]) -> [Double] {
+        let sortedValues = values.sorted()
+        var result: [Double] = []
+        for value in sortedValues {
+            guard let lastValue = result.last else {
+                result.append(value)
+                continue
+            }
+
+            guard abs(value - lastValue) < 1.0 else {
+                result.append(value)
+                continue
+            }
+
+            let currentDistance = abs(value - value.rounded())
+            let lastDistance = abs(lastValue - lastValue.rounded())
+            if currentDistance < lastDistance ||
+                (abs(currentDistance - lastDistance) < 0.0001 && value > lastValue) {
+                result[result.count - 1] = value
+            }
+        }
+        return result
     }
 
     private func shutterWheelDurationValues() -> [Double] {
         let minSeconds = cameraRuntime.minimumShutterDurationSeconds
         let maxSeconds = cameraRuntime.maximumShutterDurationSeconds
-        guard minSeconds.isFinite, maxSeconds.isFinite, minSeconds > 0, maxSeconds > minSeconds else {
-            let fallback = max(0.00025, cameraRuntime.currentManualShutterDurationSeconds)
+        let slowestVisibleSeconds = min(maxSeconds, shutterRulerSlowestDurationSeconds)
+        guard minSeconds.isFinite, maxSeconds.isFinite, slowestVisibleSeconds.isFinite,
+              minSeconds > 0, slowestVisibleSeconds > minSeconds else {
+            let fallback = max(0.00025, min(shutterRulerSlowestDurationSeconds, cameraRuntime.currentManualShutterDurationSeconds))
             return [fallback]
         }
 
-        // Keep the ruler on product-photo shutter anchors while preserving activeFormat endpoints.
-        var values: [Double] = [maxSeconds]
+        var values: [Double] = [slowestVisibleSeconds]
         values.append(contentsOf: shutterPrimaryAnchorDurations.filter { anchor in
-            anchor >= minSeconds && anchor <= maxSeconds
+            anchor >= minSeconds && anchor <= slowestVisibleSeconds
         })
         values.append(minSeconds)
-        values.append(maxSeconds)
+        values.append(slowestVisibleSeconds)
         if let pendingShutterWheelDurationSeconds, pendingShutterWheelDurationSeconds.isFinite, pendingShutterWheelDurationSeconds > 0 {
             values.append(pendingShutterWheelDurationSeconds)
         }
@@ -3608,7 +3705,7 @@ private extension CaptureScreen {
         }
         let clampedValues = values.compactMap { value -> Double? in
             guard value.isFinite, value > 0 else { return nil }
-            return max(minSeconds, min(maxSeconds, value))
+            return max(minSeconds, min(slowestVisibleSeconds, value))
         }
         return deduplicatedShutterDurations(clampedValues).sorted(by: >)
     }

@@ -613,8 +613,8 @@ struct SellerCameraRulerInteractionProfile {
 
     static let discreteTechnical = SellerCameraRulerInteractionProfile(
         pointsPerStep: 32,
-        sensitivity: 1.30,
-        fineSensitivity: 0.74,
+        sensitivity: 1.72,
+        fineSensitivity: 0.82,
         ultraFineSensitivity: 0.44,
         maximumFlingSteps: 2,
         velocityThreshold: 64,
@@ -623,11 +623,11 @@ struct SellerCameraRulerInteractionProfile {
         allowsContinuousValue: false,
         inertiaScale: 0.38,
         minimumDragDeadZone: 5,
-        maximumStepsPerUpdate: 2,
-        stepCooldown: 0.075,
+        maximumStepsPerUpdate: 4,
+        stepCooldown: 0.05,
         hapticMinimumInterval: 0.09,
         hapticPolicy: .majorTick,
-        maximumVelocityMultiplier: 1.14
+        maximumVelocityMultiplier: 1.22
     )
 
     static let ratioOutputQuality = SellerCameraRulerInteractionProfile(
@@ -650,27 +650,27 @@ struct SellerCameraRulerInteractionProfile {
     )
 
     static let shutterTechnical = SellerCameraRulerInteractionProfile(
-        pointsPerStep: 34,
-        sensitivity: 1.42,
-        fineSensitivity: 0.62,
-        ultraFineSensitivity: 0.30,
-        maximumFlingSteps: 2,
-        velocityThreshold: 70,
+        pointsPerStep: 36,
+        sensitivity: 1.36,
+        fineSensitivity: 0.55,
+        ultraFineSensitivity: 0.26,
+        maximumFlingSteps: 1,
+        velocityThreshold: 76,
         boundaryResistance: 0.34,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: false,
-        inertiaScale: 0.46,
+        inertiaScale: 0.32,
         minimumDragDeadZone: 6,
         maximumStepsPerUpdate: 1,
-        stepCooldown: 0.095,
+        stepCooldown: 0.075,
         hapticMinimumInterval: 0.11,
         hapticPolicy: .majorTick,
-        maximumVelocityMultiplier: 1.10
+        maximumVelocityMultiplier: 1.08
     )
 
     static let exposurePrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 34,
-        sensitivity: 1.38,
+        sensitivity: 1.58,
         fineSensitivity: 0.62,
         ultraFineSensitivity: 0.30,
         maximumFlingSteps: 1,
@@ -681,15 +681,15 @@ struct SellerCameraRulerInteractionProfile {
         inertiaScale: 0.24,
         minimumDragDeadZone: 6,
         maximumStepsPerUpdate: 1,
-        stepCooldown: 0.075,
+        stepCooldown: 0.06,
         hapticMinimumInterval: 0.10,
         hapticPolicy: .semanticAnchor,
-        maximumVelocityMultiplier: 1.08
+        maximumVelocityMultiplier: 1.12
     )
 
     static let tintPrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 34,
-        sensitivity: 1.50,
+        sensitivity: 1.68,
         fineSensitivity: 0.66,
         ultraFineSensitivity: 0.32,
         maximumFlingSteps: 2,
@@ -700,29 +700,29 @@ struct SellerCameraRulerInteractionProfile {
         inertiaScale: 0.34,
         minimumDragDeadZone: 5,
         maximumStepsPerUpdate: 2,
-        stepCooldown: 0.065,
+        stepCooldown: 0.055,
         hapticMinimumInterval: 0.095,
         hapticPolicy: .majorTick,
-        maximumVelocityMultiplier: 1.14
+        maximumVelocityMultiplier: 1.18
     )
 
     static let manualFocusPrecision = SellerCameraRulerInteractionProfile(
-        pointsPerStep: 18,
-        sensitivity: 2.15,
-        fineSensitivity: 0.58,
-        ultraFineSensitivity: 0.22,
+        pointsPerStep: 20,
+        sensitivity: 2.05,
+        fineSensitivity: 0.50,
+        ultraFineSensitivity: 0.20,
         maximumFlingSteps: 2,
-        velocityThreshold: 56,
+        velocityThreshold: 64,
         boundaryResistance: 0.38,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: true,
-        inertiaScale: 0.20,
-        minimumDragDeadZone: 4,
+        inertiaScale: 0.16,
+        minimumDragDeadZone: 5,
         maximumStepsPerUpdate: 6,
-        stepCooldown: 0.055,
+        stepCooldown: 0.045,
         hapticMinimumInterval: 0.11,
-        hapticPolicy: .semanticAnchor,
-        maximumVelocityMultiplier: 1.12
+        hapticPolicy: .quiet,
+        maximumVelocityMultiplier: 1.20
     )
 
     static let zoomPrecision = SellerCameraRulerInteractionProfile(
