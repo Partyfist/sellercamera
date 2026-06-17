@@ -521,6 +521,14 @@ struct SellerCameraRulerMetrics {
     )
 }
 
+enum SellerCameraRulerHapticPolicy: Equatable {
+    case everyAcceptedStep
+    case majorTick
+    case semanticAnchor
+    case discreteSelection
+    case quiet
+}
+
 struct SellerCameraRulerInteractionProfile {
     let pointsPerStep: CGFloat
     let sensitivity: CGFloat
@@ -532,31 +540,94 @@ struct SellerCameraRulerInteractionProfile {
     let snapAnimation: Animation
     let allowsContinuousValue: Bool
     let inertiaScale: CGFloat
+    let minimumDragDeadZone: CGFloat
+    let maximumStepsPerUpdate: Int
+    let stepCooldown: TimeInterval
+    let hapticMinimumInterval: TimeInterval
+    let hapticPolicy: SellerCameraRulerHapticPolicy
+    let fineModeLiftThreshold: CGFloat
+    let ultraFineModeLiftThreshold: CGFloat
+    let maximumVelocityMultiplier: CGFloat
+    let inertiaProjectionDuration: TimeInterval
+
+    init(
+        pointsPerStep: CGFloat,
+        sensitivity: CGFloat,
+        fineSensitivity: CGFloat,
+        ultraFineSensitivity: CGFloat,
+        maximumFlingSteps: Int,
+        velocityThreshold: CGFloat,
+        boundaryResistance: CGFloat,
+        snapAnimation: Animation,
+        allowsContinuousValue: Bool,
+        inertiaScale: CGFloat,
+        minimumDragDeadZone: CGFloat = 4,
+        maximumStepsPerUpdate: Int = 1,
+        stepCooldown: TimeInterval = 0.07,
+        hapticMinimumInterval: TimeInterval = 0.09,
+        hapticPolicy: SellerCameraRulerHapticPolicy = .majorTick,
+        fineModeLiftThreshold: CGFloat = 42,
+        ultraFineModeLiftThreshold: CGFloat = 92,
+        maximumVelocityMultiplier: CGFloat = 1.18,
+        inertiaProjectionDuration: TimeInterval = 0.12
+    ) {
+        self.pointsPerStep = pointsPerStep
+        self.sensitivity = sensitivity
+        self.fineSensitivity = fineSensitivity
+        self.ultraFineSensitivity = ultraFineSensitivity
+        self.maximumFlingSteps = maximumFlingSteps
+        self.velocityThreshold = velocityThreshold
+        self.boundaryResistance = boundaryResistance
+        self.snapAnimation = snapAnimation
+        self.allowsContinuousValue = allowsContinuousValue
+        self.inertiaScale = inertiaScale
+        self.minimumDragDeadZone = minimumDragDeadZone
+        self.maximumStepsPerUpdate = maximumStepsPerUpdate
+        self.stepCooldown = stepCooldown
+        self.hapticMinimumInterval = hapticMinimumInterval
+        self.hapticPolicy = hapticPolicy
+        self.fineModeLiftThreshold = fineModeLiftThreshold
+        self.ultraFineModeLiftThreshold = ultraFineModeLiftThreshold
+        self.maximumVelocityMultiplier = maximumVelocityMultiplier
+        self.inertiaProjectionDuration = inertiaProjectionDuration
+    }
 
     static let continuousPrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 34,
-        sensitivity: 1.8,
-        fineSensitivity: 0.75,
-        ultraFineSensitivity: 0.35,
+        sensitivity: 1.55,
+        fineSensitivity: 0.68,
+        ultraFineSensitivity: 0.32,
         maximumFlingSteps: 2,
         velocityThreshold: 48,
         boundaryResistance: 0.38,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: true,
-        inertiaScale: 0.50
+        inertiaScale: 0.42,
+        minimumDragDeadZone: 5,
+        maximumStepsPerUpdate: 1,
+        stepCooldown: 0.065,
+        hapticMinimumInterval: 0.09,
+        hapticPolicy: .majorTick,
+        maximumVelocityMultiplier: 1.16
     )
 
     static let discreteTechnical = SellerCameraRulerInteractionProfile(
-        pointsPerStep: 34,
-        sensitivity: 1.4,
-        fineSensitivity: 0.82,
-        ultraFineSensitivity: 0.50,
-        maximumFlingSteps: 4,
-        velocityThreshold: 56,
+        pointsPerStep: 32,
+        sensitivity: 1.30,
+        fineSensitivity: 0.74,
+        ultraFineSensitivity: 0.44,
+        maximumFlingSteps: 2,
+        velocityThreshold: 64,
         boundaryResistance: 0.34,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: false,
-        inertiaScale: 0.75
+        inertiaScale: 0.38,
+        minimumDragDeadZone: 5,
+        maximumStepsPerUpdate: 2,
+        stepCooldown: 0.075,
+        hapticMinimumInterval: 0.09,
+        hapticPolicy: .majorTick,
+        maximumVelocityMultiplier: 1.14
     )
 
     static let ratioOutputQuality = SellerCameraRulerInteractionProfile(
@@ -564,77 +635,113 @@ struct SellerCameraRulerInteractionProfile {
         sensitivity: 1.0,
         fineSensitivity: 1.0,
         ultraFineSensitivity: 1.0,
-        maximumFlingSteps: 2,
-        velocityThreshold: 52,
+        maximumFlingSteps: 1,
+        velocityThreshold: 58,
         boundaryResistance: 0.34,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: false,
-        inertiaScale: 0.55
+        inertiaScale: 0.28,
+        minimumDragDeadZone: 6,
+        maximumStepsPerUpdate: 1,
+        stepCooldown: 0.08,
+        hapticMinimumInterval: 0.11,
+        hapticPolicy: .discreteSelection,
+        maximumVelocityMultiplier: 1.0
     )
 
     static let shutterTechnical = SellerCameraRulerInteractionProfile(
         pointsPerStep: 34,
-        sensitivity: 1.8,
-        fineSensitivity: 0.75,
-        ultraFineSensitivity: 0.35,
-        maximumFlingSteps: 5,
-        velocityThreshold: 60,
+        sensitivity: 1.42,
+        fineSensitivity: 0.62,
+        ultraFineSensitivity: 0.30,
+        maximumFlingSteps: 2,
+        velocityThreshold: 70,
         boundaryResistance: 0.34,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: false,
-        inertiaScale: 1.0
+        inertiaScale: 0.46,
+        minimumDragDeadZone: 6,
+        maximumStepsPerUpdate: 1,
+        stepCooldown: 0.095,
+        hapticMinimumInterval: 0.11,
+        hapticPolicy: .majorTick,
+        maximumVelocityMultiplier: 1.10
     )
 
     static let exposurePrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 34,
-        sensitivity: 1.8,
-        fineSensitivity: 0.75,
-        ultraFineSensitivity: 0.35,
+        sensitivity: 1.38,
+        fineSensitivity: 0.62,
+        ultraFineSensitivity: 0.30,
         maximumFlingSteps: 1,
-        velocityThreshold: 42,
+        velocityThreshold: 54,
         boundaryResistance: 0.38,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: true,
-        inertiaScale: 0.42
+        inertiaScale: 0.24,
+        minimumDragDeadZone: 6,
+        maximumStepsPerUpdate: 1,
+        stepCooldown: 0.075,
+        hapticMinimumInterval: 0.10,
+        hapticPolicy: .semanticAnchor,
+        maximumVelocityMultiplier: 1.08
     )
 
     static let tintPrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 34,
-        sensitivity: 1.8,
-        fineSensitivity: 0.75,
-        ultraFineSensitivity: 0.35,
+        sensitivity: 1.50,
+        fineSensitivity: 0.66,
+        ultraFineSensitivity: 0.32,
         maximumFlingSteps: 2,
-        velocityThreshold: 44,
+        velocityThreshold: 58,
         boundaryResistance: 0.38,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: true,
-        inertiaScale: 0.55
+        inertiaScale: 0.34,
+        minimumDragDeadZone: 5,
+        maximumStepsPerUpdate: 2,
+        stepCooldown: 0.065,
+        hapticMinimumInterval: 0.095,
+        hapticPolicy: .majorTick,
+        maximumVelocityMultiplier: 1.14
     )
 
     static let manualFocusPrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 18,
-        sensitivity: 2.4,
-        fineSensitivity: 0.65,
+        sensitivity: 2.15,
+        fineSensitivity: 0.58,
         ultraFineSensitivity: 0.22,
         maximumFlingSteps: 2,
-        velocityThreshold: 42,
+        velocityThreshold: 56,
         boundaryResistance: 0.38,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: true,
-        inertiaScale: 0.24
+        inertiaScale: 0.20,
+        minimumDragDeadZone: 4,
+        maximumStepsPerUpdate: 6,
+        stepCooldown: 0.055,
+        hapticMinimumInterval: 0.11,
+        hapticPolicy: .semanticAnchor,
+        maximumVelocityMultiplier: 1.12
     )
 
     static let zoomPrecision = SellerCameraRulerInteractionProfile(
         pointsPerStep: 96,
-        sensitivity: 3.0,
-        fineSensitivity: 0.90,
-        ultraFineSensitivity: 0.38,
+        sensitivity: 2.75,
+        fineSensitivity: 0.82,
+        ultraFineSensitivity: 0.34,
         maximumFlingSteps: 2,
-        velocityThreshold: 44,
+        velocityThreshold: 62,
         boundaryResistance: 0.38,
         snapAnimation: SellerCameraMotionToken.snap,
         allowsContinuousValue: true,
-        inertiaScale: 0.22
+        inertiaScale: 0.18,
+        minimumDragDeadZone: 5,
+        maximumStepsPerUpdate: 1,
+        stepCooldown: 0.05,
+        hapticMinimumInterval: 0.13,
+        hapticPolicy: .semanticAnchor,
+        maximumVelocityMultiplier: 1.10
     )
 }
 
@@ -654,6 +761,131 @@ extension SellerCameraRulerInteractionProfile {
         default:
             return .continuousPrecision
         }
+    }
+
+    func scrubSensitivity(forVerticalTranslation verticalTranslation: CGFloat, predictedDelta: CGFloat = 0) -> CGFloat {
+        let lift = max(0, -verticalTranslation)
+        if lift > ultraFineModeLiftThreshold { return ultraFineSensitivity }
+        if lift > fineModeLiftThreshold { return fineSensitivity }
+        return sensitivity * velocityMultiplier(for: predictedDelta)
+    }
+
+    func scrubSensitivity(forVerticalTranslation verticalTranslation: CGFloat, velocity: CGFloat) -> CGFloat {
+        scrubSensitivity(
+            forVerticalTranslation: verticalTranslation,
+            predictedDelta: projectedDelta(forVelocity: velocity)
+        )
+    }
+
+    func effectivePointsPerStep(
+        baseThreshold: CGFloat,
+        verticalTranslation: CGFloat,
+        predictedDelta: CGFloat = 0
+    ) -> (threshold: CGFloat, sensitivity: CGFloat) {
+        let resolvedSensitivity = max(0.05, scrubSensitivity(forVerticalTranslation: verticalTranslation, predictedDelta: predictedDelta))
+        let threshold = max(minimumDragDeadZone, max(1, baseThreshold) / resolvedSensitivity)
+        return (threshold, resolvedSensitivity)
+    }
+
+    func effectivePointsPerStep(
+        baseThreshold: CGFloat,
+        verticalTranslation: CGFloat,
+        velocity: CGFloat
+    ) -> (threshold: CGFloat, sensitivity: CGFloat) {
+        effectivePointsPerStep(
+            baseThreshold: baseThreshold,
+            verticalTranslation: verticalTranslation,
+            predictedDelta: projectedDelta(forVelocity: velocity)
+        )
+    }
+
+    func dragStepInfo(
+        delta: CGFloat,
+        baseThreshold: CGFloat,
+        verticalTranslation: CGFloat,
+        predictedDelta: CGFloat = 0
+    ) -> (rawStepCount: Int, effectiveThreshold: CGFloat, sensitivity: CGFloat) {
+        let resolved = effectivePointsPerStep(
+            baseThreshold: baseThreshold,
+            verticalTranslation: verticalTranslation,
+            predictedDelta: predictedDelta
+        )
+        guard abs(delta) >= resolved.threshold else {
+            return (0, resolved.threshold, resolved.sensitivity)
+        }
+        let rawStepCount = Int((delta / resolved.threshold).rounded(.towardZero))
+        return (rawStepCount, resolved.threshold, resolved.sensitivity)
+    }
+
+    func dragStepInfo(
+        delta: CGFloat,
+        baseThreshold: CGFloat,
+        verticalTranslation: CGFloat,
+        velocity: CGFloat
+    ) -> (rawStepCount: Int, effectiveThreshold: CGFloat, sensitivity: CGFloat) {
+        dragStepInfo(
+            delta: delta,
+            baseThreshold: baseThreshold,
+            verticalTranslation: verticalTranslation,
+            predictedDelta: projectedDelta(forVelocity: velocity)
+        )
+    }
+
+    func cappedStepCount(_ stepCount: Int, externalMaximum: Int? = nil) -> Int {
+        let maximum = max(1, min(maximumStepsPerUpdate, externalMaximum ?? maximumStepsPerUpdate))
+        return max(-maximum, min(maximum, stepCount))
+    }
+
+    func inertialRawStepCount(
+        translationWidth: CGFloat,
+        predictedEndTranslationWidth: CGFloat,
+        baseThreshold: CGFloat,
+        currentSensitivity: CGFloat
+    ) -> Int {
+        guard currentSensitivity >= 1 else { return 0 }
+        let predictedDelta = predictedEndTranslationWidth - translationWidth
+        guard abs(predictedDelta) >= velocityThreshold else { return 0 }
+        let rawStepCount = Int(((predictedDelta * inertiaScale) / max(1, baseThreshold)).rounded(.towardZero))
+        return max(-maximumFlingSteps, min(maximumFlingSteps, rawStepCount))
+    }
+
+    func inertialRawStepCount(
+        releaseVelocity: CGFloat,
+        baseThreshold: CGFloat,
+        currentSensitivity: CGFloat
+    ) -> Int {
+        guard currentSensitivity >= 1 else { return 0 }
+        let projectedDelta = projectedDelta(forVelocity: releaseVelocity)
+        guard abs(projectedDelta) >= velocityThreshold else { return 0 }
+        let rawStepCount = Int(((projectedDelta * inertiaScale) / max(1, baseThreshold)).rounded(.towardZero))
+        return max(-maximumFlingSteps, min(maximumFlingSteps, rawStepCount))
+    }
+
+    func shouldTriggerHaptic(step: Int, selectedIndex: Int, majorTickIndexes: Set<Int>) -> Bool {
+        guard step != 0 else { return false }
+        switch hapticPolicy {
+        case .everyAcceptedStep, .discreteSelection:
+            return true
+        case .majorTick:
+            return abs(step) > 1 || majorTickIndexes.contains(selectedIndex)
+        case .semanticAnchor:
+            return majorTickIndexes.contains(selectedIndex)
+        case .quiet:
+            return false
+        }
+    }
+
+    private func velocityMultiplier(for predictedDelta: CGFloat) -> CGFloat {
+        guard maximumVelocityMultiplier > 1 else { return 1 }
+        let speed = abs(predictedDelta)
+        guard speed > velocityThreshold else { return 1 }
+        let progress = min(1, (speed - velocityThreshold) / max(velocityThreshold, 1))
+        let easedProgress = progress * progress * (3 - 2 * progress)
+        return 1 + (maximumVelocityMultiplier - 1) * easedProgress
+    }
+
+    private func projectedDelta(forVelocity velocity: CGFloat) -> CGFloat {
+        velocity * CGFloat(inertiaProjectionDuration)
     }
 }
 

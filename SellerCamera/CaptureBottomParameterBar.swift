@@ -356,7 +356,13 @@ private struct CaptureHorizontalParameterRuler: View {
     @State private var lastRulerStepAppliedAt: Date = .distantPast
     @State private var lastRulerDragDirection: Int = 0
     @State private var isInertiaInProgress = false
+    @State private var inertiaGeneration: UInt64 = 0
+    @State private var gestureStartedAt: Date?
+    @State private var lastDragSampleTranslation: CGFloat = 0
+    @State private var lastDragSampleAt: Date?
+    @State private var filteredDragVelocity: CGFloat = 0
     @State private var lastScrubSensitivity: CGFloat = 1
+    @State private var lastDiagnosticLogAt: Date = .distantPast
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -391,11 +397,10 @@ private struct CaptureHorizontalParameterRuler: View {
             .frame(height: 68)
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 4)
+                DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard item.isRulerInteractive, item.parameter.isAvailable else { return }
-                        dragOffset = value.translation.width - lastDragStepTranslation
-                        handleRulerDrag(value.translation)
+                        handleRulerDrag(value)
                     }
                     .onEnded { value in
                         finishRulerDrag(
@@ -451,6 +456,17 @@ private struct CaptureHorizontalParameterRuler: View {
         .accessibilityLabel("\(item.parameter.title) 刻度")
         .accessibilityValue(item.parameter.valueText)
         .accessibilityHint(item.isRulerInteractive ? "左右拖动调节，手指上移可精细微调" : "当前刻度不可调")
+        .accessibilityAdjustableAction { direction in
+            guard item.isRulerInteractive, item.parameter.isAvailable else { return }
+            switch direction {
+            case .increment:
+                applyAccessibilityStep(1)
+            case .decrement:
+                applyAccessibilityStep(-1)
+            default:
+                break
+            }
+        }
     }
 
     private var rulerTicks: some View {
@@ -535,35 +551,58 @@ private struct CaptureHorizontalParameterRuler: View {
         return SellerCameraColor.textTertiary
     }
 
-    private func handleRulerDrag(_ translation: CGSize) {
+    private func handleRulerDrag(_ value: DragGesture.Value) {
         guard item.isRulerInteractive, item.parameter.isAvailable else { return }
+        if isInertiaInProgress {
+            inertiaGeneration &+= 1
+            isInertiaInProgress = false
+        }
         if !isDragInProgress {
             isDragInProgress = true
+            gestureStartedAt = Date()
+            resetVelocityTracking(translationWidth: value.translation.width, at: gestureStartedAt ?? Date())
+            inertiaGeneration &+= 1
             onDragStateChange(true)
         }
 
         let threshold = max(18, item.dragThreshold)
-        let maximumStepCount = max(1, item.maximumStepCount)
-        let sensitivity = scrubSensitivity(for: translation.height)
-        lastScrubSensitivity = sensitivity
-        let effectiveThreshold = threshold / sensitivity
+        let translation = value.translation
         let translationWidth = translation.width
+        let now = Date()
+        let velocity = updateVelocityTracking(translationWidth: translationWidth, at: now)
         let delta = translationWidth - lastDragStepTranslation
-        let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
+        let stepInfo = interactionProfile.dragStepInfo(
+            delta: delta,
+            baseThreshold: threshold,
+            verticalTranslation: translation.height,
+            velocity: velocity
+        )
+        lastScrubSensitivity = stepInfo.sensitivity
+        dragOffset = translationWidth - lastDragStepTranslation
+        logRulerDiagnosticIfNeeded(
+            state: "dragging",
+            rawTranslation: translationWidth,
+            incrementalTranslation: delta,
+            velocity: velocity,
+            sensitivity: stepInfo.sensitivity,
+            projectedSteps: projectedSteps(forVelocity: velocity, threshold: threshold),
+            snappedIndex: item.selectedIndex
+        )
+        let rawStepCount = stepInfo.rawStepCount
         guard rawStepCount != 0 else { return }
 
-        let now = Date()
         let rawDirection = rawStepCount > 0 ? 1 : -1
         if lastRulerDragDirection != 0, rawDirection != lastRulerDragDirection {
             lastRulerStepAppliedAt = .distantPast
         }
         lastRulerDragDirection = rawDirection
         // Consume movement even when cooldown or boundary prevents a value change, so edge drags do not leave residual translation.
-        // Fine scrubbing raises the consumption threshold while keeping boundary movement consumed.
-        lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
+        // Fine scrubbing and velocity-aware profiles raise/lower the consumption threshold while keeping boundary movement consumed.
+        lastDragStepTranslation += CGFloat(rawStepCount) * stepInfo.effectiveThreshold
+        dragOffset = translationWidth - lastDragStepTranslation
         guard now.timeIntervalSince(lastRulerStepAppliedAt) >= stepCooldown else { return }
 
-        let clampedStepCount = max(-maximumStepCount, min(maximumStepCount, -rawStepCount))
+        let clampedStepCount = -interactionProfile.cappedStepCount(rawStepCount, externalMaximum: item.maximumStepCount)
 #if DEBUG
         if item.parameter.kind == .whiteBalance {
             let autoState: String
@@ -585,7 +624,7 @@ private struct CaptureHorizontalParameterRuler: View {
     }
 
     private var stepCooldown: TimeInterval {
-        item.parameter.kind == .shutter ? 0.12 : 0.08
+        interactionProfile.stepCooldown
     }
 
     private func finishRulerDrag(
@@ -593,24 +632,32 @@ private struct CaptureHorizontalParameterRuler: View {
         predictedEndTranslationWidth: CGFloat?,
         animateOffset: Bool
     ) {
+        let didScheduleInertia: Bool
         if item.supportsInertia,
            item.isRulerInteractive,
            item.parameter.isAvailable,
            let translationWidth,
-           let predictedEndTranslationWidth {
-            applyInertiaStep(
+           predictedEndTranslationWidth != nil {
+            didScheduleInertia = applyInertiaStep(
                 translationWidth: translationWidth,
-                predictedEndTranslationWidth: predictedEndTranslationWidth
+                releaseVelocity: filteredDragVelocity
             )
+        } else {
+            inertiaGeneration &+= 1
+            didScheduleInertia = false
         }
         if isDragInProgress {
             onDragStateChange(false)
         }
         isDragInProgress = false
-        isInertiaInProgress = false
+        isInertiaInProgress = didScheduleInertia
         lastScrubSensitivity = 1
         lastDragStepTranslation = 0
         lastRulerDragDirection = 0
+        gestureStartedAt = nil
+        lastDragSampleAt = nil
+        lastDragSampleTranslation = 0
+        filteredDragVelocity = 0
         if animateOffset {
             withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 dragOffset = 0
@@ -620,56 +667,159 @@ private struct CaptureHorizontalParameterRuler: View {
         }
     }
 
-    private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
-        guard lastScrubSensitivity >= 1 else { return }
+    private func applyInertiaStep(translationWidth: CGFloat, releaseVelocity: CGFloat) -> Bool {
         let threshold = max(18, item.dragThreshold)
-        let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let rawStepCount = Int(((predictedDelta * inertiaScale) / threshold).rounded(.towardZero))
-        guard rawStepCount != 0 else { return }
+        let rawStepCount = interactionProfile.inertialRawStepCount(
+            releaseVelocity: releaseVelocity,
+            baseThreshold: threshold,
+            currentSensitivity: lastScrubSensitivity
+        )
+        guard rawStepCount != 0 else { return false }
 
-        let maximumStepCount = inertiaMaximumStepCount
-        let inertiaStepCount = max(-maximumStepCount, min(maximumStepCount, -rawStepCount))
-        guard inertiaStepCount != 0 else { return }
+        let inertiaStepCount = -rawStepCount
+        guard inertiaStepCount != 0 else { return false }
 
+        let generation = inertiaGeneration &+ 1
+        inertiaGeneration = generation
         isInertiaInProgress = true
+        logRulerDiagnosticIfNeeded(
+            state: "decelerating",
+            rawTranslation: translationWidth,
+            incrementalTranslation: 0,
+            velocity: releaseVelocity,
+            sensitivity: lastScrubSensitivity,
+            projectedSteps: inertiaStepCount,
+            snappedIndex: max(0, min(max(0, item.tickLabels.count - 1), item.selectedIndex + inertiaStepCount))
+        )
 #if DEBUG
         if item.parameter.kind == .shutter {
             let direction = rawStepCount > 0 ? 1 : -1
             print("[CaptureShutterInertia] dragDirection=\(direction) previousTickIndex=\(item.selectedIndex) targetTickIndex=step:\(inertiaStepCount) minTickIndex=0 maxTickIndex=\(max(0, item.tickLabels.count - 1)) clampedTickIndex=pending isDragging=false isInertia=true skipReason=none writeReason=inertiaFinalCommit")
         }
 #endif
-        let didApply = onWheelStep(item.parameter.kind, inertiaStepCount)
-        if didApply {
-            triggerGearHapticIfNeeded(step: inertiaStepCount, at: Date())
+        let direction = inertiaStepCount > 0 ? 1 : -1
+        let stepTotal = abs(inertiaStepCount)
+        let interval = max(0.035, interactionProfile.stepCooldown * 0.82)
+        for offset in 0..<stepTotal {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(offset) * interval) {
+                guard inertiaGeneration == generation, isInertiaInProgress, !isDragInProgress else { return }
+                let didApply = onWheelStep(item.parameter.kind, direction)
+                if didApply {
+                    triggerGearHapticIfNeeded(step: direction, at: Date())
+                }
+                if !didApply || offset == stepTotal - 1 {
+                    isInertiaInProgress = false
+                }
+            }
         }
-    }
-
-    private var inertiaScale: CGFloat {
-        interactionProfile.inertiaScale
-    }
-
-    private var inertiaMaximumStepCount: Int {
-        interactionProfile.maximumFlingSteps
+        return true
     }
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
-        let lift = max(0, -verticalTranslation)
-        if lift > 90 { return interactionProfile.ultraFineSensitivity }
-        if lift > 40 { return interactionProfile.fineSensitivity }
-        return interactionProfile.sensitivity
+        interactionProfile.scrubSensitivity(forVerticalTranslation: verticalTranslation)
     }
 
+    private func resetVelocityTracking(translationWidth: CGFloat, at now: Date) {
+        lastDragSampleTranslation = translationWidth
+        lastDragSampleAt = now
+        filteredDragVelocity = 0
+    }
+
+    private func updateVelocityTracking(translationWidth: CGFloat, at now: Date) -> CGFloat {
+        guard let lastDragSampleAt else {
+            resetVelocityTracking(translationWidth: translationWidth, at: now)
+            return 0
+        }
+        let elapsed = max(0.001, now.timeIntervalSince(lastDragSampleAt))
+        let instantaneousVelocity = (translationWidth - lastDragSampleTranslation) / CGFloat(elapsed)
+        if filteredDragVelocity == 0 || instantaneousVelocity.sign != filteredDragVelocity.sign {
+            filteredDragVelocity = instantaneousVelocity
+        } else {
+            filteredDragVelocity = filteredDragVelocity * 0.35 + instantaneousVelocity * 0.65
+        }
+        lastDragSampleTranslation = translationWidth
+        self.lastDragSampleAt = now
+        return filteredDragVelocity
+    }
+
+    private func projectedSteps(forVelocity velocity: CGFloat, threshold: CGFloat) -> Int {
+        -interactionProfile.inertialRawStepCount(
+            releaseVelocity: velocity,
+            baseThreshold: threshold,
+            currentSensitivity: max(1, lastScrubSensitivity)
+        )
+    }
+
+#if DEBUG
+    private func logRulerDiagnosticIfNeeded(
+        state: String,
+        rawTranslation: CGFloat,
+        incrementalTranslation: CGFloat,
+        velocity: CGFloat,
+        sensitivity: CGFloat,
+        projectedSteps: Int,
+        snappedIndex: Int
+    ) {
+        let now = Date()
+        guard now.timeIntervalSince(lastDiagnosticLogAt) >= 0.16 else { return }
+        lastDiagnosticLogAt = now
+        let elapsed = gestureStartedAt.map { now.timeIntervalSince($0) } ?? 0
+        let continuousPosition = Double(item.selectedIndex) - Double(rawTranslation / max(tickSpacing, 1))
+        print(
+            "[R83A1Ruler] " +
+            "parameter=\(item.parameter.kind.rawValue) " +
+            "gestureState=\(state) " +
+            "rawTranslation=\(String(format: "%.2f", rawTranslation)) " +
+            "incrementalTranslation=\(String(format: "%.2f", incrementalTranslation)) " +
+            "elapsedTime=\(String(format: "%.3f", elapsed)) " +
+            "instantaneousVelocity=\(String(format: "%.1f", velocity)) " +
+            "filteredVelocity=\(String(format: "%.1f", filteredDragVelocity)) " +
+            "activeSensitivity=\(String(format: "%.3f", sensitivity)) " +
+            "continuousPosition=\(String(format: "%.3f", continuousPosition)) " +
+            "visualIndex=\(item.selectedIndex) " +
+            "snappedIndex=\(snappedIndex) " +
+            "projectedSteps=\(projectedSteps) " +
+            "runtimePendingValue=\(item.parameter.valueText) " +
+            "runtimeCommittedValue=see-parameter-write-log " +
+            "gestureGeneration=\(inertiaGeneration)"
+        )
+    }
+#else
+    private func logRulerDiagnosticIfNeeded(
+        state: String,
+        rawTranslation: CGFloat,
+        incrementalTranslation: CGFloat,
+        velocity: CGFloat,
+        sensitivity: CGFloat,
+        projectedSteps: Int,
+        snappedIndex: Int
+    ) {}
+#endif
+
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
-        let signature = "\(String(describing: item.parameter.kind))-\(item.selectedIndex)-\(step)"
+        let targetIndex = max(0, min(max(0, item.tickLabels.count - 1), item.selectedIndex + step))
+        guard interactionProfile.shouldTriggerHaptic(
+            step: step,
+            selectedIndex: targetIndex,
+            majorTickIndexes: item.majorTickIndexes
+        ) else { return }
+        let signature = "\(String(describing: item.parameter.kind))-\(targetIndex)-\(step)"
         guard signature != lastHapticSignature else { return }
-        guard now.timeIntervalSince(lastHapticAt) >= 0.075 else { return }
+        guard now.timeIntervalSince(lastHapticAt) >= interactionProfile.hapticMinimumInterval else { return }
         lastHapticSignature = signature
         lastHapticAt = now
         SellerCameraHaptic.play(
             .selection,
-            signature: "\(item.parameter.kind.rawValue)-\(item.selectedIndex)-\(step)",
-            minimumInterval: 0.075
+            signature: "\(item.parameter.kind.rawValue)-\(targetIndex)-\(step)",
+            minimumInterval: interactionProfile.hapticMinimumInterval
         )
+    }
+
+    private func applyAccessibilityStep(_ step: Int) {
+        let didApply = onWheelStep(item.parameter.kind, step)
+        if didApply {
+            triggerGearHapticIfNeeded(step: step, at: Date())
+        }
     }
 }
 

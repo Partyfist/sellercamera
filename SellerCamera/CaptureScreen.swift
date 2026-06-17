@@ -1057,18 +1057,15 @@ private enum ManualFocusRulerStepResult {
 }
 
 private enum ManualFocusRulerTuning {
-    static let normalSensitivity: CGFloat = 8.0
-    static let fineSensitivity: CGFloat = 0.40
-    static let ultraFineSensitivity: CGFloat = 0.16
+    static let dragStepThreshold: CGFloat = 12
+    static let tickSpacing: CGFloat = 9
 
-    static let dragStepThreshold: CGFloat = 10
-    static let tickSpacing: CGFloat = 10
-
-    static let normalMaxStepPerUpdate: Int = 12
+    static let normalMaxStepPerUpdate: Int = 6
     static let fineMaxStepPerUpdate: Int = 2
     static let ultraFineMaxStepPerUpdate: Int = 1
 
     static let lensPositionStep: Double = 0.005
+    static let gestureStepCooldown: TimeInterval = 0.055
     static let writeMinInterval: TimeInterval = 0.04
 }
 
@@ -1083,7 +1080,14 @@ private struct CaptureManualFocusRulerPanel: View {
     @State private var isDragInProgress = false
     @State private var lastStepAppliedAt: Date = .distantPast
     @State private var lastDragDirection: Int = 0
+    @State private var isInertiaInProgress = false
+    @State private var inertiaGeneration: UInt64 = 0
+    @State private var gestureStartedAt: Date?
+    @State private var lastDragSampleTranslation: CGFloat = 0
+    @State private var lastDragSampleAt: Date?
+    @State private var filteredDragVelocity: CGFloat = 0
     @State private var lastScrubSensitivity: CGFloat = 1
+    @State private var lastDiagnosticLogAt: Date = .distantPast
     @State private var lastHapticAt: Date = .distantPast
     @State private var lastHapticSignature: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1136,11 +1140,10 @@ private struct CaptureManualFocusRulerPanel: View {
             }
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 4)
+                DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard isEnabled else { return }
-                        dragOffset = value.translation.width - lastDragStepTranslation
-                        handleDrag(value.translation)
+                        handleDrag(value)
                     }
                     .onEnded { value in
                         finishDrag(
@@ -1168,6 +1171,17 @@ private struct CaptureManualFocusRulerPanel: View {
         .accessibilityLabel("手动对焦刻度")
         .accessibilityValue(currentValueText)
         .accessibilityHint(isEnabled ? "左右拖动调节对焦，手指上移可精细微调" : "当前手动对焦不可用")
+        .accessibilityAdjustableAction { direction in
+            guard isEnabled else { return }
+            switch direction {
+            case .increment:
+                applyAccessibilityFocusStep(1)
+            case .decrement:
+                applyAccessibilityFocusStep(-1)
+            default:
+                break
+            }
+        }
     }
 
     private var focusRulerTicks: some View {
@@ -1234,38 +1248,63 @@ private struct CaptureManualFocusRulerPanel: View {
             .allowsHitTesting(false)
     }
 
-    private func handleDrag(_ translation: CGSize) {
+    private func handleDrag(_ value: DragGesture.Value) {
         guard isEnabled else { return }
-        isDragInProgress = true
+        if isInertiaInProgress {
+            inertiaGeneration &+= 1
+            isInertiaInProgress = false
+        }
+        if !isDragInProgress {
+            isDragInProgress = true
+            gestureStartedAt = Date()
+            resetVelocityTracking(translationWidth: value.translation.width, at: gestureStartedAt ?? Date())
+            inertiaGeneration &+= 1
+        }
 
         let threshold = dragStepThreshold
-        let sensitivity = scrubSensitivity(for: translation.height)
-        lastScrubSensitivity = sensitivity
-        let effectiveThreshold = threshold / sensitivity
+        let translation = value.translation
         let translationWidth = translation.width
+        let now = Date()
+        let velocity = updateVelocityTracking(translationWidth: translationWidth, at: now)
         let delta = translationWidth - lastDragStepTranslation
-        let rawStepCount = Int((delta / effectiveThreshold).rounded(.towardZero))
+        let stepInfo = interactionProfile.dragStepInfo(
+            delta: delta,
+            baseThreshold: threshold,
+            verticalTranslation: translation.height,
+            velocity: velocity
+        )
+        lastScrubSensitivity = stepInfo.sensitivity
+        dragOffset = translationWidth - lastDragStepTranslation
+        logManualFocusDiagnosticIfNeeded(
+            state: "dragging",
+            rawTranslation: translationWidth,
+            incrementalTranslation: delta,
+            velocity: velocity,
+            sensitivity: stepInfo.sensitivity,
+            projectedSteps: projectedSteps(forVelocity: velocity),
+            snappedIndex: selectedIndex
+        )
+        let rawStepCount = stepInfo.rawStepCount
         guard rawStepCount != 0 else { return }
 
-        let now = Date()
         let rawDirection = rawStepCount > 0 ? 1 : -1
         if lastDragDirection != 0, rawDirection != lastDragDirection {
             lastStepAppliedAt = .distantPast
         }
         lastDragDirection = rawDirection
-        let cooldownAllowed = now.timeIntervalSince(lastStepAppliedAt) >= 0.12
+        let cooldownAllowed = now.timeIntervalSince(lastStepAppliedAt) >= ManualFocusRulerTuning.gestureStepCooldown
         guard cooldownAllowed else {
 #if DEBUG
             logManualFocusDrag(
                 translationWidth: translationWidth,
                 delta: delta,
-                effectiveThreshold: effectiveThreshold,
+                effectiveThreshold: stepInfo.effectiveThreshold,
                 rawStepCount: rawStepCount,
                 appliedStepDelta: 0,
-                cap: maximumManualFocusStepCount(for: sensitivity),
+                cap: maximumManualFocusStepCount(for: stepInfo.sensitivity),
                 lensBefore: values.indices.contains(selectedIndex) ? values[selectedIndex] : 0,
                 lensAfter: values.indices.contains(selectedIndex) ? values[selectedIndex] : 0,
-                mode: manualFocusScrubMode(for: sensitivity),
+                mode: manualFocusScrubMode(for: stepInfo.sensitivity),
                 writeAllowed: false,
                 throttled: false,
                 cooldownAllowed: false,
@@ -1277,26 +1316,27 @@ private struct CaptureManualFocusRulerPanel: View {
             return
         }
 
-        let maximumStepCount = maximumManualFocusStepCount(for: sensitivity)
-        let consumedRawStepCount = max(-maximumStepCount, min(maximumStepCount, rawStepCount))
+        let maximumStepCount = maximumManualFocusStepCount(for: stepInfo.sensitivity)
+        let consumedRawStepCount = interactionProfile.cappedStepCount(rawStepCount, externalMaximum: maximumStepCount)
         let clampedStepCount = -consumedRawStepCount
 #if DEBUG
         let lensBefore = values.indices.contains(selectedIndex) ? values[selectedIndex] : 0
         let predictedIndex = max(0, min(values.count - 1, selectedIndex + clampedStepCount))
         let lensAfter = values.indices.contains(predictedIndex) ? values[predictedIndex] : lensBefore
-        let mode = manualFocusScrubMode(for: sensitivity)
+        let mode = manualFocusScrubMode(for: stepInfo.sensitivity)
         let wasClamped = consumedRawStepCount != rawStepCount
 #endif
         let stepResult = onStep(clampedStepCount)
         switch stepResult {
         case .applied:
-            lastDragStepTranslation += CGFloat(consumedRawStepCount) * effectiveThreshold
+            lastDragStepTranslation += CGFloat(consumedRawStepCount) * stepInfo.effectiveThreshold
+            dragOffset = translationWidth - lastDragStepTranslation
         case .throttled(let lastWriteAge):
 #if DEBUG
             logManualFocusDrag(
                 translationWidth: translationWidth,
                 delta: delta,
-                effectiveThreshold: effectiveThreshold,
+                effectiveThreshold: stepInfo.effectiveThreshold,
                 rawStepCount: rawStepCount,
                 appliedStepDelta: clampedStepCount,
                 cap: maximumStepCount,
@@ -1314,12 +1354,13 @@ private struct CaptureManualFocusRulerPanel: View {
             return
         case .rejected:
             // Boundary movement is still consumed so users can reverse immediately at 0/1 limits.
-            lastDragStepTranslation += CGFloat(rawStepCount) * effectiveThreshold
+            lastDragStepTranslation += CGFloat(rawStepCount) * stepInfo.effectiveThreshold
+            dragOffset = translationWidth - lastDragStepTranslation
 #if DEBUG
             logManualFocusDrag(
                 translationWidth: translationWidth,
                 delta: delta,
-                effectiveThreshold: effectiveThreshold,
+                effectiveThreshold: stepInfo.effectiveThreshold,
                 rawStepCount: rawStepCount,
                 appliedStepDelta: clampedStepCount,
                 cap: maximumStepCount,
@@ -1343,7 +1384,7 @@ private struct CaptureManualFocusRulerPanel: View {
         logManualFocusDrag(
             translationWidth: translationWidth,
             delta: delta,
-            effectiveThreshold: effectiveThreshold,
+            effectiveThreshold: stepInfo.effectiveThreshold,
             rawStepCount: rawStepCount,
             appliedStepDelta: clampedStepCount,
             cap: maximumStepCount,
@@ -1365,16 +1406,25 @@ private struct CaptureManualFocusRulerPanel: View {
         predictedEndTranslationWidth: CGFloat?,
         animateOffset: Bool
     ) {
-        if isEnabled, let translationWidth, let predictedEndTranslationWidth {
-            applyInertiaStep(
+        let didScheduleInertia: Bool
+        if isEnabled, let translationWidth, predictedEndTranslationWidth != nil {
+            didScheduleInertia = applyInertiaStep(
                 translationWidth: translationWidth,
-                predictedEndTranslationWidth: predictedEndTranslationWidth
+                releaseVelocity: filteredDragVelocity
             )
+        } else {
+            inertiaGeneration &+= 1
+            didScheduleInertia = false
         }
         isDragInProgress = false
+        isInertiaInProgress = didScheduleInertia
         lastDragStepTranslation = 0
         lastDragDirection = 0
         lastScrubSensitivity = 1
+        gestureStartedAt = nil
+        lastDragSampleAt = nil
+        lastDragSampleTranslation = 0
+        filteredDragVelocity = 0
         if animateOffset {
             withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 dragOffset = 0
@@ -1384,24 +1434,80 @@ private struct CaptureManualFocusRulerPanel: View {
         }
     }
 
-    private func applyInertiaStep(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
-        guard lastScrubSensitivity >= 1 else { return }
-        let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let rawStepCount = Int(((predictedDelta * interactionProfile.inertiaScale) / dragStepThreshold).rounded(.towardZero))
-        let inertiaStepCount = max(-interactionProfile.maximumFlingSteps, min(interactionProfile.maximumFlingSteps, -rawStepCount))
-        guard inertiaStepCount != 0 else { return }
-        let stepResult = onStep(inertiaStepCount)
-        if case .applied = stepResult {
-            triggerGearHapticIfNeeded(step: inertiaStepCount, at: Date())
+    private func applyInertiaStep(translationWidth: CGFloat, releaseVelocity: CGFloat) -> Bool {
+        let rawStepCount = interactionProfile.inertialRawStepCount(
+            releaseVelocity: releaseVelocity,
+            baseThreshold: dragStepThreshold,
+            currentSensitivity: lastScrubSensitivity
+        )
+        let inertiaStepCount = -rawStepCount
+        guard inertiaStepCount != 0 else { return false }
+
+        let generation = inertiaGeneration &+ 1
+        inertiaGeneration = generation
+        isInertiaInProgress = true
+        logManualFocusDiagnosticIfNeeded(
+            state: "decelerating",
+            rawTranslation: translationWidth,
+            incrementalTranslation: 0,
+            velocity: releaseVelocity,
+            sensitivity: lastScrubSensitivity,
+            projectedSteps: inertiaStepCount,
+            snappedIndex: max(0, min(max(0, values.count - 1), selectedIndex + inertiaStepCount))
+        )
+        let direction = inertiaStepCount > 0 ? 1 : -1
+        let stepTotal = abs(inertiaStepCount)
+        let interval = max(0.035, ManualFocusRulerTuning.gestureStepCooldown * 0.82)
+        for offset in 0..<stepTotal {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(offset) * interval) {
+                guard inertiaGeneration == generation, isInertiaInProgress, !isDragInProgress else { return }
+                let stepResult = onStep(direction)
+                if case .applied = stepResult {
+                    triggerGearHapticIfNeeded(step: direction, at: Date())
+                }
+                if case .rejected = stepResult {
+                    isInertiaInProgress = false
+                } else if offset == stepTotal - 1 {
+                    isInertiaInProgress = false
+                }
+            }
         }
+        return true
     }
 
     private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
-        let lift = max(0, -verticalTranslation)
-        // Normal drag is faster for range coverage; lifted drags remain precise for focus tweaks.
-        if lift > 90 { return interactionProfile.ultraFineSensitivity }
-        if lift > 40 { return interactionProfile.fineSensitivity }
-        return interactionProfile.sensitivity
+        interactionProfile.scrubSensitivity(forVerticalTranslation: verticalTranslation)
+    }
+
+    private func resetVelocityTracking(translationWidth: CGFloat, at now: Date) {
+        lastDragSampleTranslation = translationWidth
+        lastDragSampleAt = now
+        filteredDragVelocity = 0
+    }
+
+    private func updateVelocityTracking(translationWidth: CGFloat, at now: Date) -> CGFloat {
+        guard let lastDragSampleAt else {
+            resetVelocityTracking(translationWidth: translationWidth, at: now)
+            return 0
+        }
+        let elapsed = max(0.001, now.timeIntervalSince(lastDragSampleAt))
+        let instantaneousVelocity = (translationWidth - lastDragSampleTranslation) / CGFloat(elapsed)
+        if filteredDragVelocity == 0 || instantaneousVelocity.sign != filteredDragVelocity.sign {
+            filteredDragVelocity = instantaneousVelocity
+        } else {
+            filteredDragVelocity = filteredDragVelocity * 0.35 + instantaneousVelocity * 0.65
+        }
+        lastDragSampleTranslation = translationWidth
+        self.lastDragSampleAt = now
+        return filteredDragVelocity
+    }
+
+    private func projectedSteps(forVelocity velocity: CGFloat) -> Int {
+        -interactionProfile.inertialRawStepCount(
+            releaseVelocity: velocity,
+            baseThreshold: dragStepThreshold,
+            currentSensitivity: max(1, lastScrubSensitivity)
+        )
     }
 
     private func maximumManualFocusStepCount(for sensitivity: CGFloat) -> Int {
@@ -1417,6 +1523,41 @@ private struct CaptureManualFocusRulerPanel: View {
     }
 
 #if DEBUG
+    private func logManualFocusDiagnosticIfNeeded(
+        state: String,
+        rawTranslation: CGFloat,
+        incrementalTranslation: CGFloat,
+        velocity: CGFloat,
+        sensitivity: CGFloat,
+        projectedSteps: Int,
+        snappedIndex: Int
+    ) {
+        let now = Date()
+        guard now.timeIntervalSince(lastDiagnosticLogAt) >= 0.16 else { return }
+        lastDiagnosticLogAt = now
+        let elapsed = gestureStartedAt.map { now.timeIntervalSince($0) } ?? 0
+        let continuousPosition = Double(selectedIndex) - Double(rawTranslation / max(tickSpacing, 1))
+        let runtimePendingValue = values.indices.contains(selectedIndex) ? focusTickLabel(values[selectedIndex]) : currentValueText
+        print(
+            "[R83A1Ruler] " +
+            "parameter=focus " +
+            "gestureState=\(state) " +
+            "rawTranslation=\(String(format: "%.2f", rawTranslation)) " +
+            "incrementalTranslation=\(String(format: "%.2f", incrementalTranslation)) " +
+            "elapsedTime=\(String(format: "%.3f", elapsed)) " +
+            "instantaneousVelocity=\(String(format: "%.1f", velocity)) " +
+            "filteredVelocity=\(String(format: "%.1f", filteredDragVelocity)) " +
+            "activeSensitivity=\(String(format: "%.3f", sensitivity)) " +
+            "continuousPosition=\(String(format: "%.3f", continuousPosition)) " +
+            "visualIndex=\(selectedIndex) " +
+            "snappedIndex=\(snappedIndex) " +
+            "projectedSteps=\(projectedSteps) " +
+            "runtimePendingValue=\(runtimePendingValue) " +
+            "runtimeCommittedValue=see-manual-focus-write-log " +
+            "gestureGeneration=\(inertiaGeneration)"
+        )
+    }
+
     private func logManualFocusDrag(
         translationWidth: CGFloat,
         delta: CGFloat,
@@ -1449,15 +1590,38 @@ private struct CaptureManualFocusRulerPanel: View {
             "clamped=\(wasClamped) lastWriteAge=\(lastWriteAgeText)"
         )
     }
+#else
+    private func logManualFocusDiagnosticIfNeeded(
+        state: String,
+        rawTranslation: CGFloat,
+        incrementalTranslation: CGFloat,
+        velocity: CGFloat,
+        sensitivity: CGFloat,
+        projectedSteps: Int,
+        snappedIndex: Int
+    ) {}
 #endif
 
     private func triggerGearHapticIfNeeded(step: Int, at now: Date) {
-        let signature = "mf-\(selectedIndex)-\(step)"
+        let targetIndex = max(0, min(max(0, values.count - 1), selectedIndex + step))
+        if interactionProfile.hapticPolicy == .semanticAnchor {
+            let selectedValue = values.indices.contains(targetIndex) ? values[targetIndex] : 0
+            let selectedPercent = Int((selectedValue * 100).rounded())
+            guard abs(step) > 1 || selectedPercent % 25 == 0 else { return }
+        }
+        let signature = "mf-\(targetIndex)-\(step)"
         guard signature != lastHapticSignature else { return }
-        guard now.timeIntervalSince(lastHapticAt) >= 0.09 else { return }
+        guard now.timeIntervalSince(lastHapticAt) >= interactionProfile.hapticMinimumInterval else { return }
         lastHapticSignature = signature
         lastHapticAt = now
-        SellerCameraHaptic.play(.selection, signature: signature, minimumInterval: 0.09)
+        SellerCameraHaptic.play(.selection, signature: signature, minimumInterval: interactionProfile.hapticMinimumInterval)
+    }
+
+    private func applyAccessibilityFocusStep(_ step: Int) {
+        let stepResult = onStep(step)
+        if case .applied = stepResult {
+            triggerGearHapticIfNeeded(step: step, at: Date())
+        }
     }
 
     private func isMajorTick(_ value: Double) -> Bool {
@@ -1852,8 +2016,6 @@ private struct CaptureOptionRulerItem: Identifiable, Equatable {
 private struct CaptureDiscreteOptionRuler: View {
     private enum Tuning {
         static let snapDuration: TimeInterval = 0.15
-        static let dragActivationDistance: CGFloat = 3
-        static let inertiaScale: CGFloat = 0.55
         static let edgeResistance: CGFloat = 0.34
     }
 
@@ -1870,6 +2032,9 @@ private struct CaptureDiscreteOptionRuler: View {
     @State private var isDragging = false
     @State private var lastCandidateIndex: Int?
     @State private var lastHapticIndex: Int?
+    @State private var lastDragSampleTranslation: CGFloat = 0
+    @State private var lastDragSampleAt: Date?
+    @State private var filteredDragVelocity: CGFloat = 0
     @State private var snapGeneration: UInt64 = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let interactionProfile = SellerCameraRulerInteractionProfile.ratioOutputQuality
@@ -1937,6 +2102,16 @@ private struct CaptureDiscreteOptionRuler: View {
         .accessibilityLabel(title)
         .accessibilityValue(selectedItemTitle)
         .accessibilityHint("左右拖动或双击选项切换")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                selectAccessibleOption(offset: 1)
+            case .decrement:
+                selectAccessibleOption(offset: -1)
+            default:
+                break
+            }
+        }
     }
 
     private var selectedItemTitle: String {
@@ -1949,10 +2124,11 @@ private struct CaptureDiscreteOptionRuler: View {
     }
 
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: Tuning.dragActivationDistance)
+        DragGesture(minimumDistance: 0)
             .onChanged { value in
                 beginDragIfNeeded()
                 guard let startIndex = dragStartIndex else { return }
+                _ = updateVelocityTracking(translationWidth: value.translation.width, at: Date())
                 let boundedTranslation = resistedTranslation(value.translation.width, startIndex: startIndex)
                 visualOffset = boundedTranslation
 
@@ -1975,7 +2151,7 @@ private struct CaptureDiscreteOptionRuler: View {
             .onEnded { value in
                 finishDrag(
                     translation: value.translation.width,
-                    predictedTranslation: value.predictedEndTranslation.width
+                    releaseVelocity: filteredDragVelocity
                 )
             }
     }
@@ -2038,9 +2214,10 @@ private struct CaptureDiscreteOptionRuler: View {
         lastCandidateIndex = selectedIndex
         lastHapticIndex = selectedIndex
         isDragging = true
+        resetVelocityTracking(translationWidth: 0, at: Date())
     }
 
-    private func finishDrag(translation: CGFloat, predictedTranslation: CGFloat) {
+    private func finishDrag(translation: CGFloat, releaseVelocity: CGFloat) {
         guard let startIndex = dragStartIndex else {
             resetDragState(animated: true)
             return
@@ -2048,8 +2225,10 @@ private struct CaptureDiscreteOptionRuler: View {
 
         let boundedTranslation = resistedTranslation(translation, startIndex: startIndex)
         let baseTargetIndex = clampedIndex(startIndex + Int((-boundedTranslation / optionSpacing).rounded()))
-        let predictedDelta = predictedTranslation - translation
-        let rawFlingSteps = Int(((-predictedDelta / optionSpacing) * interactionProfile.inertiaScale).rounded())
+        let predictedDelta = releaseVelocity * CGFloat(interactionProfile.inertiaProjectionDuration)
+        let rawFlingSteps = abs(predictedDelta) >= interactionProfile.velocityThreshold
+            ? Int(((-predictedDelta / optionSpacing) * interactionProfile.inertiaScale).rounded(.towardZero))
+            : 0
         let boundedMaximumFlingSteps = min(maximumFlingSteps, interactionProfile.maximumFlingSteps)
         let flingSteps = max(-boundedMaximumFlingSteps, min(boundedMaximumFlingSteps, rawFlingSteps))
         let targetIndex = nearestSelectableIndex(to: clampedIndex(baseTargetIndex + flingSteps))
@@ -2062,7 +2241,7 @@ private struct CaptureDiscreteOptionRuler: View {
             CaptureOptionSelectionContext(
                 startIndex: startIndex,
                 translation: translation,
-                predictedTranslation: predictedTranslation,
+                predictedTranslation: translation + predictedDelta,
                 flingSteps: flingSteps
             )
         )
@@ -2077,6 +2256,9 @@ private struct CaptureDiscreteOptionRuler: View {
             dragStartIndex = nil
             isDragging = false
             lastCandidateIndex = nil
+            lastDragSampleAt = nil
+            lastDragSampleTranslation = 0
+            filteredDragVelocity = 0
         }
         if animated {
             withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion), updates)
@@ -2113,6 +2295,44 @@ private struct CaptureDiscreteOptionRuler: View {
         guard index != lastHapticIndex else { return }
         lastHapticIndex = index
         SellerCameraHaptic.play(.selection, signature: "\(scope.rawValue)-\(index)")
+    }
+
+    private func resetVelocityTracking(translationWidth: CGFloat, at now: Date) {
+        lastDragSampleTranslation = translationWidth
+        lastDragSampleAt = now
+        filteredDragVelocity = 0
+    }
+
+    private func updateVelocityTracking(translationWidth: CGFloat, at now: Date) -> CGFloat {
+        guard let lastDragSampleAt else {
+            resetVelocityTracking(translationWidth: translationWidth, at: now)
+            return 0
+        }
+        let elapsed = max(0.001, now.timeIntervalSince(lastDragSampleAt))
+        let instantaneousVelocity = (translationWidth - lastDragSampleTranslation) / CGFloat(elapsed)
+        if filteredDragVelocity == 0 || instantaneousVelocity.sign != filteredDragVelocity.sign {
+            filteredDragVelocity = instantaneousVelocity
+        } else {
+            filteredDragVelocity = filteredDragVelocity * 0.35 + instantaneousVelocity * 0.65
+        }
+        lastDragSampleTranslation = translationWidth
+        self.lastDragSampleAt = now
+        return filteredDragVelocity
+    }
+
+    private func selectAccessibleOption(offset: Int) {
+        guard !items.isEmpty else { return }
+        let targetIndex = nearestSelectableIndex(to: clampedIndex(selectedIndex + offset))
+        guard targetIndex != selectedIndex else { return }
+        triggerSelectionHapticIfNeeded(for: targetIndex)
+        onSelectIndex(
+            targetIndex,
+            .tap,
+            CaptureOptionSelectionContext(startIndex: selectedIndex)
+        )
+        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
+            visualOffset = 0
+        }
     }
 
     private func chipTitleColor(isSelected: Bool, item: CaptureOptionRulerItem) -> Color {
@@ -2641,10 +2861,6 @@ private struct CaptureLensControlStrip: View {
 private struct CaptureZoomDialView: View {
     private enum Tuning {
         static let tickSpacing: CGFloat = 34
-        static let normalSensitivity: CGFloat = 3.0
-        static let fineSensitivity: CGFloat = 0.90
-        static let ultraFineSensitivity: CGFloat = 0.38
-        static let pointsPerZoomCommon: CGFloat = 96
         static let pointsPerZoomHigh: CGFloat = 172
         static let smoothingPreviousWeight: Double = 0.34
         static let dragSnapThreshold: Double = 0.016
@@ -2674,6 +2890,9 @@ private struct CaptureZoomDialView: View {
     @State private var lastHapticSignature: String?
     @State private var dragBaselineValue: Double?
     @State private var lastEmittedZoomValue: Double?
+    @State private var lastDragSampleTranslation: CGFloat = 0
+    @State private var lastDragSampleAt: Date?
+    @State private var filteredDragVelocity: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let accent = SellerCameraColor.accentPrimary
     private let tickSpacing: CGFloat = Tuning.tickSpacing
@@ -2703,10 +2922,10 @@ private struct CaptureZoomDialView: View {
             }
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 4)
+                DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard isEnabled else { return }
-                        handleDrag(value.translation)
+                        handleDrag(value)
                     }
                     .onEnded { value in
                         finishDrag(
@@ -2735,6 +2954,17 @@ private struct CaptureZoomDialView: View {
         .accessibilityLabel("变焦刻度")
         .accessibilityValue(currentValueText)
         .accessibilityHint(isEnabled ? "左右拖动调节变焦，手指上移可精细微调" : "当前变焦不可用")
+        .accessibilityAdjustableAction { direction in
+            guard isEnabled else { return }
+            switch direction {
+            case .increment:
+                applyAccessibleZoomStep(1)
+            case .decrement:
+                applyAccessibleZoomStep(-1)
+            default:
+                break
+            }
+        }
     }
 
     private var lensRulerTicks: some View {
@@ -2817,15 +3047,18 @@ private struct CaptureZoomDialView: View {
         return SellerCameraColor.textTertiary
     }
 
-    private func handleDrag(_ translation: CGSize) {
+    private func handleDrag(_ value: DragGesture.Value) {
         guard isEnabled else { return }
         if !isDragInProgress {
             isDragInProgress = true
             dragBaselineValue = selectedZoomValue
             lastEmittedZoomValue = nil
+            resetVelocityTracking(translationWidth: value.translation.width, at: Date())
             onEditingBegan()
         }
-        let sensitivity = scrubSensitivity(for: translation.height)
+        let translation = value.translation
+        let velocity = updateVelocityTracking(translationWidth: translation.width, at: Date())
+        let sensitivity = scrubSensitivity(for: translation.height, velocity: velocity)
         lastScrubSensitivity = sensitivity
         dragOffset = translation.width.truncatingRemainder(dividingBy: tickSpacing)
 
@@ -2854,16 +3087,19 @@ private struct CaptureZoomDialView: View {
         predictedEndTranslationWidth: CGFloat?,
         animateOffset: Bool
     ) {
-        if isEnabled, let translationWidth, let predictedEndTranslationWidth {
+        if isEnabled, let translationWidth, predictedEndTranslationWidth != nil {
             applyInertiaSettle(
                 translationWidth: translationWidth,
-                predictedEndTranslationWidth: predictedEndTranslationWidth
+                releaseVelocity: filteredDragVelocity
             )
         }
         isDragInProgress = false
         lastScrubSensitivity = 1
         dragBaselineValue = nil
         lastEmittedZoomValue = nil
+        lastDragSampleAt = nil
+        lastDragSampleTranslation = 0
+        filteredDragVelocity = 0
         if animateOffset {
             withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
                 dragOffset = 0
@@ -2873,14 +3109,16 @@ private struct CaptureZoomDialView: View {
         }
     }
 
-    private func applyInertiaSettle(translationWidth: CGFloat, predictedEndTranslationWidth: CGFloat) {
+    private func applyInertiaSettle(translationWidth: CGFloat, releaseVelocity: CGFloat) {
         let baseline = dragBaselineValue ?? selectedZoomValue
         let sensitivity = max(0.1, lastScrubSensitivity)
-        let predictedDelta = predictedEndTranslationWidth - translationWidth
-        let cappedInertiaDelta = max(
-            -Tuning.maxInertiaDelta,
-            min(Tuning.maxInertiaDelta, predictedDelta * interactionProfile.inertiaScale)
-        )
+        let predictedDelta = releaseVelocity * CGFloat(interactionProfile.inertiaProjectionDuration)
+        let cappedInertiaDelta = abs(predictedDelta) >= interactionProfile.velocityThreshold
+            ? max(
+                -Tuning.maxInertiaDelta,
+                min(Tuning.maxInertiaDelta, predictedDelta * interactionProfile.inertiaScale)
+            )
+            : 0
         let inertiaEnabled = sensitivity >= 1
         let finalTranslation = translationWidth + (inertiaEnabled ? cappedInertiaDelta : 0)
         let target = finalSnappedZoomValue(mappedZoomValue(
@@ -2950,12 +3188,34 @@ private struct CaptureZoomDialView: View {
         return abs(lastEmittedZoomValue - value) >= Tuning.emitDelta
     }
 
-    private func scrubSensitivity(for verticalTranslation: CGFloat) -> CGFloat {
-        let lift = max(0, -verticalTranslation)
-        // Normal drag covers more zoom range; lifted drags keep the R73 fine-control path.
-        if lift > 90 { return interactionProfile.ultraFineSensitivity }
-        if lift > 40 { return interactionProfile.fineSensitivity }
-        return interactionProfile.sensitivity
+    private func scrubSensitivity(for verticalTranslation: CGFloat, velocity: CGFloat = 0) -> CGFloat {
+        interactionProfile.scrubSensitivity(
+            forVerticalTranslation: verticalTranslation,
+            velocity: velocity
+        )
+    }
+
+    private func resetVelocityTracking(translationWidth: CGFloat, at now: Date) {
+        lastDragSampleTranslation = translationWidth
+        lastDragSampleAt = now
+        filteredDragVelocity = 0
+    }
+
+    private func updateVelocityTracking(translationWidth: CGFloat, at now: Date) -> CGFloat {
+        guard let lastDragSampleAt else {
+            resetVelocityTracking(translationWidth: translationWidth, at: now)
+            return 0
+        }
+        let elapsed = max(0.001, now.timeIntervalSince(lastDragSampleAt))
+        let instantaneousVelocity = (translationWidth - lastDragSampleTranslation) / CGFloat(elapsed)
+        if filteredDragVelocity == 0 || instantaneousVelocity.sign != filteredDragVelocity.sign {
+            filteredDragVelocity = instantaneousVelocity
+        } else {
+            filteredDragVelocity = filteredDragVelocity * 0.35 + instantaneousVelocity * 0.65
+        }
+        lastDragSampleTranslation = translationWidth
+        self.lastDragSampleAt = now
+        return filteredDragVelocity
     }
 
     private func triggerAnchorHapticIfNeeded(for zoom: Double, at now: Date, force: Bool = false) {
@@ -2967,6 +3227,16 @@ private struct CaptureZoomDialView: View {
         lastHapticSignature = signature
         lastHapticAt = now
         SellerCameraHaptic.play(.selection, signature: signature, minimumInterval: Tuning.hapticMinInterval)
+    }
+
+    private func applyAccessibleZoomStep(_ step: Int) {
+        guard values.indices.contains(selectedIndex) else { return }
+        let targetIndex = max(0, min(values.count - 1, selectedIndex + step))
+        guard targetIndex != selectedIndex else { return }
+        let targetValue = values[targetIndex]
+        onEditingBegan()
+        onValueSettled(targetValue)
+        triggerAnchorHapticIfNeeded(for: targetValue, at: Date(), force: true)
     }
 
     private func formatMultiplier(_ multiplier: Double) -> String {
