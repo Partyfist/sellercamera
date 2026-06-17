@@ -19,7 +19,6 @@ struct CaptureScreen: View {
     @State private var selectedImportPhotoItem: PhotosPickerItem?
     @State private var isImportingPhoto = false
     @State private var selectedCaptureIntent: CaptureIntentKind = .standard
-    @State private var activeControlTarget: CaptureActiveControlTarget = .none
     @State private var activeBottomParameterKind: CaptureProfessionalParameterKind?
     @State private var isBottomParameterPanelExpanded = false
     @State private var isManualFocusModeEnabled = false
@@ -57,15 +56,8 @@ struct CaptureScreen: View {
     private let manualFocusPendingTimeout: TimeInterval = 1.4
     private let exposureBiasPendingTicker = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
-    private var isLensZoomControlPresented: Bool {
-        if case .lensZoom = activeControlTarget {
-            return true
-        }
-        return false
-    }
-
     private var isAnyFloatingControlPresented: Bool {
-        isLensZoomControlPresented || isManualFocusRulerPresented || isCaptureOptionPanelPresented
+        isManualFocusRulerPresented || isCaptureOptionPanelPresented
     }
 
     private var primaryParameterKinds: [CaptureProfessionalParameterKind] {
@@ -85,7 +77,7 @@ struct CaptureScreen: View {
     }
 
     private var isBottomOverlayControlPresented: Bool {
-        isBottomParameterPanelExpanded || isLensZoomControlPresented
+        isBottomParameterPanelExpanded
     }
 
     private var isManualFocusModeActive: Bool {
@@ -233,16 +225,6 @@ struct CaptureScreen: View {
                     insertion: .opacity,
                     removal: .opacity
                 ))
-            } else if isLensZoomControlPresented {
-                CaptureLensZoomControlPanel(
-                    cameraRuntime: cameraRuntime,
-                    onFocusDial: {}
-                )
-                .padding(.horizontal, 14)
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .move(edge: .bottom).combined(with: .opacity)
-                ))
             }
         }
         .frame(height: bottomControlDeckHeight)
@@ -288,7 +270,6 @@ struct CaptureScreen: View {
                 isBottomParameterPanelExpanded = false
             } else {
                 activeBottomParameterKind = kind
-                activeControlTarget = .none
                 isBottomParameterPanelExpanded = true
             }
         }
@@ -299,10 +280,9 @@ struct CaptureScreen: View {
     }
 
     private func dismissInlineControls() {
-        guard isBottomParameterPanelExpanded || activeControlTarget != .none || isManualFocusRulerPresented || isCaptureOptionPanelPresented else { return }
+        guard isBottomParameterPanelExpanded || isManualFocusRulerPresented || isCaptureOptionPanelPresented else { return }
         withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
             isBottomParameterPanelExpanded = false
-            activeControlTarget = .none
             isManualFocusRulerPresented = false
             isCaptureOptionPanelPresented = false
         }
@@ -322,7 +302,6 @@ struct CaptureScreen: View {
             } else {
                 isCaptureOptionPanelPresented = false
                 isBottomParameterPanelExpanded = false
-                activeControlTarget = .none
                 isManualFocusRulerPresented = false
                 isMoreOptionsPanelPresented = true
             }
@@ -336,7 +315,6 @@ struct CaptureScreen: View {
             } else {
                 isMoreOptionsPanelPresented = false
                 isBottomParameterPanelExpanded = false
-                activeControlTarget = .none
                 isManualFocusRulerPresented = false
                 isCaptureOptionPanelPresented = true
             }
@@ -352,7 +330,7 @@ struct CaptureScreen: View {
             dismissMoreOptionsPanel()
             return true
         }
-        if isBottomParameterPanelExpanded || activeControlTarget != .none {
+        if isBottomParameterPanelExpanded {
             dismissInlineControls()
             return true
         }
@@ -380,7 +358,6 @@ struct CaptureScreen: View {
         }
         withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
             isBottomParameterPanelExpanded = false
-            activeControlTarget = .none
             isMoreOptionsPanelPresented = false
         }
 
@@ -458,7 +435,6 @@ struct CaptureScreen: View {
                         selectedAspectRatioPreset: cameraRuntime.selectedAspectRatioPreset,
                         captureHintText: cameraRuntime.captureHintText,
                         isAnyFloatingControlPresented: isAnyFloatingControlPresented,
-                        activeControlTarget: $activeControlTarget,
                         isManualFocusModeActive: isManualFocusModeActive,
                         isManualFocusRulerPresented: isManualFocusRulerPresented && isManualFocusModeActive,
                         manualFocusRulerValues: manualFocusRulerValues,
@@ -595,18 +571,6 @@ struct CaptureScreen: View {
         }
         .onChange(of: selectedCaptureIntent) { intent in
             cameraRuntime.captureHintText = intent.hintText
-        }
-        .onChange(of: activeControlTarget) { target in
-            if target == .lensZoom, isBottomParameterPanelExpanded {
-                isBottomParameterPanelExpanded = false
-            }
-            if target == .lensZoom {
-                isManualFocusRulerPresented = false
-            }
-            if target != .none {
-                dismissMoreOptionsPanel()
-                isCaptureOptionPanelPresented = false
-            }
         }
         .onChange(of: cameraRuntime.currentExposureBias) { value in
             guard let pendingExposureBiasWheelValue else { return }
@@ -893,160 +857,6 @@ struct CaptureScreen: View {
             "generation=\(generation)"
         )
 #endif
-    }
-}
-
-private struct CaptureLensZoomControlPanel: View {
-    @ObservedObject var cameraRuntime: CaptureCameraRuntime
-    let onFocusDial: () -> Void
-    @State private var pendingLensZoomValue: Double?
-    @State private var lastDispatchedLensZoomValue: Double?
-    @State private var lastLensZoomPendingAt: Date?
-    private let pendingTimeout: TimeInterval = 1.0
-
-    private var displayZoomValue: Double {
-        pendingLensZoomValue ?? cameraRuntime.lensZoomDialValue
-    }
-
-    private var lensZoomValues: [Double] {
-        lensZoomRulerValues(range: cameraRuntime.lensZoomDialRange, currentValue: displayZoomValue)
-    }
-
-    private var selectedLensZoomIndex: Int {
-        nearestLensZoomIndex(to: displayZoomValue, in: lensZoomValues)
-    }
-
-    private var majorLensZoomIndexes: Set<Int> {
-        let values = lensZoomValues
-        let range = cameraRuntime.lensZoomDialRange
-        let anchors = lensZoomMajorLabelValues(range: range)
-        let indexes = anchors.compactMap { anchor -> Int? in
-            guard let nearestIndex = values.indices.min(by: { abs(values[$0] - anchor) < abs(values[$1] - anchor) }) else {
-                return nil
-            }
-            return abs(values[nearestIndex] - anchor) <= 0.26 ? nearestIndex : nil
-        }
-        return Set(indexes)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            CaptureZoomDialView(
-                values: lensZoomValues,
-                valueRange: cameraRuntime.lensZoomDialRange,
-                selectedIndex: selectedLensZoomIndex,
-                currentValueText: formatLensZoom(displayZoomValue),
-                majorTickIndexes: majorLensZoomIndexes,
-                isEnabled: true,
-                onEditingBegan: {
-                    cameraRuntime.beginLensZoomRulerInteraction()
-                },
-                onValueChanged: { value in
-                    dispatchLensZoomValue(value, isFinal: false)
-                },
-                onValueSettled: { value in
-                    dispatchLensZoomValue(value, isFinal: true)
-                }
-            )
-        }
-        .frame(height: 104)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.045, green: 0.052, blue: 0.060).opacity(0.82),
-                    Color(red: 0.014, green: 0.018, blue: 0.026).opacity(0.88)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            ),
-            in: RoundedRectangle(cornerRadius: 17, style: .continuous)
-        )
-        .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 8)
-        .onChange(of: cameraRuntime.lensZoomDialValue) { value in
-            guard let pendingLensZoomValue else { return }
-            if abs(value - pendingLensZoomValue) <= 0.08 {
-                self.pendingLensZoomValue = nil
-                self.lastDispatchedLensZoomValue = nil
-                self.lastLensZoomPendingAt = nil
-            } else if let lastLensZoomPendingAt,
-                      Date().timeIntervalSince(lastLensZoomPendingAt) > pendingTimeout {
-                self.pendingLensZoomValue = nil
-                self.lastDispatchedLensZoomValue = nil
-                self.lastLensZoomPendingAt = nil
-            }
-        }
-        .onChange(of: cameraRuntime.selectedLensProfile?.id) { _ in
-            pendingLensZoomValue = nil
-            lastDispatchedLensZoomValue = nil
-            lastLensZoomPendingAt = nil
-        }
-    }
-
-    private func dispatchLensZoomValue(_ value: Double, isFinal: Bool) {
-        let range = cameraRuntime.lensZoomDialRange
-        let targetValue = max(range.lowerBound, min(range.upperBound, roundedLensZoomTarget(value)))
-        if !isFinal, let lastDispatchedLensZoomValue, abs(lastDispatchedLensZoomValue - targetValue) < 0.004 {
-            pendingLensZoomValue = targetValue
-            return
-        }
-        pendingLensZoomValue = targetValue
-        lastDispatchedLensZoomValue = targetValue
-        lastLensZoomPendingAt = Date()
-        onFocusDial()
-        if isFinal {
-            cameraRuntime.endLensZoomRulerInteraction(finalDialValue: targetValue)
-        } else {
-            cameraRuntime.setLensZoomDialValueFromRuler(targetValue)
-        }
-    }
-
-    private func lensZoomRulerValues(range: ClosedRange<Double>, currentValue: Double) -> [Double] {
-        let lower = max(0.1, range.lowerBound)
-        let upper = max(lower, range.upperBound)
-        guard upper > lower + 0.001 else { return [roundedLensZoom(lower)] }
-
-        var values: [Double] = []
-        var cursor = lower
-        while cursor <= upper + 0.001 {
-            values.append(roundedLensZoom(cursor))
-            cursor += 0.1
-        }
-
-        values.append(roundedLensZoom(lower))
-        values.append(roundedLensZoom(upper))
-        values.append(roundedLensZoom(currentValue))
-        return Array(Set(values))
-            .filter { $0 >= lower - 0.001 && $0 <= upper + 0.001 }
-            .sorted()
-    }
-
-    private func lensZoomMajorLabelValues(range: ClosedRange<Double>) -> [Double] {
-        let anchors: [Double] = [0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0]
-        var values = anchors.filter { $0 >= range.lowerBound - 0.001 && $0 <= range.upperBound + 0.001 }
-        values.append(roundedLensZoom(range.lowerBound))
-        values.append(roundedLensZoom(range.upperBound))
-        return Array(Set(values)).sorted()
-    }
-
-    private func nearestLensZoomIndex(to value: Double, in values: [Double]) -> Int {
-        guard let index = values.indices.min(by: { abs(values[$0] - value) < abs(values[$1] - value) }) else {
-            return 0
-        }
-        return index
-    }
-
-    private func roundedLensZoom(_ value: Double) -> Double {
-        (value * 10).rounded() / 10
-    }
-
-    private func roundedLensZoomTarget(_ value: Double) -> Double {
-        (value * 50).rounded() / 50
-    }
-
-    private func formatLensZoom(_ value: Double) -> String {
-        String(format: "%.1fx", value)
     }
 }
 
@@ -1664,11 +1474,6 @@ private struct CaptureManualFocusRulerPanel: View {
         if isSelected { return SellerCameraColor.textPrimary }
         return SellerCameraColor.textTertiary
     }
-}
-
-private enum CaptureActiveControlTarget: Equatable {
-    case none
-    case lensZoom
 }
 
 private enum CaptureOptionControlScope: String {
@@ -2513,7 +2318,6 @@ private struct CapturePreviewContainer: View {
     let selectedAspectRatioPreset: CapturePhotoAspectRatioPreset
     let captureHintText: String
     let isAnyFloatingControlPresented: Bool
-    @Binding var activeControlTarget: CaptureActiveControlTarget
     let isManualFocusModeActive: Bool
     let isManualFocusRulerPresented: Bool
     let manualFocusRulerValues: [Double]
@@ -2565,7 +2369,6 @@ private struct CapturePreviewContainer: View {
 
                 CaptureLensControlStrip(
                     cameraRuntime: cameraRuntime,
-                    activeControlTarget: $activeControlTarget,
                     isManualFocusModeActive: isManualFocusModeActive,
                     onToggleExposureLock: onToggleExposureLock,
                     onToggleManualFocusMode: onToggleManualFocusMode
@@ -2710,7 +2513,6 @@ private struct CaptureWorkspaceMaskOverlay: View {
 
 private struct CaptureLensControlStrip: View {
     @ObservedObject var cameraRuntime: CaptureCameraRuntime
-    @Binding var activeControlTarget: CaptureActiveControlTarget
     let isManualFocusModeActive: Bool
     let onToggleExposureLock: () -> Void
     let onToggleManualFocusMode: () -> Void
@@ -2758,11 +2560,8 @@ private struct CaptureLensControlStrip: View {
                         let style = SellerCameraControlVisualStyle.style(for: isSelected ? .selected : .normal)
 
                         Button {
-                            if isSelected {
-                                activeControlTarget = activeControlTarget == .lensZoom ? .none : .lensZoom
-                            } else {
+                            if !isSelected {
                                 cameraRuntime.selectSemanticFocal(focal)
-                                activeControlTarget = .lensZoom
                             }
                         } label: {
                             Text(focal.displayText)
@@ -2784,7 +2583,7 @@ private struct CaptureLensControlStrip: View {
                         .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
                         .accessibilityLabel("\(focal.displayText) 焦段")
                         .accessibilityValue(isSelected ? "已选中" : "未选中")
-                        .accessibilityHint(isSelected ? "双击打开或关闭变焦刻度" : "双击切换到此焦段")
+                        .accessibilityHint(isSelected ? "当前焦段已选中，可在取景器双指缩放" : "双击切换到此焦段")
                     }
                 }
             }
@@ -2855,392 +2654,6 @@ private struct CaptureLensControlStrip: View {
                     .stroke(style.stroke, lineWidth: 1)
             )
             .shadow(color: style.shadow, radius: 9, x: 0, y: 0)
-    }
-}
-
-private struct CaptureZoomDialView: View {
-    private enum Tuning {
-        static let tickSpacing: CGFloat = 34
-        static let pointsPerZoomHigh: CGFloat = 172
-        static let smoothingPreviousWeight: Double = 0.34
-        static let dragSnapThreshold: Double = 0.016
-        static let dragSnapWeight: Double = 0.25
-        static let settleSnapThreshold: Double = 0.075
-        static let settleSnapWeight: Double = 1.0
-        static let emitDelta: Double = 0.005
-        static let maxInertiaDelta: CGFloat = 38
-        static let inertiaScale: CGFloat = 0.22
-        static let anchorHapticThreshold: Double = 0.032
-        static let hapticMinInterval: TimeInterval = 0.12
-    }
-
-    let values: [Double]
-    let valueRange: ClosedRange<Double>
-    let selectedIndex: Int
-    let currentValueText: String
-    let majorTickIndexes: Set<Int>
-    let isEnabled: Bool
-    let onEditingBegan: () -> Void
-    let onValueChanged: (Double) -> Void
-    let onValueSettled: (Double) -> Void
-    @State private var dragOffset: CGFloat = 0
-    @State private var isDragInProgress = false
-    @State private var lastScrubSensitivity: CGFloat = 1
-    @State private var lastHapticAt: Date = .distantPast
-    @State private var lastHapticSignature: String?
-    @State private var dragBaselineValue: Double?
-    @State private var lastEmittedZoomValue: Double?
-    @State private var lastDragSampleTranslation: CGFloat = 0
-    @State private var lastDragSampleAt: Date?
-    @State private var filteredDragVelocity: CGFloat = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let accent = SellerCameraColor.accentPrimary
-    private let tickSpacing: CGFloat = Tuning.tickSpacing
-    private let interactionProfile = SellerCameraRulerInteractionProfile.zoomPrecision
-    private let rulerStyle = SellerCameraRulerStyle.professional
-
-    var body: some View {
-        GeometryReader { geometry in
-            let width = max(1, geometry.size.width)
-            let centerX = width / 2
-
-            ZStack {
-                RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
-                    .fill(SellerCameraColor.controlSurfacePrimary.opacity(isEnabled ? 0.74 : 0.44))
-
-                lensRulerTicks
-                    .offset(x: centerX - CGFloat(selectedIndex) * tickSpacing - tickSpacing / 2 + dragOffset)
-                    .frame(width: width, height: 52, alignment: .leading)
-                    .clipped()
-                    .position(x: centerX, y: 42)
-
-                centerPointer
-                    .position(x: centerX, y: 41)
-
-                valueBadge
-                    .position(x: centerX, y: 12)
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        guard isEnabled else { return }
-                        handleDrag(value)
-                    }
-                    .onEnded { value in
-                        finishDrag(
-                            translationWidth: value.translation.width,
-                            predictedEndTranslationWidth: value.predictedEndTranslation.width,
-                            animateOffset: true
-                        )
-                    }
-            )
-            .onDisappear {
-                finishDrag(
-                    translationWidth: nil,
-                    predictedEndTranslationWidth: nil,
-                    animateOffset: false
-                )
-            }
-        }
-        .frame(height: 70)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: SellerCameraRadius.control, style: .continuous)
-                .fill(SellerCameraColor.controlSurfacePrimary.opacity(isEnabled ? 0.42 : 0.28))
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("变焦刻度")
-        .accessibilityValue(currentValueText)
-        .accessibilityHint(isEnabled ? "左右拖动调节变焦，手指上移可精细微调" : "当前变焦不可用")
-        .accessibilityAdjustableAction { direction in
-            guard isEnabled else { return }
-            switch direction {
-            case .increment:
-                applyAccessibleZoomStep(1)
-            case .decrement:
-                applyAccessibleZoomStep(-1)
-            default:
-                break
-            }
-        }
-    }
-
-    private var lensRulerTicks: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                let isSelected = index == selectedIndex
-                let isMajor = majorTickIndexes.contains(index)
-                VStack(spacing: 3) {
-                    Rectangle()
-                        .fill(tickColor(isSelected: isSelected, isMajor: isMajor))
-                        .frame(width: isSelected ? rulerStyle.tickSelectedWidth : rulerStyle.tickNormalWidth, height: tickHeight(isSelected: isSelected, isMajor: isMajor))
-                        .shadow(color: isSelected ? accent.opacity(0.22) : .clear, radius: 4, x: 0, y: 0)
-                    Text(isMajor ? formatMultiplier(value) : "")
-                        .font(isSelected ? SellerCameraTypography.rulerSecondaryValue : SellerCameraTypographyToken.rulerMinor)
-                        .monospacedDigit()
-                        .foregroundStyle(tickLabelColor(isSelected: isSelected))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.55)
-                        .frame(width: 50, height: 12)
-                }
-                .frame(width: tickSpacing, height: 43, alignment: .bottom)
-            }
-        }
-        .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.selection, reduceMotion: reduceMotion), value: selectedIndex)
-    }
-
-    private var centerPointer: some View {
-        VStack(spacing: 0) {
-            LensRulerTriangle()
-                .fill(accent)
-                .frame(width: 8, height: 5)
-                .shadow(color: accent.opacity(0.28), radius: 5, x: 0, y: 0)
-
-            Rectangle()
-                .fill(accent)
-                .frame(width: rulerStyle.indicatorWidth, height: rulerStyle.indicatorHeight)
-                .shadow(color: accent.opacity(0.28), radius: 6, x: 0, y: 0)
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var valueBadge: some View {
-        Text(currentValueText)
-            .font(SellerCameraTypography.rulerPrimaryValue)
-            .monospacedDigit()
-            .foregroundStyle(isEnabled ? SellerCameraColor.textPrimary : SellerCameraColor.textDisabled)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(accent.opacity(isEnabled ? 0.20 : 0.07))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(accent.opacity(isEnabled ? 0.42 : 0.12), lineWidth: 1)
-            )
-            .shadow(color: accent.opacity(isEnabled ? 0.18 : 0), radius: 8, x: 0, y: 0)
-            .id(currentValueText)
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            .animation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.panelDismiss, reduceMotion: reduceMotion), value: currentValueText)
-            .allowsHitTesting(false)
-    }
-
-    private func tickHeight(isSelected: Bool, isMajor: Bool) -> CGFloat {
-        if isSelected { return rulerStyle.selectedTickHeight }
-        return isMajor ? rulerStyle.majorTickHeight : rulerStyle.minorTickHeight
-    }
-
-    private func tickColor(isSelected: Bool, isMajor: Bool) -> Color {
-        guard isEnabled else { return SellerCameraColor.textDisabled.opacity(0.66) }
-        if isSelected { return accent }
-        return SellerCameraColor.textPrimary.opacity(isMajor ? 0.34 : 0.16)
-    }
-
-    private func tickLabelColor(isSelected: Bool) -> Color {
-        guard isEnabled else { return SellerCameraColor.textDisabled.opacity(0.74) }
-        if isSelected { return SellerCameraColor.textPrimary }
-        return SellerCameraColor.textTertiary
-    }
-
-    private func handleDrag(_ value: DragGesture.Value) {
-        guard isEnabled else { return }
-        if !isDragInProgress {
-            isDragInProgress = true
-            dragBaselineValue = selectedZoomValue
-            lastEmittedZoomValue = nil
-            resetVelocityTracking(translationWidth: value.translation.width, at: Date())
-            onEditingBegan()
-        }
-        let translation = value.translation
-        let velocity = updateVelocityTracking(translationWidth: translation.width, at: Date())
-        let sensitivity = scrubSensitivity(for: translation.height, velocity: velocity)
-        lastScrubSensitivity = sensitivity
-        dragOffset = translation.width.truncatingRemainder(dividingBy: tickSpacing)
-
-        let rawZoom = mappedZoomValue(for: translation.width, sensitivity: sensitivity)
-        let smoothedZoom = smoothedZoomValue(rawZoom)
-        let emittedZoom = softSnappedZoomValue(smoothedZoom, final: false)
-        guard shouldEmitZoomValue(emittedZoom) else { return }
-
-#if DEBUG
-        print(
-            "[CaptureLensZoomRuler] " +
-            "dragDelta=\(String(format: "%.1f", translation.width)) " +
-            "sensitivity=\(String(format: "%.2f", sensitivity)) " +
-            "rawZoom=\(String(format: "%.3f", rawZoom)) " +
-            "smoothedZoom=\(String(format: "%.3f", smoothedZoom)) " +
-            "emittedZoom=\(String(format: "%.3f", emittedZoom))"
-        )
-#endif
-        lastEmittedZoomValue = emittedZoom
-        onValueChanged(emittedZoom)
-        triggerAnchorHapticIfNeeded(for: emittedZoom, at: Date())
-    }
-
-    private func finishDrag(
-        translationWidth: CGFloat?,
-        predictedEndTranslationWidth: CGFloat?,
-        animateOffset: Bool
-    ) {
-        if isEnabled, let translationWidth, predictedEndTranslationWidth != nil {
-            applyInertiaSettle(
-                translationWidth: translationWidth,
-                releaseVelocity: filteredDragVelocity
-            )
-        }
-        isDragInProgress = false
-        lastScrubSensitivity = 1
-        dragBaselineValue = nil
-        lastEmittedZoomValue = nil
-        lastDragSampleAt = nil
-        lastDragSampleTranslation = 0
-        filteredDragVelocity = 0
-        if animateOffset {
-            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.snap, reduceMotion: reduceMotion)) {
-                dragOffset = 0
-            }
-        } else {
-            dragOffset = 0
-        }
-    }
-
-    private func applyInertiaSettle(translationWidth: CGFloat, releaseVelocity: CGFloat) {
-        let baseline = dragBaselineValue ?? selectedZoomValue
-        let sensitivity = max(0.1, lastScrubSensitivity)
-        let predictedDelta = releaseVelocity * CGFloat(interactionProfile.inertiaProjectionDuration)
-        let cappedInertiaDelta = abs(predictedDelta) >= interactionProfile.velocityThreshold
-            ? max(
-                -Tuning.maxInertiaDelta,
-                min(Tuning.maxInertiaDelta, predictedDelta * interactionProfile.inertiaScale)
-            )
-            : 0
-        let inertiaEnabled = sensitivity >= 1
-        let finalTranslation = translationWidth + (inertiaEnabled ? cappedInertiaDelta : 0)
-        let target = finalSnappedZoomValue(mappedZoomValue(
-            for: finalTranslation,
-            sensitivity: sensitivity,
-            baseline: baseline
-        ))
-        onValueSettled(target)
-        triggerAnchorHapticIfNeeded(for: target, at: Date(), force: true)
-    }
-
-    private var selectedZoomValue: Double {
-        guard values.indices.contains(selectedIndex) else {
-            return max(valueRange.lowerBound, min(valueRange.upperBound, 1.0))
-        }
-        return values[selectedIndex]
-    }
-
-    private func mappedZoomValue(
-        for translationWidth: CGFloat,
-        sensitivity: CGFloat,
-        baseline explicitBaseline: Double? = nil
-    ) -> Double {
-        let baseline = explicitBaseline ?? dragBaselineValue ?? selectedZoomValue
-        let effectiveSensitivity = max(0.12, sensitivity)
-        let pointsPerZoom: CGFloat = baseline > 3.0 ? Tuning.pointsPerZoomHigh : interactionProfile.pointsPerStep
-        let rawDelta = Double((-translationWidth / pointsPerZoom) * effectiveSensitivity)
-        var candidate = baseline + rawDelta
-        if candidate > 3.0 {
-            candidate = 3.0 + (candidate - 3.0) * 0.58
-        }
-        return clampedZoom(candidate)
-    }
-
-    private func smoothedZoomValue(_ rawZoom: Double) -> Double {
-        guard let lastEmittedZoomValue else { return rawZoom }
-        return clampedZoom(
-            lastEmittedZoomValue * Tuning.smoothingPreviousWeight
-                + rawZoom * (1.0 - Tuning.smoothingPreviousWeight)
-        )
-    }
-
-    private func softSnappedZoomValue(_ zoom: Double, final: Bool) -> Double {
-        let threshold = final ? Tuning.settleSnapThreshold : Tuning.dragSnapThreshold
-        guard let anchor = zoomAnchors.min(by: { abs($0 - zoom) < abs($1 - zoom) }),
-              abs(anchor - zoom) <= threshold else {
-            return clampedZoom(zoom)
-        }
-        let weight = final ? Tuning.settleSnapWeight : Tuning.dragSnapWeight
-        return clampedZoom(zoom + (anchor - zoom) * weight)
-    }
-
-    private func finalSnappedZoomValue(_ zoom: Double) -> Double {
-        softSnappedZoomValue(zoom, final: true)
-    }
-
-    private var zoomAnchors: [Double] {
-        [0.5, 1.0, 2.0, 3.0].filter { $0 >= valueRange.lowerBound - 0.001 && $0 <= valueRange.upperBound + 0.001 }
-    }
-
-    private func clampedZoom(_ zoom: Double) -> Double {
-        max(valueRange.lowerBound, min(valueRange.upperBound, zoom))
-    }
-
-    private func shouldEmitZoomValue(_ value: Double) -> Bool {
-        guard let lastEmittedZoomValue else { return true }
-        return abs(lastEmittedZoomValue - value) >= Tuning.emitDelta
-    }
-
-    private func scrubSensitivity(for verticalTranslation: CGFloat, velocity: CGFloat = 0) -> CGFloat {
-        interactionProfile.scrubSensitivity(
-            forVerticalTranslation: verticalTranslation,
-            velocity: velocity
-        )
-    }
-
-    private func resetVelocityTracking(translationWidth: CGFloat, at now: Date) {
-        lastDragSampleTranslation = translationWidth
-        lastDragSampleAt = now
-        filteredDragVelocity = 0
-    }
-
-    private func updateVelocityTracking(translationWidth: CGFloat, at now: Date) -> CGFloat {
-        guard let lastDragSampleAt else {
-            resetVelocityTracking(translationWidth: translationWidth, at: now)
-            return 0
-        }
-        let elapsed = max(0.001, now.timeIntervalSince(lastDragSampleAt))
-        let instantaneousVelocity = (translationWidth - lastDragSampleTranslation) / CGFloat(elapsed)
-        if filteredDragVelocity == 0 || instantaneousVelocity.sign != filteredDragVelocity.sign {
-            filteredDragVelocity = instantaneousVelocity
-        } else {
-            filteredDragVelocity = filteredDragVelocity * 0.35 + instantaneousVelocity * 0.65
-        }
-        lastDragSampleTranslation = translationWidth
-        self.lastDragSampleAt = now
-        return filteredDragVelocity
-    }
-
-    private func triggerAnchorHapticIfNeeded(for zoom: Double, at now: Date, force: Bool = false) {
-        guard let anchor = zoomAnchors.min(by: { abs($0 - zoom) < abs($1 - zoom) }) else { return }
-        guard force || abs(anchor - zoom) <= Tuning.anchorHapticThreshold else { return }
-        let signature = "lens-anchor-\(String(format: "%.1f", anchor))"
-        guard signature != lastHapticSignature else { return }
-        guard now.timeIntervalSince(lastHapticAt) >= Tuning.hapticMinInterval else { return }
-        lastHapticSignature = signature
-        lastHapticAt = now
-        SellerCameraHaptic.play(.selection, signature: signature, minimumInterval: Tuning.hapticMinInterval)
-    }
-
-    private func applyAccessibleZoomStep(_ step: Int) {
-        guard values.indices.contains(selectedIndex) else { return }
-        let targetIndex = max(0, min(values.count - 1, selectedIndex + step))
-        guard targetIndex != selectedIndex else { return }
-        let targetValue = values[targetIndex]
-        onEditingBegan()
-        onValueSettled(targetValue)
-        triggerAnchorHapticIfNeeded(for: targetValue, at: Date(), force: true)
-    }
-
-    private func formatMultiplier(_ multiplier: Double) -> String {
-        String(format: "%.1fx", multiplier)
     }
 }
 
@@ -4302,7 +3715,7 @@ private extension CaptureScreen {
             "parameter=\(parameter.rawValue) " +
             "allowed=\(allowed) " +
             "activePanel=\(activePanel?.rawValue ?? "nil") " +
-            "lensZoomActive=\(isLensZoomControlPresented) " +
+            "bottomPanelExpanded=\(isBottomParameterPanelExpanded) " +
             "blockedReason=\(blockedReason ?? "none")"
         )
 #endif

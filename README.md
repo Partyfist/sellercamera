@@ -105,3 +105,4 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R81 iOS 27 专业相机视觉统一与控件组件化报告：`docs/reports/r81_ios27_camera_design_system_and_control_unification.md`
 - R82 拍摄预览 HUD 与 Glyph 视觉尾项收口报告：`docs/reports/r82_preview_hud_and_glyph_visual_closure.md`
 - R83A1 专业参数 Ruler 物理与中断接管报告：`docs/reports/r83a1_ruler_gesture_physics_and_interruption.md`
+- R83B 移除底部 Zoom 参数刻度入口报告：`docs/reports/r83b_remove_bottom_zoom_ruler.md`
