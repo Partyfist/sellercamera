@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		148245972F794E9E003C8259 /* SellerCamera.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SellerCamera.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000102 /* SellerCameraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SellerCameraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +17,22 @@
 			path = SellerCamera;
 			sourceTree = "<group>";
 		};
+		A00000000000000000000103 /* SellerCameraTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SellerCameraTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		148245942F794E9E003C8259 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000105 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +46,7 @@
 			isa = PBXGroup;
 			children = (
 				148245992F794E9E003C8259 /* SellerCamera */,
+				A00000000000000000000103 /* SellerCameraTests */,
 				148245982F794E9E003C8259 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				148245972F794E9E003C8259 /* SellerCamera.app */,
+				A00000000000000000000102 /* SellerCameraTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,7 +85,40 @@
 			productReference = 148245972F794E9E003C8259 /* SellerCamera.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A00000000000000000000101 /* SellerCameraTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000107 /* Build configuration list for PBXNativeTarget "SellerCameraTests" */;
+			buildPhases = (
+				A00000000000000000000104 /* Sources */,
+				A00000000000000000000105 /* Frameworks */,
+				A00000000000000000000106 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000111 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A00000000000000000000103 /* SellerCameraTests */,
+			);
+			name = SellerCameraTests;
+			packageProductDependencies = (
+			);
+			productName = SellerCameraTests;
+			productReference = A00000000000000000000102 /* SellerCameraTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		A00000000000000000000110 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1482458F2F794E9E003C8259 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 148245962F794E9E003C8259;
+			remoteInfo = SellerCamera;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXProject section */
 		1482458F2F794E9E003C8259 /* Project object */ = {
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					148245962F794E9E003C8259 = {
 						CreatedOnToolsVersion = 26.4;
+					};
+					A00000000000000000000101 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 148245962F794E9E003C8259;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				148245962F794E9E003C8259 /* SellerCamera */,
+				A00000000000000000000101 /* SellerCameraTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		148245952F794E9E003C8259 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000106 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A00000000000000000000104 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00000000000000000000111 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 148245962F794E9E003C8259 /* SellerCamera */;
+			targetProxy = A00000000000000000000110 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		148245A02F794E9F003C8259 /* Debug */ = {
@@ -314,6 +389,62 @@
 			};
 			name = Release;
 		};
+		A00000000000000000000108 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXFWYJU8YF;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.partyfist.SellerCameraTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SellerCamera.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SellerCamera";
+				TEST_TARGET_NAME = SellerCamera;
+			};
+			name = Debug;
+		};
+		A00000000000000000000109 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXFWYJU8YF;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.partyfist.SellerCameraTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SellerCamera.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SellerCamera";
+				TEST_TARGET_NAME = SellerCamera;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -331,6 +462,15 @@
 			buildConfigurations = (
 				148245A32F794E9F003C8259 /* Debug */,
 				148245A42F794E9F003C8259 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000107 /* Build configuration list for PBXNativeTarget "SellerCameraTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000108 /* Debug */,
+				A00000000000000000000109 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

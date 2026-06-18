@@ -2,11 +2,19 @@
 
 Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄 App。
 
-## 当前正式主线状态（R27）
+## 当前正式主线状态
 
-- 当前正式开发基线：`main@d6b013d6cf4821edb67c965f221c42fbd2203b2c`
+- 当前拍摄冻结基线：`camera-baseline-r77i`
+- 当前开发分支：`feature/product-project-workflow`
+- 当前里程碑：P1A Product Workspace Foundation
 - 端侧正式分割/白底主线：`Vision`（`VNGenerateForegroundInstanceMaskRequest`）
 - 多模型实验能力：已从正式主线收口，不作为当前正式产品能力暴露
+
+## 当前完成能力
+
+- 拍摄基础能力已冻结：专业参数、Auto EV/WB、点击对焦、焦段、虚拟/物理镜头通道与 MF 三态降级。
+- 商品项目基础已接入：项目自动命名、当前项目恢复、Application Support 资产目录、拍摄原图归档、缩略图、资产记录与分类统计。
+- 下一任务方向：P1B Product Workspace Navigation Shell，需等待最终 UI 布局确认。
 
 ## 实验分支归档
 
@@ -110,3 +118,7 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R83A1 专业参数 Ruler 物理与中断接管报告：`docs/reports/r83a1_ruler_gesture_physics_and_interruption.md`
 - R83B 移除底部 Zoom 参数刻度入口报告：`docs/reports/r83b_remove_bottom_zoom_ruler.md`
 - R83B1 修复 13mm / 24mm 焦段 target mapping 报告：`docs/reports/r83b1_fix_13mm_24mm_lens_target_mapping.md`
+- P1A Product Workspace Foundation 报告：`docs/reports/p1a_product_workspace_foundation.md`
+- Product Workspace 架构说明：`docs/architecture/product_workspace_architecture.md`
+- Product Asset Storage 说明：`docs/architecture/product_asset_storage.md`
+- 待定产品决策清单：`docs/product/pending_product_decisions.md`

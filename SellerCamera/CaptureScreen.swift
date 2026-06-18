@@ -13,6 +13,7 @@ import UIKit
 
 struct CaptureScreen: View {
     @StateObject private var cameraRuntime = CaptureCameraRuntime()
+    @StateObject private var productWorkspace = ProductWorkspaceSession()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isLatestReviewPresented = false
     @State private var isImportPickerPresented = false
@@ -165,9 +166,16 @@ struct CaptureScreen: View {
                         cameraRuntime.prepareForReviewPresentation()
                         isLatestReviewPresented = true
                     },
-                    onShutterTap: cameraRuntime.triggerPhotoCapture,
-                    onTapGalleryPlaceholder: {
-                        cameraRuntime.captureHintText = "图册与管理入口已预留，后续任务包接入完整能力。"
+                    onShutterTap: {
+                        cameraRuntime.setProjectCaptureCategory(selectedCaptureIntent.projectCategory)
+                        cameraRuntime.triggerPhotoCapture()
+                    },
+                    projectActionSymbol: productWorkspace.currentProject == nil ? "folder.badge.plus" : "folder.fill",
+                    projectActionTitle: "项目",
+                    onTapProjectPlaceholder: {
+                        Task {
+                            await handleProductProjectPlaceholderTap()
+                        }
                     }
                 )
                 .padding(.horizontal, 18)
@@ -587,7 +595,20 @@ struct CaptureScreen: View {
             }
         }
         .onChange(of: selectedCaptureIntent) { intent in
+            cameraRuntime.setProjectCaptureCategory(intent.projectCategory)
             cameraRuntime.captureHintText = intent.hintText
+        }
+        .onChange(of: cameraRuntime.latestProjectArchiveStatusText) { _ in
+            Task {
+                await productWorkspace.refreshCurrentProjectState()
+            }
+        }
+        .task {
+            cameraRuntime.setProjectCaptureCategory(selectedCaptureIntent.projectCategory)
+            await productWorkspace.restoreCurrentProject()
+            if productWorkspace.currentProject != nil {
+                cameraRuntime.captureHintText = productWorkspace.lastStatusText
+            }
         }
         .onChange(of: cameraRuntime.currentExposureBias) { value in
             guard let pendingExposureBiasWheelValue else { return }
@@ -798,6 +819,16 @@ struct CaptureScreen: View {
         } catch {
             cameraRuntime.notifyImportFailure("读取相册图片失败，请重试")
         }
+    }
+
+    @MainActor
+    private func handleProductProjectPlaceholderTap() async {
+        if productWorkspace.currentProject == nil {
+            await productWorkspace.createProject()
+        } else {
+            await productWorkspace.refreshCurrentProjectState()
+        }
+        cameraRuntime.captureHintText = productWorkspace.lastStatusText
     }
 
     private func selectAspectRatioPreset(_ preset: CapturePhotoAspectRatioPreset) {
@@ -1541,6 +1572,15 @@ private enum CaptureIntentKind: String, CaseIterable, Identifiable {
             return "细节图 · 清晰优先"
         case .whiteBackground:
             return "白底导向 · 保边界"
+        }
+    }
+
+    var projectCategory: CaptureCategory {
+        switch self {
+        case .standard, .whiteBackground:
+            return .standard
+        case .detail:
+            return .detail
         }
     }
 }
@@ -4485,7 +4525,9 @@ private struct CaptureBottomActionBar: View {
     let latestResult: CaptureStillPhotoResult?
     let onTapLatestResult: () -> Void
     let onShutterTap: () -> Void
-    let onTapGalleryPlaceholder: () -> Void
+    let projectActionSymbol: String
+    let projectActionTitle: String
+    let onTapProjectPlaceholder: () -> Void
 
     var body: some View {
         HStack {
@@ -4520,15 +4562,15 @@ private struct CaptureBottomActionBar: View {
 
             Spacer(minLength: 14)
 
-            Button(action: onTapGalleryPlaceholder) {
+            Button(action: onTapProjectPlaceholder) {
                 sideControlCard(
-                    symbol: "rectangle.stack",
-                    title: "图片"
+                    symbol: projectActionSymbol,
+                    title: projectActionTitle
                 )
             }
             .buttonStyle(SellerCameraPressButtonStyle())
-            .accessibilityLabel("图片")
-            .accessibilityHint("双击打开图片管理入口")
+            .accessibilityLabel("项目")
+            .accessibilityHint("双击创建或查看当前项目状态")
         }
         .frame(height: 86)
     }

@@ -731,6 +731,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var latestProcessedResult: CaptureProcessedPhotoResult?
     @Published var latestProcessingErrorText: String?
     @Published var isProcessingLatestResult = false
+    @Published var latestProjectArchiveStatusText: String?
+    @Published var latestProjectAssetCounts: ProjectAssetCounts = .empty
     @Published var isSavingLatestProcessed = false
     @Published var isLatestProcessedSaveCompleted = false
     @Published var latestProcessedSaveFailureText: String?
@@ -782,6 +784,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var isRAWCaptureSupported = false
     @Published var isManualFocusEntrySupported = false
     @Published var isManualFocusSupported = false
+    @Published var selectedProjectCaptureCategory: CaptureCategory = .standard
     @Published var canSwitchCamera = false
     @Published var activeCameraPosition: AVCaptureDevice.Position = .back
     @Published var activeCameraDeviceType: AVCaptureDevice.DeviceType?
@@ -827,6 +830,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let videoAnalysisQueue = DispatchQueue(label: "seller.camera.video.analysis.queue")
+    private let projectAssetArchiveService = ProductWorkspaceEnvironment.shared.archiveService
     private var isSessionConfigured = false
     private var pendingCaptureDelegates: [UUID: CapturePhotoDelegateProxy] = [:]
     private var countdownTask: Task<Void, Never>?
@@ -944,6 +948,10 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         } else {
             startBurstSequence()
         }
+    }
+
+    func setProjectCaptureCategory(_ category: CaptureCategory) {
+        selectedProjectCaptureCategory = category
     }
 
     @MainActor
@@ -3522,7 +3530,49 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         quickPreviewHideTask?.cancel()
         quickPreviewHideTask = nil
         quickPreviewImage = nil
+        archiveCaptureResultToCurrentProject(outputAdjustedResult)
         refreshStatusSummary()
+    }
+
+    private func archiveCaptureResultToCurrentProject(_ result: CaptureStillPhotoResult) {
+        let category = selectedProjectCaptureCategory
+        let origin: AssetOrigin = result.source == .camera ? .camera : .photoLibrary
+        let width = result.pixelSize.map { Int($0.width.rounded()) }
+        let height = result.pixelSize.map { Int($0.height.rounded()) }
+        let input = ProjectPhotoArchiveInput(
+            data: result.imageData,
+            capturedAt: result.capturedAt,
+            category: category,
+            origin: origin,
+            width: width,
+            height: height,
+            metadata: result.metadata
+        )
+
+        let archiveService = projectAssetArchiveService
+        Task { [weak self] in
+            do {
+                let archiveResult = try await Task.detached(priority: .utility) {
+                    try await archiveService.archivePhoto(input)
+                }.value
+                self?.applyProjectArchiveSuccess(archiveResult)
+            } catch {
+                self?.applyProjectArchiveFailure()
+            }
+        }
+    }
+
+    @MainActor
+    private func applyProjectArchiveSuccess(_ archiveResult: ProjectAssetArchiveResult) {
+        latestProjectAssetCounts = archiveResult.counts
+        latestProjectArchiveStatusText = "已归档到 \(archiveResult.project.name)"
+        captureHintText = "拍摄成功 · 已归档 \(archiveResult.counts.total) 张"
+    }
+
+    @MainActor
+    private func applyProjectArchiveFailure() {
+        latestProjectArchiveStatusText = "项目归档失败"
+        captureHintText = "拍摄成功 · 项目归档失败，可继续拍摄"
     }
 
     private func applySelectedOutputPresetsIfNeeded(
