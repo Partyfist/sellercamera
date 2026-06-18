@@ -63,21 +63,28 @@ nonisolated struct ProjectAssetRecord: Codable, Equatable {
     var schemaVersion: Int
     var projectID: UUID
     var category: CaptureCategory
-    var mediaType: ProjectAssetType
-    var origin: AssetOrigin
+    var mediaType: ProjectAssetMediaType
+    var sourceType: ProjectAssetSourceType
     var originalFilename: String?
     var relativePath: String
     var thumbnailRelativePath: String?
     var createdAt: Date
+    var importedAt: Date?
     var updatedAt: Date
-    var width: Int?
-    var height: Int?
-    var duration: Double?
-    var fileSize: Int64?
+    var pixelWidth: Int?
+    var pixelHeight: Int?
+    var durationSeconds: Double?
+    var fileSizeBytes: Int64?
     var isFavorite: Bool
+    var isBest: Bool
     var isDeleted: Bool
-    var version: Int
+    var deletionState: AssetDeletionState
+    var deletedAt: Date?
     var parentAssetID: UUID?
+    var rootAssetID: UUID?
+    var assetRole: AssetRole
+    var processingState: AssetProcessingState
+    var versionNumber: Int
     var skuID: UUID?
 
     enum CodingKeys: String, CodingKey {
@@ -87,20 +94,33 @@ nonisolated struct ProjectAssetRecord: Codable, Equatable {
         case category
         case mediaType
         case assetType
+        case sourceType
         case origin
         case originalFilename
         case relativePath
         case thumbnailRelativePath
         case createdAt
+        case importedAt
         case updatedAt
+        case pixelWidth
+        case pixelHeight
         case width
         case height
+        case durationSeconds
         case duration
+        case fileSizeBytes
         case fileSize
         case isFavorite
+        case isBest
         case isDeleted
+        case deletionState
+        case deletedAt
         case version
         case parentAssetID
+        case rootAssetID
+        case assetRole
+        case processingState
+        case versionNumber
         case skuID
     }
 
@@ -109,21 +129,28 @@ nonisolated struct ProjectAssetRecord: Codable, Equatable {
         schemaVersion: Int,
         projectID: UUID,
         category: CaptureCategory,
-        mediaType: ProjectAssetType,
-        origin: AssetOrigin,
+        mediaType: ProjectAssetMediaType,
+        sourceType: ProjectAssetSourceType,
         originalFilename: String?,
         relativePath: String,
         thumbnailRelativePath: String?,
         createdAt: Date,
+        importedAt: Date?,
         updatedAt: Date,
-        width: Int?,
-        height: Int?,
-        duration: Double?,
-        fileSize: Int64?,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        durationSeconds: Double?,
+        fileSizeBytes: Int64?,
         isFavorite: Bool,
+        isBest: Bool,
         isDeleted: Bool,
-        version: Int,
+        deletionState: AssetDeletionState,
+        deletedAt: Date?,
         parentAssetID: UUID?,
+        rootAssetID: UUID?,
+        assetRole: AssetRole,
+        processingState: AssetProcessingState,
+        versionNumber: Int,
         skuID: UUID?
     ) {
         self.id = id
@@ -131,45 +158,76 @@ nonisolated struct ProjectAssetRecord: Codable, Equatable {
         self.projectID = projectID
         self.category = category
         self.mediaType = mediaType
-        self.origin = origin
+        self.sourceType = sourceType
         self.originalFilename = originalFilename
         self.relativePath = relativePath
         self.thumbnailRelativePath = thumbnailRelativePath
         self.createdAt = createdAt
+        self.importedAt = importedAt
         self.updatedAt = updatedAt
-        self.width = width
-        self.height = height
-        self.duration = duration
-        self.fileSize = fileSize
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+        self.durationSeconds = durationSeconds
+        self.fileSizeBytes = fileSizeBytes
         self.isFavorite = isFavorite
+        self.isBest = isBest
         self.isDeleted = isDeleted
-        self.version = version
+        self.deletionState = deletionState
+        self.deletedAt = deletedAt
         self.parentAssetID = parentAssetID
+        self.rootAssetID = rootAssetID
+        self.assetRole = assetRole
+        self.processingState = processingState
+        self.versionNumber = versionNumber
         self.skuID = skuID
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        let decodedSchemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        schemaVersion = max(decodedSchemaVersion, 2)
         projectID = try container.decode(UUID.self, forKey: .projectID)
         category = try container.decode(CaptureCategory.self, forKey: .category)
-        mediaType = try container.decodeIfPresent(ProjectAssetType.self, forKey: .mediaType)
-            ?? (try container.decodeIfPresent(ProjectAssetType.self, forKey: .assetType) ?? .photo)
-        origin = try container.decodeIfPresent(AssetOrigin.self, forKey: .origin) ?? .camera
+        if let decodedMediaType = try container.decodeIfPresent(ProjectAssetMediaType.self, forKey: .mediaType) {
+            mediaType = decodedMediaType
+        } else {
+            let legacyType = try container.decodeIfPresent(ProjectAssetType.self, forKey: .assetType) ?? .photo
+            mediaType = ProjectAssetMediaType(assetType: legacyType)
+        }
+        if let decodedSourceType = try container.decodeIfPresent(ProjectAssetSourceType.self, forKey: .sourceType) {
+            sourceType = decodedSourceType
+        } else {
+            let legacyOrigin = try container.decodeIfPresent(AssetOrigin.self, forKey: .origin) ?? .camera
+            sourceType = ProjectAssetSourceType(origin: legacyOrigin)
+        }
         originalFilename = try container.decodeIfPresent(String.self, forKey: .originalFilename)
         relativePath = try container.decode(String.self, forKey: .relativePath)
         thumbnailRelativePath = try container.decodeIfPresent(String.self, forKey: .thumbnailRelativePath)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
+        importedAt = try container.decodeIfPresent(Date.self, forKey: .importedAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
-        width = try container.decodeIfPresent(Int.self, forKey: .width)
-        height = try container.decodeIfPresent(Int.self, forKey: .height)
-        duration = try container.decodeIfPresent(Double.self, forKey: .duration)
-        fileSize = try container.decodeIfPresent(Int64.self, forKey: .fileSize)
+        pixelWidth = try container.decodeIfPresent(Int.self, forKey: .pixelWidth)
+            ?? container.decodeIfPresent(Int.self, forKey: .width)
+        pixelHeight = try container.decodeIfPresent(Int.self, forKey: .pixelHeight)
+            ?? container.decodeIfPresent(Int.self, forKey: .height)
+        durationSeconds = try container.decodeIfPresent(Double.self, forKey: .durationSeconds)
+            ?? container.decodeIfPresent(Double.self, forKey: .duration)
+        fileSizeBytes = try container.decodeIfPresent(Int64.self, forKey: .fileSizeBytes)
+            ?? container.decodeIfPresent(Int64.self, forKey: .fileSize)
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
-        isDeleted = try container.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
-        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        isBest = try container.decodeIfPresent(Bool.self, forKey: .isBest) ?? false
+        let legacyIsDeleted = try container.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
+        deletionState = try container.decodeIfPresent(AssetDeletionState.self, forKey: .deletionState)
+            ?? (legacyIsDeleted ? .trashed : .active)
+        isDeleted = legacyIsDeleted || deletionState == .trashed
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
         parentAssetID = try container.decodeIfPresent(UUID.self, forKey: .parentAssetID)
+        rootAssetID = try container.decodeIfPresent(UUID.self, forKey: .rootAssetID) ?? id
+        assetRole = try container.decodeIfPresent(AssetRole.self, forKey: .assetRole) ?? .original
+        processingState = try container.decodeIfPresent(AssetProcessingState.self, forKey: .processingState) ?? .original
+        versionNumber = try container.decodeIfPresent(Int.self, forKey: .versionNumber)
+            ?? (try container.decodeIfPresent(Int.self, forKey: .version) ?? 1)
         skuID = try container.decodeIfPresent(UUID.self, forKey: .skuID)
     }
 
@@ -180,20 +238,27 @@ nonisolated struct ProjectAssetRecord: Codable, Equatable {
         try container.encode(projectID, forKey: .projectID)
         try container.encode(category, forKey: .category)
         try container.encode(mediaType, forKey: .mediaType)
-        try container.encode(origin, forKey: .origin)
+        try container.encode(sourceType, forKey: .sourceType)
         try container.encodeIfPresent(originalFilename, forKey: .originalFilename)
         try container.encode(relativePath, forKey: .relativePath)
         try container.encodeIfPresent(thumbnailRelativePath, forKey: .thumbnailRelativePath)
         try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(importedAt, forKey: .importedAt)
         try container.encode(updatedAt, forKey: .updatedAt)
-        try container.encodeIfPresent(width, forKey: .width)
-        try container.encodeIfPresent(height, forKey: .height)
-        try container.encodeIfPresent(duration, forKey: .duration)
-        try container.encodeIfPresent(fileSize, forKey: .fileSize)
+        try container.encodeIfPresent(pixelWidth, forKey: .pixelWidth)
+        try container.encodeIfPresent(pixelHeight, forKey: .pixelHeight)
+        try container.encodeIfPresent(durationSeconds, forKey: .durationSeconds)
+        try container.encodeIfPresent(fileSizeBytes, forKey: .fileSizeBytes)
         try container.encode(isFavorite, forKey: .isFavorite)
+        try container.encode(isBest, forKey: .isBest)
         try container.encode(isDeleted, forKey: .isDeleted)
-        try container.encode(version, forKey: .version)
+        try container.encode(deletionState, forKey: .deletionState)
+        try container.encodeIfPresent(deletedAt, forKey: .deletedAt)
         try container.encodeIfPresent(parentAssetID, forKey: .parentAssetID)
+        try container.encodeIfPresent(rootAssetID, forKey: .rootAssetID)
+        try container.encode(assetRole, forKey: .assetRole)
+        try container.encode(processingState, forKey: .processingState)
+        try container.encode(versionNumber, forKey: .versionNumber)
         try container.encodeIfPresent(skuID, forKey: .skuID)
     }
 }
@@ -236,20 +301,27 @@ nonisolated enum ProductWorkspaceMapper {
             projectID: asset.projectID,
             category: asset.category,
             mediaType: asset.mediaType,
-            origin: asset.origin,
+            sourceType: asset.sourceType,
             originalFilename: asset.originalFilename,
             relativePath: asset.relativePath,
             thumbnailRelativePath: asset.thumbnailRelativePath,
             createdAt: asset.createdAt,
+            importedAt: asset.importedAt,
             updatedAt: asset.updatedAt,
-            width: asset.width,
-            height: asset.height,
-            duration: asset.duration,
-            fileSize: asset.fileSize,
+            pixelWidth: asset.pixelWidth,
+            pixelHeight: asset.pixelHeight,
+            durationSeconds: asset.durationSeconds,
+            fileSizeBytes: asset.fileSizeBytes,
             isFavorite: asset.isFavorite,
+            isBest: asset.isBest,
             isDeleted: asset.isDeleted,
-            version: asset.version,
+            deletionState: asset.deletionState,
+            deletedAt: asset.deletedAt,
             parentAssetID: asset.parentAssetID,
+            rootAssetID: asset.rootAssetID,
+            assetRole: asset.assetRole,
+            processingState: asset.processingState,
+            versionNumber: asset.versionNumber,
             skuID: asset.skuID
         )
     }
@@ -260,21 +332,28 @@ nonisolated enum ProductWorkspaceMapper {
             schemaVersion: record.schemaVersion,
             projectID: record.projectID,
             category: record.category,
-            assetType: record.mediaType,
-            origin: record.origin,
+            mediaType: record.mediaType,
+            sourceType: record.sourceType,
             originalFilename: record.originalFilename,
             relativePath: record.relativePath,
             thumbnailRelativePath: record.thumbnailRelativePath,
             createdAt: record.createdAt,
+            importedAt: record.importedAt,
             updatedAt: record.updatedAt,
-            width: record.width,
-            height: record.height,
-            duration: record.duration,
-            fileSize: record.fileSize,
+            width: record.pixelWidth,
+            height: record.pixelHeight,
+            duration: record.durationSeconds,
+            fileSize: record.fileSizeBytes,
             isFavorite: record.isFavorite,
+            isBest: record.isBest,
             isDeleted: record.isDeleted,
-            version: record.version,
+            deletionState: record.deletionState,
+            deletedAt: record.deletedAt,
+            version: record.versionNumber,
             parentAssetID: record.parentAssetID,
+            rootAssetID: record.rootAssetID,
+            assetRole: record.assetRole,
+            processingState: record.processingState,
             skuID: record.skuID
         )
     }

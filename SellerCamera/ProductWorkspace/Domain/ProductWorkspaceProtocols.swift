@@ -20,8 +20,16 @@ nonisolated protocol ProjectAssetRepository {
     func createAsset(_ asset: ProjectAsset) throws
     func fetchAsset(id: UUID) throws -> ProjectAsset?
     func fetchAssets(includeDeleted: Bool) throws -> [ProjectAsset]
+    func fetchAssets(projectID: UUID, filter: AssetFilter, sort: AssetSort) throws -> [ProjectAsset]
     func fetchAssets(projectID: UUID) throws -> [ProjectAsset]
     func fetchAssets(projectID: UUID, category: CaptureCategory) throws -> [ProjectAsset]
+    func updateCategory(assetIDs: [UUID], category: CaptureCategory) throws
+    func updateFavorite(assetIDs: [UUID], isFavorite: Bool) throws
+    func updateBest(assetIDs: [UUID], isBest: Bool) throws
+    func moveToTrash(assetIDs: [UUID], deletedAt: Date) throws
+    func restoreFromTrash(assetIDs: [UUID]) throws
+    func permanentlyDelete(assetIDs: [UUID]) throws -> [ProjectAsset]
+    func activeDerivedAssets(parentAssetID: UUID) throws -> [ProjectAsset]
 }
 
 nonisolated protocol CurrentProjectStore {

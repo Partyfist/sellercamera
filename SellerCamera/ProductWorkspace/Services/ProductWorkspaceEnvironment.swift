@@ -18,6 +18,7 @@ nonisolated final class ProductWorkspaceEnvironment {
     let projectService: ProductProjectService
     let countService: ProjectAssetCountService
     let archiveService: ProjectAssetArchiveService
+    let assetLibraryService: ProjectAssetLibraryService
 
     init(
         rootURL: URL = ProjectFileStore.defaultRootURL(),
@@ -51,6 +52,13 @@ nonisolated final class ProductWorkspaceEnvironment {
             fileStore: fileStore,
             thumbnailGenerator: thumbnailGenerator
         )
+        let assetLibraryService = ProjectAssetLibraryService(
+            projectRepository: repository,
+            assetRepository: repository,
+            projectService: projectService,
+            countService: countService,
+            fileStore: fileStore
+        )
 
         self.repository = repository
         self.currentProjectStore = currentProjectStore
@@ -60,5 +68,6 @@ nonisolated final class ProductWorkspaceEnvironment {
         self.projectService = projectService
         self.countService = countService
         self.archiveService = archiveService
+        self.assetLibraryService = assetLibraryService
     }
 }

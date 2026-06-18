@@ -250,6 +250,204 @@ final class ProductWorkspaceFoundationTests: XCTestCase {
         XCTAssertTrue(summary.isCurrent)
     }
 
+    func testP1CLegacyAssetMetadataMigratesToVersionedModel() throws {
+        let repository = ProductWorkspaceJSONRepository(
+            metadataURL: tempRootURL.appendingPathComponent("ProductWorkspace", isDirectory: true)
+                .appendingPathComponent("metadata.json")
+        )
+        let projectID = UUID()
+        let assetID = UUID()
+        let timestamp = ISO8601DateFormatter().string(from: fixedDate())
+        let metadata = """
+        {
+          "schemaVersion": 1,
+          "projects": [
+            {
+              "id": "\(projectID.uuidString)",
+              "schemaVersion": 1,
+              "name": "Legacy",
+              "createdAt": "\(timestamp)",
+              "updatedAt": "\(timestamp)",
+              "status": "active",
+              "coverAssetID": null,
+              "isArchived": false,
+              "sortOrder": 0,
+              "lastSelectedCaptureCategory": "standard"
+            }
+          ],
+          "assets": [
+            {
+              "id": "\(assetID.uuidString)",
+              "schemaVersion": 1,
+              "projectID": "\(projectID.uuidString)",
+              "category": "standard",
+              "assetType": "photo",
+              "origin": "camera",
+              "originalFilename": "legacy.jpg",
+              "relativePath": "\(projectID.uuidString)/originals/standard/\(assetID.uuidString).jpg",
+              "thumbnailRelativePath": null,
+              "createdAt": "\(timestamp)",
+              "updatedAt": "\(timestamp)",
+              "width": 128,
+              "height": 96,
+              "fileSize": 2048,
+              "isFavorite": true,
+              "isDeleted": false,
+              "version": 3,
+              "parentAssetID": null,
+              "skuID": null
+            }
+          ]
+        }
+        """
+        let metadataURL = repository.metadataURL
+        try FileManager.default.createDirectory(
+            at: metadataURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(metadata.utf8).write(to: metadataURL)
+
+        let asset = try XCTUnwrap(repository.fetchAsset(id: assetID))
+        XCTAssertEqual(asset.schemaVersion, 2)
+        XCTAssertEqual(asset.mediaType, .photo)
+        XCTAssertEqual(asset.sourceType, .camera)
+        XCTAssertEqual(asset.pixelWidth, 128)
+        XCTAssertEqual(asset.pixelHeight, 96)
+        XCTAssertEqual(asset.fileSizeBytes, 2048)
+        XCTAssertEqual(asset.isFavorite, true)
+        XCTAssertEqual(asset.isBest, false)
+        XCTAssertEqual(asset.deletionState, .active)
+        XCTAssertEqual(asset.rootAssetID, assetID)
+        XCTAssertEqual(asset.assetRole, .original)
+        XCTAssertEqual(asset.processingState, .original)
+        XCTAssertEqual(asset.versionNumber, 3)
+    }
+
+    func testP1CAssetLibraryFiltersTrashAndCoverFallback() async throws {
+        let environment = makeEnvironment()
+        let project = try environment.projectService.createProject(name: "资产库", date: fixedDate())
+        let standard = try await environment.archiveService.archivePhoto(makePhotoInput(category: .standard)).asset
+        let detail = try await environment.archiveService.archivePhoto(makePhotoInput(category: .detail)).asset
+        let sku = try await environment.archiveService.archivePhoto(makePhotoInput(category: .sku)).asset
+        let video = try await environment.archiveService.archivePhoto(makeVideoInput(targetProjectID: project.id)).asset
+
+        try environment.assetLibraryService.updateFavorite(assetIDs: [detail.id], isFavorite: true)
+        try environment.assetLibraryService.updateBest(assetIDs: [sku.id], isBest: true)
+
+        XCTAssertEqual(try environment.assetLibraryService.fetchAssets(projectID: project.id, filter: .all).count, 4)
+        XCTAssertEqual(try environment.assetLibraryService.fetchAssets(projectID: project.id, filter: .category(.standard)).map(\.id), [standard.id])
+        XCTAssertEqual(try environment.assetLibraryService.fetchAssets(projectID: project.id, filter: .video).map(\.id), [video.id])
+        XCTAssertEqual(try environment.assetLibraryService.fetchAssets(projectID: project.id, filter: .favorite).map(\.id), [detail.id])
+        XCTAssertEqual(try environment.assetLibraryService.fetchAssets(projectID: project.id, filter: .best).map(\.id), [sku.id])
+
+        try environment.assetLibraryService.setProjectCover(projectID: project.id, assetID: standard.id)
+        try environment.assetLibraryService.moveToTrash(assetIDs: [standard.id])
+        let projectAfterTrash = try XCTUnwrap(environment.repository.fetchProject(id: project.id))
+        XCTAssertEqual(projectAfterTrash.coverAssetID, sku.id)
+        XCTAssertEqual(try environment.countService.counts(projectID: project.id), ProjectAssetCounts(standard: 0, detail: 1, sku: 1, video: 1))
+        XCTAssertEqual(try environment.assetLibraryService.fetchAssets(projectID: project.id, filter: .trash).map(\.id), [standard.id])
+
+        try environment.assetLibraryService.restoreFromTrash(assetIDs: [standard.id])
+        XCTAssertEqual(try environment.countService.counts(projectID: project.id).total, 4)
+        XCTAssertEqual(try XCTUnwrap(environment.repository.fetchProject(id: project.id)).coverAssetID, sku.id)
+    }
+
+    func testP1CPermanentDeleteRemovesFilesAndBlocksActiveDerivedAssets() async throws {
+        let environment = makeEnvironment()
+        _ = try environment.projectService.createProject(name: "版本", date: fixedDate())
+        let original = try await environment.archiveService.archivePhoto(makePhotoInput(category: .standard)).asset
+        let derivedID = UUID()
+        let derivedPath = try environment.fileStore.saveOriginalPhoto(
+            data: Data("derived".utf8),
+            projectID: original.projectID,
+            category: .standard,
+            assetID: derivedID,
+            fileExtension: "jpg"
+        )
+        let derived = ProjectAsset(
+            id: derivedID,
+            projectID: original.projectID,
+            category: .standard,
+            origin: .generated,
+            originalFilename: "processed.jpg",
+            relativePath: derivedPath,
+            thumbnailRelativePath: nil,
+            createdAt: fixedDate(),
+            updatedAt: fixedDate(),
+            width: original.width,
+            height: original.height,
+            fileSize: original.fileSize,
+            version: 2,
+            parentAssetID: original.id,
+            rootAssetID: original.id,
+            assetRole: .processed,
+            processingState: .completed
+        )
+        try environment.repository.createAsset(derived)
+
+        XCTAssertThrowsError(try environment.assetLibraryService.permanentlyDelete(assetIDs: [original.id]))
+
+        try environment.assetLibraryService.moveToTrash(assetIDs: [derived.id])
+        _ = try environment.assetLibraryService.permanentlyDelete(assetIDs: [derived.id])
+        try environment.assetLibraryService.moveToTrash(assetIDs: [original.id])
+        let originalURL = try environment.fileStore.resolveURL(relativePath: original.relativePath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: originalURL.path))
+        _ = try environment.assetLibraryService.permanentlyDelete(assetIDs: [original.id])
+        XCTAssertNil(try environment.repository.fetchAsset(id: original.id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: originalURL.path))
+    }
+
+    @MainActor
+    func testP1CImportSessionDedupesAndRoutesVideoToTargetProject() async throws {
+        let environment = makeEnvironment()
+        let firstProject = try environment.projectService.createProject(name: "项目 A", date: fixedDate())
+        let secondProject = try environment.projectService.createProject(name: "项目 B", date: fixedDate())
+        let session = ProductAssetLibrarySession(environment: environment)
+        await session.load(projectID: secondProject.id)
+
+        let imageData = makePhotoInput(category: .standard).data
+        let importItems = [
+            ProjectAssetImportItem(
+                data: imageData,
+                mediaType: .photo,
+                originalFilename: "import.jpg",
+                fileExtension: "jpg",
+                pixelWidth: 64,
+                pixelHeight: 48,
+                durationSeconds: nil
+            ),
+            ProjectAssetImportItem(
+                data: imageData,
+                mediaType: .photo,
+                originalFilename: "import.jpg",
+                fileExtension: "jpg",
+                pixelWidth: 64,
+                pixelHeight: 48,
+                durationSeconds: nil
+            ),
+            ProjectAssetImportItem(
+                data: Data("fake-movie".utf8),
+                mediaType: .video,
+                originalFilename: "clip.mov",
+                fileExtension: "mov",
+                pixelWidth: nil,
+                pixelHeight: nil,
+                durationSeconds: 1.2
+            )
+        ]
+
+        let result = await session.importItems(importItems, projectID: secondProject.id, category: .detail)
+        XCTAssertEqual(result.requestedCount, 3)
+        XCTAssertEqual(result.succeededCount, 2)
+        XCTAssertEqual(result.failedCount, 0)
+        XCTAssertEqual(try environment.countService.counts(projectID: firstProject.id).total, 0)
+        XCTAssertEqual(try environment.countService.counts(projectID: secondProject.id), ProjectAssetCounts(standard: 0, detail: 1, sku: 0, video: 1))
+
+        let importedAssets = try environment.assetLibraryService.fetchAssets(projectID: secondProject.id, filter: .all)
+        XCTAssertTrue(importedAssets.allSatisfy { $0.sourceType == .photoLibrary && $0.importedAt != nil })
+        XCTAssertEqual(importedAssets.filter { $0.mediaType == .video }.first?.category, .video)
+    }
+
     private func makeEnvironment() -> ProductWorkspaceEnvironment {
         ProductWorkspaceEnvironment(
             rootURL: tempRootURL.appendingPathComponent("Projects", isDirectory: true),
@@ -287,6 +485,23 @@ final class ProductWorkspaceFoundationTests: XCTestCase {
             height: 48,
             metadata: ["test": "true"],
             originalFilename: "test-photo.jpg"
+        )
+    }
+
+    private func makeVideoInput(targetProjectID: UUID) -> ProjectPhotoArchiveInput {
+        ProjectPhotoArchiveInput(
+            data: Data("fake-movie".utf8),
+            targetProjectID: targetProjectID,
+            capturedAt: fixedDate(),
+            category: .video,
+            origin: .photoLibrary,
+            mediaType: .video,
+            width: nil,
+            height: nil,
+            duration: 1.2,
+            metadata: ["test": "video"],
+            originalFilename: "clip.mov",
+            fileExtension: "mov"
         )
     }
 }

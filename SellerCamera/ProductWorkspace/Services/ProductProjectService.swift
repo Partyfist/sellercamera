@@ -140,14 +140,25 @@ nonisolated final class ProductProjectService {
         return project
     }
 
-    func setProjectCover(projectID: UUID, assetID: UUID) throws -> ProductProject {
+    func setProjectCover(projectID: UUID, assetID: UUID?) throws -> ProductProject {
         guard var project = try projectRepository.fetchProject(id: projectID) else {
             throw ProductWorkspaceError.projectNotFound(projectID)
+        }
+        if let assetID {
+            guard let asset = try assetRepository.fetchAsset(id: assetID) else {
+                throw ProductWorkspaceError.assetNotFound(assetID)
+            }
+            guard asset.projectID == projectID,
+                  asset.mediaType == .photo,
+                  asset.deletionState == .active,
+                  !asset.isDeleted else {
+                throw ProductWorkspaceError.metadataSaveFailed("invalid cover asset")
+            }
         }
         project.coverAssetID = assetID
         project.updatedAt = Date()
         try projectRepository.updateProject(project)
-        debugLog("project cover changed id=\(projectID.uuidString) asset=\(assetID.uuidString)")
+        debugLog("project cover changed id=\(projectID.uuidString) asset=\(assetID?.uuidString ?? "nil")")
         return project
     }
 

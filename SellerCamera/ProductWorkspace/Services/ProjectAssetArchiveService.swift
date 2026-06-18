@@ -9,13 +9,45 @@ import Foundation
 
 nonisolated struct ProjectPhotoArchiveInput {
     var data: Data
+    var targetProjectID: UUID?
     var capturedAt: Date
     var category: CaptureCategory
     var origin: AssetOrigin
+    var mediaType: ProjectAssetMediaType
     var width: Int?
     var height: Int?
+    var duration: Double?
     var metadata: [String: String]
     var originalFilename: String?
+    var fileExtension: String?
+
+    init(
+        data: Data,
+        targetProjectID: UUID? = nil,
+        capturedAt: Date,
+        category: CaptureCategory,
+        origin: AssetOrigin,
+        mediaType: ProjectAssetMediaType = .photo,
+        width: Int?,
+        height: Int?,
+        duration: Double? = nil,
+        metadata: [String: String],
+        originalFilename: String?,
+        fileExtension: String? = nil
+    ) {
+        self.data = data
+        self.targetProjectID = targetProjectID
+        self.capturedAt = capturedAt
+        self.category = category
+        self.origin = origin
+        self.mediaType = mediaType
+        self.width = width
+        self.height = height
+        self.duration = duration
+        self.metadata = metadata
+        self.originalFilename = originalFilename
+        self.fileExtension = fileExtension
+    }
 }
 
 nonisolated struct ProjectAssetArchiveResult {
@@ -54,39 +86,57 @@ nonisolated final class ProjectAssetArchiveService {
         var savedRelativePaths: [String] = []
 
         do {
-            var project = try projectService.currentProjectOrCreateDefault(date: input.capturedAt)
+            var project: ProductProject
+            if let targetProjectID = input.targetProjectID {
+                guard let fetchedProject = try projectRepository.fetchProject(id: targetProjectID),
+                      !fetchedProject.isArchived else {
+                    throw ProductWorkspaceError.projectNotFound(targetProjectID)
+                }
+                try fileStore.createProjectDirectories(projectID: fetchedProject.id)
+                project = fetchedProject
+            } else {
+                project = try projectService.currentProjectOrCreateDefault(date: input.capturedAt)
+            }
             let assetID = UUID()
-            let originalExtension = PhotoFileFormatDetector.fileExtension(for: input.data)
+            let category = input.mediaType == .video ? CaptureCategory.video : input.category
+            let originalExtension = input.fileExtension ?? (input.mediaType == .video ? "mov" : PhotoFileFormatDetector.fileExtension(for: input.data))
             let originalRelativePath = try fileStore.saveOriginalPhoto(
                 data: input.data,
                 projectID: project.id,
-                category: input.category,
+                category: category,
                 assetID: assetID,
                 fileExtension: originalExtension
             )
             savedRelativePaths.append(originalRelativePath)
 
-            let thumbnailRelativePath = await makeThumbnailIfPossible(
-                data: input.data,
-                projectID: project.id,
-                assetID: assetID,
-                savedRelativePaths: &savedRelativePaths
-            )
+            let thumbnailRelativePath: String?
+            if input.mediaType == .photo {
+                thumbnailRelativePath = await makeThumbnailIfPossible(
+                    data: input.data,
+                    projectID: project.id,
+                    assetID: assetID,
+                    savedRelativePaths: &savedRelativePaths
+                )
+            } else {
+                thumbnailRelativePath = nil
+            }
 
             let now = Date()
             let asset = ProjectAsset(
                 id: assetID,
                 projectID: project.id,
-                category: input.category,
-                assetType: .photo,
+                category: category,
                 origin: input.origin,
+                mediaType: input.mediaType,
                 originalFilename: input.originalFilename,
                 relativePath: originalRelativePath,
                 thumbnailRelativePath: thumbnailRelativePath,
                 createdAt: input.capturedAt,
+                importedAt: input.origin == .camera ? nil : now,
                 updatedAt: now,
                 width: input.width,
                 height: input.height,
+                duration: input.duration,
                 fileSize: Int64(input.data.count),
                 version: 1
             )

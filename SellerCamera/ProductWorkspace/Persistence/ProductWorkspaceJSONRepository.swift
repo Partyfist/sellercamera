@@ -134,14 +134,24 @@ nonisolated final class ProductWorkspaceJSONRepository: ProductProjectRepository
     func fetchAssets(includeDeleted: Bool) throws -> [ProjectAsset] {
         try readSnapshot().assets
             .map(ProductWorkspaceMapper.domain(from:))
-            .filter { includeDeleted || !$0.isDeleted }
+            .filter { includeDeleted || $0.deletionState == .active && !$0.isDeleted }
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func fetchAssets(projectID: UUID, filter: AssetFilter, sort: AssetSort) throws -> [ProjectAsset] {
+        let includeDeleted = filter == .trash
+        return try sortedAssets(
+            fetchAssets(includeDeleted: includeDeleted)
+                .filter { $0.projectID == projectID }
+                .filter { assetMatches($0, filter: filter) },
+            sort: sort
+        )
     }
 
     func fetchAssets(projectID: UUID) throws -> [ProjectAsset] {
         try readSnapshot().assets
-            .filter { $0.projectID == projectID && !$0.isDeleted }
             .map(ProductWorkspaceMapper.domain(from:))
+            .filter { $0.projectID == projectID && $0.deletionState == .active && !$0.isDeleted }
             .sorted { $0.createdAt < $1.createdAt }
     }
 
@@ -158,6 +168,84 @@ nonisolated final class ProductWorkspaceJSONRepository: ProductProjectRepository
             sku: assets.filter { $0.category == .sku }.count,
             video: assets.filter { $0.category == .video }.count
         )
+    }
+
+    func updateCategory(assetIDs: [UUID], category: CaptureCategory) throws {
+        try updateAssets(assetIDs: assetIDs) { asset in
+            guard asset.mediaType != .video else { return }
+            asset.category = category
+            asset.updatedAt = Date()
+        }
+    }
+
+    func updateFavorite(assetIDs: [UUID], isFavorite: Bool) throws {
+        try updateAssets(assetIDs: assetIDs) { asset in
+            asset.isFavorite = isFavorite
+            asset.updatedAt = Date()
+        }
+    }
+
+    func updateBest(assetIDs: [UUID], isBest: Bool) throws {
+        try updateAssets(assetIDs: assetIDs) { asset in
+            asset.isBest = isBest
+            asset.updatedAt = Date()
+        }
+    }
+
+    func moveToTrash(assetIDs: [UUID], deletedAt: Date = Date()) throws {
+        try updateAssets(assetIDs: assetIDs) { asset in
+            asset.deletionState = .trashed
+            asset.isDeleted = true
+            asset.deletedAt = deletedAt
+            asset.updatedAt = deletedAt
+        }
+    }
+
+    func restoreFromTrash(assetIDs: [UUID]) throws {
+        try updateAssets(assetIDs: assetIDs) { asset in
+            asset.deletionState = .active
+            asset.isDeleted = false
+            asset.deletedAt = nil
+            asset.updatedAt = Date()
+        }
+    }
+
+    func permanentlyDelete(assetIDs: [UUID]) throws -> [ProjectAsset] {
+        let ids = Set(assetIDs)
+        return try mutateSnapshot { snapshot in
+            let allAssets = snapshot.assets.map(ProductWorkspaceMapper.domain(from:))
+            for id in ids {
+                let activeChildren = allAssets.filter {
+                    ($0.parentAssetID == id || ($0.rootAssetID == id && $0.id != id))
+                        && $0.deletionState == .active
+                        && !$0.isDeleted
+                }
+                guard activeChildren.isEmpty else {
+                    throw ProductWorkspaceError.metadataSaveFailed("asset has active derived versions")
+                }
+            }
+            let deletedAssets = allAssets.filter { ids.contains($0.id) }
+            snapshot.assets.removeAll { ids.contains($0.id) }
+
+            for projectIndex in snapshot.projects.indices {
+                var project = ProductWorkspaceMapper.domain(from: snapshot.projects[projectIndex])
+                if let coverAssetID = project.coverAssetID, ids.contains(coverAssetID) {
+                    project.coverAssetID = replacementCoverID(for: project.id, excluding: ids, in: snapshot.assets)
+                    project.updatedAt = Date()
+                    snapshot.projects[projectIndex] = ProductWorkspaceMapper.record(from: project)
+                }
+            }
+            return deletedAssets
+        }
+    }
+
+    func activeDerivedAssets(parentAssetID: UUID) throws -> [ProjectAsset] {
+        try fetchAssets(includeDeleted: true)
+            .filter {
+                ($0.parentAssetID == parentAssetID || ($0.rootAssetID == parentAssetID && $0.id != parentAssetID))
+                    && $0.deletionState == .active
+                    && !$0.isDeleted
+            }
     }
 
     private func readSnapshot() throws -> ProductWorkspaceSnapshot {
@@ -197,5 +285,85 @@ nonisolated final class ProductWorkspaceJSONRepository: ProductProjectRepository
         } catch {
             throw ProductWorkspaceError.metadataSaveFailed(error.localizedDescription)
         }
+    }
+
+    private func updateAssets(assetIDs: [UUID], update: (inout ProjectAsset) throws -> Void) throws {
+        let ids = Set(assetIDs)
+        try mutateSnapshot { snapshot in
+            var updatedCount = 0
+            for index in snapshot.assets.indices {
+                var asset = ProductWorkspaceMapper.domain(from: snapshot.assets[index])
+                guard ids.contains(asset.id) else { continue }
+                try update(&asset)
+                snapshot.assets[index] = ProductWorkspaceMapper.record(from: asset)
+                updatedCount += 1
+            }
+            guard updatedCount == ids.count else {
+                let existingIDs = Set(snapshot.assets.map(\.id))
+                let missing = ids.first { !existingIDs.contains($0) } ?? UUID()
+                throw ProductWorkspaceError.assetNotFound(missing)
+            }
+        }
+    }
+
+    private func assetMatches(_ asset: ProjectAsset, filter: AssetFilter) -> Bool {
+        switch filter {
+        case .all:
+            return asset.deletionState == .active && !asset.isDeleted
+        case .category(let category):
+            return asset.category == category && asset.deletionState == .active && !asset.isDeleted
+        case .photo:
+            return asset.mediaType == .photo && asset.deletionState == .active && !asset.isDeleted
+        case .video:
+            return asset.mediaType == .video && asset.deletionState == .active && !asset.isDeleted
+        case .favorite:
+            return asset.isFavorite && asset.deletionState == .active && !asset.isDeleted
+        case .best:
+            return asset.isBest && asset.deletionState == .active && !asset.isDeleted
+        case .trash:
+            return asset.deletionState == .trashed || asset.isDeleted
+        }
+    }
+
+    private func sortedAssets(_ assets: [ProjectAsset], sort: AssetSort) -> [ProjectAsset] {
+        switch sort {
+        case .newest:
+            return assets.sorted { $0.createdAt > $1.createdAt }
+        case .oldest:
+            return assets.sorted { $0.createdAt < $1.createdAt }
+        case .filename:
+            return assets.sorted { ($0.originalFilename ?? $0.relativePath) < ($1.originalFilename ?? $1.relativePath) }
+        case .fileSize:
+            return assets.sorted { ($0.fileSizeBytes ?? 0) > ($1.fileSizeBytes ?? 0) }
+        }
+    }
+
+    private func replacementCoverID(
+        for projectID: UUID,
+        excluding deletedIDs: Set<UUID>,
+        in records: [ProjectAssetRecord]
+    ) -> UUID? {
+        let assets = records
+            .map(ProductWorkspaceMapper.domain(from:))
+            .filter {
+                $0.projectID == projectID
+                    && !deletedIDs.contains($0.id)
+                    && $0.mediaType == .photo
+                    && $0.deletionState == .active
+                    && !$0.isDeleted
+            }
+        return assets
+            .sorted { lhs, rhs in
+                coverRank(lhs) == coverRank(rhs) ? lhs.createdAt < rhs.createdAt : coverRank(lhs) < coverRank(rhs)
+            }
+            .first?.id
+    }
+
+    private func coverRank(_ asset: ProjectAsset) -> Int {
+        if asset.isBest && asset.category == .standard { return 0 }
+        if asset.category == .standard { return 1 }
+        if asset.category == .sku { return 2 }
+        if asset.category == .detail { return 3 }
+        return 4
     }
 }

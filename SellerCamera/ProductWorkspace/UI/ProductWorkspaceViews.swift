@@ -8,6 +8,7 @@
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 private enum ProductWorkspaceTab: String, CaseIterable, Identifiable {
     case projects
@@ -326,184 +327,789 @@ private struct ProductProjectDetailView: View {
     }
 }
 
+private enum AssetLibraryFilterOption: String, CaseIterable, Identifiable {
+    case all
+    case standard
+    case detail
+    case sku
+    case video
+    case best
+    case favorite
+    case trash
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "全部"
+        case .standard:
+            return "标准"
+        case .detail:
+            return "细节"
+        case .sku:
+            return "SKU"
+        case .video:
+            return "视频"
+        case .best:
+            return "最佳"
+        case .favorite:
+            return "收藏"
+        case .trash:
+            return "回收站"
+        }
+    }
+
+    var filter: AssetFilter {
+        switch self {
+        case .all:
+            return .all
+        case .standard:
+            return .category(.standard)
+        case .detail:
+            return .category(.detail)
+        case .sku:
+            return .category(.sku)
+        case .video:
+            return .video
+        case .best:
+            return .best
+        case .favorite:
+            return .favorite
+        case .trash:
+            return .trash
+        }
+    }
+}
+
 private struct ProductAssetLibraryView: View {
     @ObservedObject var session: ProductWorkspaceSession
+    @StateObject private var assetSession: ProductAssetLibrarySession
 
-    @State private var categoryFilter: CaptureCategory?
-    @State private var projectFilterID: UUID?
+    @State private var filterOption: AssetLibraryFilterOption = .all
+    @State private var selectedImportItems: [PhotosPickerItem] = []
+    @State private var importProjectID: UUID?
+    @State private var importCategory: CaptureCategory = .standard
     @State private var selectedAsset: ProjectAsset?
-    @State private var selectedImportPhotoItem: PhotosPickerItem?
-    @State private var isImporting = false
-    @State private var importStatusText: String?
+    @State private var shareURLs: [URL] = []
+    @State private var isSharePresented = false
+    @State private var isPermanentDeleteConfirmationPresented = false
+    @State private var isEmptyTrashConfirmationPresented = false
 
-    private var assets: [ProjectAsset] {
-        session.allAssets
-            .filter { asset in
-                if let categoryFilter, asset.category != categoryFilter {
-                    return false
-                }
-                if let projectFilterID, asset.projectID != projectFilterID {
-                    return false
-                }
-                return true
-            }
-            .sorted { $0.createdAt > $1.createdAt }
+    init(session: ProductWorkspaceSession) {
+        self.session = session
+        _assetSession = StateObject(wrappedValue: ProductAssetLibrarySession(environment: session.environment))
+    }
+
+    private var currentProjectID: UUID? {
+        importProjectID ?? session.currentProject?.id
+    }
+
+    private var isTrashFilter: Bool {
+        filterOption == .trash
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            VStack(spacing: 8) {
-                Picker("分类", selection: $categoryFilter) {
-                    Text("全部").tag(Optional<CaptureCategory>.none)
-                    Text("标准").tag(Optional.some(CaptureCategory.standard))
-                    Text("细节").tag(Optional.some(CaptureCategory.detail))
-                    Text("SKU").tag(Optional.some(CaptureCategory.sku))
-                    Text("视频").tag(Optional.some(CaptureCategory.video))
+        VStack(spacing: 10) {
+            headerView
+            filterBar
+            statusView
+            assetGrid
+            if assetSession.isSelectionMode {
+                selectionToolbar
+            }
+        }
+        .task(id: session.currentProject?.id) {
+            importProjectID = session.currentProject?.id
+            importCategory = session.selectedCaptureCategory == .video ? .standard : session.selectedCaptureCategory
+            await assetSession.load(projectID: currentProjectID)
+        }
+        .onChange(of: importProjectID) { _ in
+            Task {
+                await assetSession.load(projectID: currentProjectID)
+            }
+        }
+        .sheet(item: $selectedAsset) { asset in
+            ProductAssetPreviewSheet(
+                workspaceSession: session,
+                assetSession: assetSession,
+                asset: asset,
+                assets: assetSession.visibleAssets,
+                onChanged: {
+                    await session.refreshCurrentProjectState()
+                    await assetSession.load(projectID: currentProjectID)
                 }
-                .pickerStyle(.segmented)
+            )
+            .presentationDetents([.large])
+        }
+        .sheet(isPresented: $isSharePresented) {
+            ActivityView(activityItems: shareURLs)
+        }
+        .confirmationDialog("永久删除所选资产？", isPresented: $isPermanentDeleteConfirmationPresented, titleVisibility: .visible) {
+            Button("永久删除", role: .destructive) {
+                Task {
+                    await assetSession.permanentlyDeleteSelected()
+                    await session.refreshCurrentProjectState()
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("此操作会删除 metadata、原图和缩略图，不能撤销。")
+        }
+        .confirmationDialog("清空当前项目回收站？", isPresented: $isEmptyTrashConfirmationPresented, titleVisibility: .visible) {
+            Button("清空回收站", role: .destructive) {
+                Task {
+                    await assetSession.emptyTrash()
+                    await session.refreshCurrentProjectState()
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只会永久删除当前项目回收站内的资产。")
+        }
+        .onChange(of: selectedImportItems) { items in
+            guard !items.isEmpty else { return }
+            Task {
+                await importSelectedItems(items)
+            }
+        }
+    }
 
-                Picker("项目", selection: $projectFilterID) {
-                    Text("全部项目").tag(Optional<UUID>.none)
+    private var headerView: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                ProductWorkspaceThumbnail(
+                    relativePath: session.currentProjectSummary?.coverThumbnailPath,
+                    fileStore: session.environment.fileStore,
+                    placeholderSymbol: "shippingbox"
+                )
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.currentProject?.name ?? "未选择项目")
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text("当前筛选 \(assetSession.visibleAssets.count) 项 · 标准 \(session.currentCounts.standard) · 细节 \(session.currentCounts.detail) · SKU \(session.currentCounts.sku)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                Spacer()
+
+                Button(assetSession.isSelectionMode ? "取消" : "选择") {
+                    if assetSession.isSelectionMode {
+                        assetSession.exitSelectionMode()
+                    } else {
+                        assetSession.enterSelectionMode()
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+
+            HStack(spacing: 10) {
+                Picker("导入项目", selection: $importProjectID) {
                     ForEach(session.projectSummaries) { summary in
                         Text(summary.projectName).tag(Optional.some(summary.projectID))
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack {
-                    PhotosPicker(
-                        selection: $selectedImportPhotoItem,
-                        matching: .images,
-                        preferredItemEncoding: .automatic
-                    ) {
-                        Label(isImporting ? "导入中…" : "导入图片", systemImage: "square.and.arrow.down")
-                    }
-                    .disabled(isImporting)
-
-                    if let importStatusText {
-                        Text(importStatusText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                Picker("导入分类", selection: $importCategory) {
+                    Text("标准").tag(CaptureCategory.standard)
+                    Text("细节").tag(CaptureCategory.detail)
+                    Text("SKU").tag(CaptureCategory.sku)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .pickerStyle(.menu)
+
+                PhotosPicker(
+                    selection: $selectedImportItems,
+                    maxSelectionCount: 100,
+                    matching: .any(of: [.images, .videos]),
+                    preferredItemEncoding: .automatic
+                ) {
+                    Label("导入", systemImage: "square.and.arrow.down")
+                }
+                .disabled(assetSession.isImporting || importProjectID == nil)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal)
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(AssetLibraryFilterOption.allCases) { option in
+                    Button {
+                        filterOption = option
+                        Task {
+                            await assetSession.setFilter(option.filter)
+                        }
+                    } label: {
+                        Text(option.title)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .foregroundStyle(filterOption == option ? .white : .primary)
+                            .background(filterOption == option ? Color.green.opacity(0.78) : Color.secondary.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal)
+        }
+    }
 
-            if assets.isEmpty {
-                ProductEmptyStateView(
-                    title: "暂无图片",
-                    systemImage: "photo.stack",
-                    message: "拍摄成功并写入项目 metadata 后，图片会按分类出现在这里。"
-                )
-                .frame(maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 98), spacing: 10)], spacing: 10) {
-                        ForEach(assets) { asset in
-                            Button {
+    @ViewBuilder
+    private var statusView: some View {
+        if let text = assetSession.importProgressText ?? assetSession.lastStatusText ?? assetSession.lastErrorText {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(assetSession.lastErrorText == nil ? Color.secondary : Color.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var assetGrid: some View {
+        if assetSession.visibleAssets.isEmpty {
+            ProductEmptyStateView(
+                title: isTrashFilter ? "回收站为空" : "暂无图片",
+                systemImage: isTrashFilter ? "trash" : "photo.stack",
+                message: isTrashFilter ? "删除到回收站的资产会显示在这里。" : "拍摄或导入成功并写入 metadata 后，图片会按分类出现在这里。"
+            )
+            .frame(maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(assetSession.visibleAssets) { asset in
+                        Button {
+                            if assetSession.isSelectionMode {
+                                assetSession.toggleSelection(assetID: asset.id)
+                            } else {
                                 selectedAsset = asset
-                            } label: {
-                                ProductAssetTileView(
-                                    asset: asset,
-                                    fileStore: session.environment.fileStore
-                                )
                             }
-                            .buttonStyle(.plain)
+                        } label: {
+                            ProductAssetTileView(
+                                asset: asset,
+                                fileStore: session.environment.fileStore,
+                                isSelected: assetSession.selectedAssetIDs.contains(asset.id),
+                                isCover: session.currentProject?.coverAssetID == asset.id
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("选择") {
+                                assetSession.enterSelectionMode(assetID: asset.id)
+                            }
+                            if asset.mediaType == .photo && asset.deletionState == .active {
+                                Button("设为封面") {
+                                    Task {
+                                        await assetSession.setCover(assetID: asset.id)
+                                        await session.refreshCurrentProjectState()
+                                    }
+                                }
+                            }
+                            Button(asset.isBest ? "取消最佳" : "标记最佳") {
+                                Task {
+                                    assetSession.enterSelectionMode(assetID: asset.id)
+                                    await assetSession.updateBest(!asset.isBest)
+                                    await session.refreshCurrentProjectState()
+                                }
+                            }
+                            Button(asset.deletionState == .trashed ? "恢复" : "删除到回收站", role: asset.deletionState == .trashed ? nil : .destructive) {
+                                Task {
+                                    assetSession.enterSelectionMode(assetID: asset.id)
+                                    if asset.deletionState == .trashed {
+                                        await assetSession.restoreSelectedFromTrash()
+                                    } else {
+                                        await assetSession.moveSelectedToTrash()
+                                    }
+                                    await session.refreshCurrentProjectState()
+                                }
+                            }
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 18)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, assetSession.isSelectionMode ? 90 : 18)
+            }
+        }
+    }
+
+    private var selectionToolbar: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("已选择 \(assetSession.selectedAssetIDs.count) 项")
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Button("全选") {
+                    assetSession.selectAllVisible()
+                }
+                Button("取消") {
+                    assetSession.exitSelectionMode()
                 }
             }
-        }
-        .sheet(item: $selectedAsset) { asset in
-            ProductAssetPreviewSheet(
-                session: session,
-                asset: asset
-            )
-            .presentationDetents([.large])
-        }
-        .onChange(of: selectedImportPhotoItem) { item in
-            guard let item else { return }
-            Task {
-                await importPhoto(item)
+
+            HStack(spacing: 10) {
+                Menu("分类") {
+                    Button("标准") { Task { await changeSelectedCategory(.standard) } }
+                    Button("细节") { Task { await changeSelectedCategory(.detail) } }
+                    Button("SKU") { Task { await changeSelectedCategory(.sku) } }
+                }
+                Menu("标记") {
+                    Button("标记最佳") { Task { await markSelectedBest(true) } }
+                    Button("取消最佳") { Task { await markSelectedBest(false) } }
+                    Button("收藏") { Task { await markSelectedFavorite(true) } }
+                    Button("取消收藏") { Task { await markSelectedFavorite(false) } }
+                }
+                Button("分享") {
+                    shareSelectedAssets()
+                }
+                if isTrashFilter {
+                    Button("恢复") {
+                        Task {
+                            await assetSession.restoreSelectedFromTrash()
+                            await session.refreshCurrentProjectState()
+                        }
+                    }
+                    Button("永久删除", role: .destructive) {
+                        isPermanentDeleteConfirmationPresented = true
+                    }
+                } else {
+                    Button("删除", role: .destructive) {
+                        Task {
+                            await assetSession.moveSelectedToTrash()
+                            await session.refreshCurrentProjectState()
+                        }
+                    }
+                }
+                if isTrashFilter {
+                    Button("清空", role: .destructive) {
+                        isEmptyTrashConfirmationPresented = true
+                    }
+                }
             }
+            .buttonStyle(.bordered)
         }
+        .padding()
+        .background(.ultraThinMaterial)
+    }
+
+    private func changeSelectedCategory(_ category: CaptureCategory) async {
+        await assetSession.updateCategory(category)
+        await session.refreshCurrentProjectState()
+    }
+
+    private func markSelectedBest(_ isBest: Bool) async {
+        await assetSession.updateBest(isBest)
+        await session.refreshCurrentProjectState()
+    }
+
+    private func markSelectedFavorite(_ isFavorite: Bool) async {
+        await assetSession.updateFavorite(isFavorite)
+        await session.refreshCurrentProjectState()
+    }
+
+    private func shareSelectedAssets() {
+        let urls = assetSession.visibleAssets
+            .filter { assetSession.selectedAssetIDs.contains($0.id) }
+            .compactMap { try? session.environment.fileStore.resolveURL(relativePath: $0.relativePath) }
+        guard !urls.isEmpty else { return }
+        shareURLs = urls
+        isSharePresented = true
     }
 
     @MainActor
-    private func importPhoto(_ item: PhotosPickerItem) async {
-        isImporting = true
-        importStatusText = "读取中"
-        defer {
-            isImporting = false
-            selectedImportPhotoItem = nil
-        }
-
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  !data.isEmpty,
-                  let image = UIImage(data: data) else {
-                importStatusText = "导入失败"
-                return
+    private func importSelectedItems(_ items: [PhotosPickerItem]) async {
+        defer { selectedImportItems = [] }
+        guard let projectID = importProjectID else { return }
+        var importItems: [ProjectAssetImportItem] = []
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self), !data.isEmpty else {
+                continue
             }
-            let category = importCategory
-            let input = ProjectPhotoArchiveInput(
-                data: data,
-                capturedAt: Date(),
-                category: category,
-                origin: .photoLibrary,
-                width: Int(image.size.width.rounded()),
-                height: Int(image.size.height.rounded()),
-                metadata: ["source": "workspace-import"],
-                originalFilename: item.itemIdentifier
-            )
-            let archiveService = session.environment.archiveService
-            let result = try await Task.detached(priority: .utility) {
-                try await archiveService.archivePhoto(input)
-            }.value
-            await session.refreshCurrentProjectState()
-            importStatusText = "已导入 \(result.asset.category.rawValue)"
-        } catch {
-            importStatusText = "导入失败"
+            let mediaType = mediaType(for: item)
+            let contentType = item.supportedContentTypes.first
+            let filename = item.itemIdentifier ?? "import-\(UUID().uuidString)"
+            if mediaType == .photo, let image = UIImage(data: data) {
+                importItems.append(ProjectAssetImportItem(
+                    data: data,
+                    mediaType: .photo,
+                    originalFilename: filename,
+                    fileExtension: contentType?.preferredFilenameExtension,
+                    pixelWidth: Int(image.size.width.rounded()),
+                    pixelHeight: Int(image.size.height.rounded()),
+                    durationSeconds: nil
+                ))
+            } else {
+                importItems.append(ProjectAssetImportItem(
+                    data: data,
+                    mediaType: .video,
+                    originalFilename: filename,
+                    fileExtension: contentType?.preferredFilenameExtension ?? "mov",
+                    pixelWidth: nil,
+                    pixelHeight: nil,
+                    durationSeconds: nil
+                ))
+            }
         }
+        _ = await assetSession.importItems(importItems, projectID: projectID, category: importCategory)
+        await session.refreshCurrentProjectState()
     }
 
-    private var importCategory: CaptureCategory {
-        if let categoryFilter, categoryFilter != .video {
-            return categoryFilter
-        }
-        if session.selectedCaptureCategory == .video {
-            return .standard
-        }
-        return session.selectedCaptureCategory
+    private func mediaType(for item: PhotosPickerItem) -> ProjectAssetMediaType {
+        item.supportedContentTypes.contains { $0.conforms(to: .movie) } ? .video : .photo
     }
 }
 
 private struct ProductAssetTileView: View {
     let asset: ProjectAsset
     let fileStore: ProjectFileStore
+    var isSelected = false
+    var isCover = false
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .topTrailing) {
             ProductWorkspaceThumbnail(
                 relativePath: asset.thumbnailRelativePath ?? asset.relativePath,
                 fileStore: fileStore,
-                placeholderSymbol: asset.category == .video ? "video" : "photo"
+                placeholderSymbol: asset.mediaType == .video ? "video" : "photo"
             )
             .aspectRatio(1, contentMode: .fill)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            Text(categoryTitle(asset.category))
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(.black.opacity(0.46), in: Capsule())
-                .padding(6)
+            VStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(categoryTitle(asset.category))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.48), in: Capsule())
+                        if isCover {
+                            Text("封面")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(.green.opacity(0.76), in: Capsule())
+                        }
+                    }
+                    Spacer()
+                    VStack(spacing: 4) {
+                        if asset.isBest {
+                            Image(systemName: "crown.fill")
+                                .foregroundStyle(.yellow)
+                        }
+                        if asset.isFavorite {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.pink)
+                        }
+                        if asset.mediaType == .video {
+                            Text(durationText(asset.durationSeconds))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(.black.opacity(0.5), in: Capsule())
+                        }
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    .font(.caption.weight(.bold))
+                }
+                Spacer()
+                if asset.deletionState == .trashed {
+                    Text("回收站")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.red.opacity(0.72), in: Capsule())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(6)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isSelected ? Color.green : Color.clear, lineWidth: 3)
+        )
+    }
+
+    private func categoryTitle(_ category: CaptureCategory) -> String {
+        switch category {
+        case .standard:
+            return "标准"
+        case .detail:
+            return "细节"
+        case .sku:
+            return "SKU"
+        case .video:
+            return "视频"
+        }
+    }
+
+    private func durationText(_ duration: Double?) -> String {
+        guard let duration else { return "视频" }
+        let seconds = max(Int(duration.rounded()), 0)
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+private struct ProductAssetPreviewSheet: View {
+    @ObservedObject var workspaceSession: ProductWorkspaceSession
+    @ObservedObject var assetSession: ProductAssetLibrarySession
+    let asset: ProjectAsset
+    let assets: [ProjectAsset]
+    let onChanged: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentAsset: ProjectAsset
+    @State private var zoomScale: CGFloat = 1
+    @State private var shareURLs: [URL] = []
+    @State private var isSharePresented = false
+
+    init(
+        workspaceSession: ProductWorkspaceSession,
+        assetSession: ProductAssetLibrarySession,
+        asset: ProjectAsset,
+        assets: [ProjectAsset],
+        onChanged: @escaping () async -> Void
+    ) {
+        self.workspaceSession = workspaceSession
+        self.assetSession = assetSession
+        self.asset = asset
+        self.assets = assets
+        self.onChanged = onChanged
+        _currentAsset = State(initialValue: asset)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    ZStack {
+                        ProductWorkspaceThumbnail(
+                            relativePath: currentAsset.relativePath,
+                            fileStore: workspaceSession.environment.fileStore,
+                            placeholderSymbol: currentAsset.mediaType == .video ? "video" : "photo"
+                        )
+                        .scaledToFit()
+                        .scaleEffect(zoomScale)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .gesture(MagnificationGesture().onChanged { value in
+                            zoomScale = min(max(value, 1), 4)
+                        })
+                        .onTapGesture(count: 2) {
+                            zoomScale = zoomScale > 1 ? 1 : 2
+                        }
+                    }
+                    .padding()
+
+                    HStack {
+                        Button {
+                            move(offset: -1)
+                        } label: {
+                            Label("上一张", systemImage: "chevron.left")
+                        }
+                        .disabled(currentIndex <= 0)
+                        Spacer()
+                        Text("\(currentIndex + 1)/\(max(assets.count, 1))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            move(offset: 1)
+                        } label: {
+                            Label("下一张", systemImage: "chevron.right")
+                        }
+                        .disabled(currentIndex >= assets.count - 1)
+                    }
+                    .padding(.horizontal)
+
+                    assetActions
+                    AssetDetailView(
+                        workspaceSession: workspaceSession,
+                        asset: currentAsset,
+                        isProjectCover: workspaceSession.currentProject?.coverAssetID == currentAsset.id
+                    )
+                }
+                .padding(.bottom, 24)
+            }
+            .navigationTitle("资产")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $isSharePresented) {
+                ActivityView(activityItems: shareURLs)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private var assetActions: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Button("分享") {
+                    if let url = try? workspaceSession.environment.fileStore.resolveURL(relativePath: currentAsset.relativePath) {
+                        shareURLs = [url]
+                        isSharePresented = true
+                    }
+                }
+                Menu("分类") {
+                    Button("标准") { Task { await changeCategory(.standard) } }
+                    Button("细节") { Task { await changeCategory(.detail) } }
+                    Button("SKU") { Task { await changeCategory(.sku) } }
+                }
+                .disabled(currentAsset.mediaType == .video || currentAsset.deletionState == .trashed)
+                Button(currentAsset.isBest ? "取消最佳" : "最佳") {
+                    Task { await updateBest(!currentAsset.isBest) }
+                }
+                Button(currentAsset.isFavorite ? "取消收藏" : "收藏") {
+                    Task { await updateFavorite(!currentAsset.isFavorite) }
+                }
+            }
+            .buttonStyle(.bordered)
+
+            HStack {
+                Button("设为封面") {
+                    Task {
+                        await assetSession.setCover(assetID: currentAsset.id)
+                        await onChanged()
+                    }
+                }
+                .disabled(currentAsset.mediaType == .video || currentAsset.deletionState == .trashed)
+
+                if currentAsset.deletionState == .trashed {
+                    Button("恢复") {
+                        Task { await restoreCurrent() }
+                    }
+                } else {
+                    Button("删除到回收站", role: .destructive) {
+                        Task { await trashCurrent() }
+                    }
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.horizontal)
+    }
+
+    private var currentIndex: Int {
+        assets.firstIndex(where: { $0.id == currentAsset.id }) ?? 0
+    }
+
+    private func move(offset: Int) {
+        let nextIndex = currentIndex + offset
+        guard assets.indices.contains(nextIndex) else { return }
+        currentAsset = assets[nextIndex]
+        zoomScale = 1
+    }
+
+    private func changeCategory(_ category: CaptureCategory) async {
+        assetSession.enterSelectionMode(assetID: currentAsset.id)
+        await assetSession.updateCategory(category)
+        await onChanged()
+        if let updated = assetSession.visibleAssets.first(where: { $0.id == currentAsset.id }) {
+            currentAsset = updated
+        }
+    }
+
+    private func updateBest(_ isBest: Bool) async {
+        assetSession.enterSelectionMode(assetID: currentAsset.id)
+        await assetSession.updateBest(isBest)
+        await onChanged()
+        currentAsset.isBest = isBest
+    }
+
+    private func updateFavorite(_ isFavorite: Bool) async {
+        assetSession.enterSelectionMode(assetID: currentAsset.id)
+        await assetSession.updateFavorite(isFavorite)
+        await onChanged()
+        currentAsset.isFavorite = isFavorite
+    }
+
+    private func trashCurrent() async {
+        assetSession.enterSelectionMode(assetID: currentAsset.id)
+        await assetSession.moveSelectedToTrash()
+        await onChanged()
+        dismiss()
+    }
+
+    private func restoreCurrent() async {
+        assetSession.enterSelectionMode(assetID: currentAsset.id)
+        await assetSession.restoreSelectedFromTrash()
+        await onChanged()
+        dismiss()
+    }
+}
+
+private struct AssetDetailView: View {
+    @ObservedObject var workspaceSession: ProductWorkspaceSession
+    let asset: ProjectAsset
+    let isProjectCover: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("详情")
+                .font(.headline)
+            detailRow("文件名", asset.originalFilename ?? asset.relativePath.components(separatedBy: "/").last ?? "-")
+            detailRow("项目", workspaceSession.projectName(for: asset.projectID))
+            detailRow("分类", categoryTitle(asset.category))
+            detailRow("来源", asset.sourceType.rawValue)
+            detailRow("媒体", asset.mediaType.rawValue)
+            detailRow("像素", pixelText)
+            detailRow("大小", fileSizeText)
+            detailRow("拍摄/导入", DateFormatter.localizedString(from: asset.importedAt ?? asset.createdAt, dateStyle: .short, timeStyle: .short))
+            detailRow("创建", DateFormatter.localizedString(from: asset.createdAt, dateStyle: .short, timeStyle: .short))
+            detailRow("封面", isProjectCover ? "是" : "否")
+            detailRow("最佳", asset.isBest ? "是" : "否")
+            detailRow("收藏", asset.isFavorite ? "是" : "否")
+            detailRow("资产 ID", String(asset.id.uuidString.prefix(8)))
+            #if DEBUG
+            Divider()
+            detailRow("relativePath", asset.relativePath)
+            detailRow("thumbnail", asset.thumbnailRelativePath ?? "-")
+            detailRow("schema", "\(asset.schemaVersion)")
+            detailRow("parent", asset.parentAssetID?.uuidString ?? "-")
+            detailRow("root", asset.rootAssetID?.uuidString ?? "-")
+            #endif
+        }
+        .font(.caption)
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var pixelText: String {
+        guard let width = asset.pixelWidth, let height = asset.pixelHeight else { return "-" }
+        return "\(width) × \(height)"
+    }
+
+    private var fileSizeText: String {
+        guard let bytes = asset.fileSizeBytes else { return "-" }
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private func detailRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(title)
+                .foregroundStyle(.secondary)
+                .frame(width: 82, alignment: .leading)
+            Text(value)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -521,62 +1127,27 @@ private struct ProductAssetTileView: View {
     }
 }
 
-private struct ProductAssetPreviewSheet: View {
-    @ObservedObject var session: ProductWorkspaceSession
-    let asset: ProjectAsset
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
 
-    @Environment(\.dismiss) private var dismiss
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
 
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                ProductWorkspaceThumbnail(
-                    relativePath: asset.relativePath,
-                    fileStore: session.environment.fileStore,
-                    placeholderSymbol: "photo"
-                )
-                .scaledToFit()
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .padding()
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(session.projectName(for: asset.projectID))
-                        .font(.headline)
-                    Text("\(asset.category.rawValue) · \(DateFormatter.localizedString(from: asset.createdAt, dateStyle: .short, timeStyle: .short))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(asset.relativePath)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
+private final class ProductWorkspaceThumbnailCache {
+    static let shared = ProductWorkspaceThumbnailCache()
 
-                Button {
-                    Task {
-                        await session.setCover(projectID: asset.projectID, assetID: asset.id)
-                        dismiss()
-                    }
-                } label: {
-                    Label("设为项目封面", systemImage: "star.square")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal)
+    private let cache = NSCache<NSString, UIImage>()
 
-                Spacer(minLength: 0)
-            }
-            .navigationTitle("图片")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
-                        dismiss()
-                    }
-                }
-            }
-        }
+    func image(forKey key: String) -> UIImage? {
+        cache.object(forKey: key as NSString)
+    }
+
+    func set(_ image: UIImage, forKey key: String) {
+        cache.setObject(image, forKey: key as NSString)
     }
 }
 
@@ -615,10 +1186,17 @@ private struct ProductWorkspaceThumbnail: View {
             image = nil
             return
         }
+        if let cachedImage = ProductWorkspaceThumbnailCache.shared.image(forKey: relativePath) {
+            image = cachedImage
+            return
+        }
         let loaded = await Task.detached(priority: .utility) { () -> UIImage? in
             guard let data = try? Data(contentsOf: url) else { return nil }
             return UIImage(data: data)
         }.value
+        if let loaded {
+            ProductWorkspaceThumbnailCache.shared.set(loaded, forKey: relativePath)
+        }
         image = loaded
     }
 }

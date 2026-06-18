@@ -240,14 +240,14 @@ Launched application with com.partyfist.SellerCamera bundle identifier.
 PID: 16622
 ```
 
-Codex 本轮确认 build / install / launch / process created。P1B 手动拍摄矩阵仍需用户在 iPhone 14 Pro Max 真机上补验：
+Codex 本轮确认 build / install / launch / process created。用户已在 iPhone 14 Pro Max 真机补验 P1B 项目与相机回归矩阵：
 
-- 顶部创建项目；
-- 标准 2 张、细节 3 张、SKU 4 张；
-- 项目 A / B 切换后计数隔离；
-- 重启后恢复当前项目、项目名称、最后分类与计数；
-- 工作台查看图片、设封面、重命名、归档与恢复；
-- 13 / 24 / 48 / 77mm、连续变焦、AE-L、MF、EV、WB、TINT、ISO、Shutter、比例、像素、稳定器回归。
+- 测试设备：iPhone 14 Pro Max。
+- 项目 A / B 创建与切换：通过。
+- 标准 / 细节 / SKU 计数：通过。
+- 重启恢复：通过。
+- 归档恢复：通过。
+- 镜头和参数回归：通过。
 
 ## 10. 已知限制
 
@@ -255,7 +255,7 @@ Codex 本轮确认 build / install / launch / process created。P1B 手动拍摄
 - 图片页提供基础筛选、单张系统相册导入与设封面，未实现批量导入、删除或回收站。
 - “我的”页是静态骨架，未接入登录、订阅、云空间、AI 费用或支付。
 - 工作台视觉为 P1B 首版可操作结构，未做最终视觉精修。
-- 真机手动拍摄矩阵需要用户补验后再闭环记录。
+- P1B 真机手动矩阵已补验通过，后续 P1C 将在此基础上扩展资产库生命周期。
 
 ## 11. 代码边界声明
 

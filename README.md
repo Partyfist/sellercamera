@@ -6,7 +6,7 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 
 - 当前拍摄冻结基线：`camera-baseline-r77i`
 - 当前开发分支：`feature/product-project-workflow`
-- 当前里程碑：P1B Product Project Management
+- 当前里程碑：P1C Product Asset Library
 - 端侧正式分割/白底主线：`Vision`（`VNGenerateForegroundInstanceMaskRequest`）
 - 多模型实验能力：已从正式主线收口，不作为当前正式产品能力暴露
 
@@ -14,6 +14,7 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 
 - 拍摄基础能力已冻结：专业参数、Auto EV/WB、点击对焦、焦段、虚拟/物理镜头通道与 MF 三态降级。
 - 商品项目管理已接入：顶部项目胶囊、工作台项目/图片页、我的页骨架、项目创建/切换/重命名/归档/恢复、标准/细节/SKU 分类计数与拍摄归档联动。
+- 商品资产库已接入：当前项目资产网格、分类/视频/最佳/收藏/回收站筛选、多选批量管理、系统相册批量导入、软删除/恢复/永久删除、封面自动替换与版本关系字段预留。
 - 白底图继续作为拍后处理分支保留，不再作为原始拍摄分类；SKU 当前仅代表 SKU 差异图片采集分类，不代表完整 SKU 管理系统。
 
 ## 实验分支归档
@@ -120,6 +121,7 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R83B1 修复 13mm / 24mm 焦段 target mapping 报告：`docs/reports/r83b1_fix_13mm_24mm_lens_target_mapping.md`
 - P1A Product Workspace Foundation 报告：`docs/reports/p1a_product_workspace_foundation.md`
 - P1B Product Project Management 报告：`docs/reports/p1b_product_project_management.md`
+- P1C Product Asset Library 报告：`docs/reports/p1c_product_asset_library.md`
 - Product Workspace 架构说明：`docs/architecture/product_workspace_architecture.md`
 - Product Asset Storage 说明：`docs/architecture/product_asset_storage.md`
 - 待定产品决策清单：`docs/product/pending_product_decisions.md`
