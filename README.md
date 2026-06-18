@@ -92,6 +92,9 @@ Seller Camera 是面向电商与销售场景的商品图采集与标准化拍摄
 - R77E 商品自动场景分析采样修复报告：`docs/reports/r77e_product_auto_scene_sampling_reliability.md`
 - R77F ProductAutoScene 真机指标校准与自动拍摄策略收口报告：`docs/reports/r77f_product_auto_scene_metrics_calibration.md`
 - R77G 拍摄链路真机手感复核报告：`docs/reports/r77g_capture_chain_device_feel_review_zoom_macro_focus.md`
+- R77G 虚拟 / 物理镜头双通道架构审计报告：`docs/reports/r77g_virtual_physical_lens_dual_path_audit.md`
+- R77H 虚拟 / 物理镜头双通道运行时证据补齐报告：`docs/reports/r77h_virtual_physical_lens_runtime_evidence.md`
+- R77I 虚拟多摄 MF 能力误判修复报告：`docs/reports/r77i_virtual_camera_manual_focus_capability_fix.md`
 - R78 iOS 27 Beta 真机运行恢复与兼容性诊断收口报告：`docs/reports/r78_ios27_beta_device_runtime_compatibility_closure.md`
 - R78A Xcode 27 Beta 真机运行恢复验收报告：`docs/reports/r78a_xcode27_beta_device_runtime_recovery.md`
 - R78B iOS 27 四参数真实手动写入恢复报告：`docs/reports/r78b_ios27_manual_parameter_runtime_write_recovery.md`

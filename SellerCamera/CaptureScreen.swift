@@ -364,20 +364,6 @@ struct CaptureScreen: View {
     }
 
     private func toggleManualFocusMode() {
-        guard !cameraRuntime.isFocusExposureLocked else {
-            cameraRuntime.captureHintText = "AE/AF 锁定中，长按画面解除后可进入 MF"
-            return
-        }
-        guard cameraRuntime.isManualFocusSupported else {
-            cameraRuntime.captureHintText = "当前镜头不支持手动对焦"
-            return
-        }
-        withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
-            isBottomParameterPanelExpanded = false
-            activeBottomParameterKind = nil
-            isMoreOptionsPanelPresented = false
-        }
-
         if isManualFocusModeActive {
             isManualFocusModeEnabled = false
             isManualFocusRulerPresented = false
@@ -387,11 +373,25 @@ struct CaptureScreen: View {
             cameraRuntime.restoreAutofocusMode()
             cameraRuntime.captureHintText = "已恢复 AF"
         } else {
+            let capability = cameraRuntime.manualFocusEntryCapability(reason: "toggleMF")
+            guard capability.canEnterManualFocusMode else { return }
+            withAnimation(SellerCameraMotionToken.resolved(SellerCameraMotionToken.modeSwitch, reduceMotion: reduceMotion)) {
+                isBottomParameterPanelExpanded = false
+                activeBottomParameterKind = nil
+                isMoreOptionsPanelPresented = false
+            }
             isManualFocusModeEnabled = true
-            isManualFocusRulerPresented = true
             cameraRuntime.setProductFocusAssistManualSuppression(true)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            cameraRuntime.captureHintText = "MF 模式已开启，左近右远，拖动刻度微调对焦"
+            if capability.isFull {
+                isManualFocusRulerPresented = true
+                cameraRuntime.setManualFocusLensPosition(cameraRuntime.currentManualFocusPosition)
+                cameraRuntime.captureHintText = "MF 模式已开启，左近右远，拖动刻度微调对焦"
+            } else {
+                isManualFocusRulerPresented = false
+                cameraRuntime.lockCurrentManualFocus(reason: "toggleMF")
+                cameraRuntime.captureHintText = capability.userFacingHint
+            }
         }
     }
 
@@ -2544,7 +2544,7 @@ private struct CaptureLensControlStrip: View {
     }
 
     private var isManualFocusDisabled: Bool {
-        cameraRuntime.isFocusExposureLocked || !cameraRuntime.isManualFocusSupported
+        cameraRuntime.isFocusExposureLocked || !cameraRuntime.isManualFocusEntrySupported
     }
 
     var body: some View {
@@ -3930,10 +3930,7 @@ private extension CaptureScreen {
 
     private func stepManualFocusRuler(by direction: Int) -> ManualFocusRulerStepResult {
         guard isManualFocusModeActive, isManualFocusRulerPresented else { return .rejected }
-        guard cameraRuntime.isManualFocusSupported else {
-            cameraRuntime.captureHintText = "当前镜头不支持手动对焦"
-            return .rejected
-        }
+        guard cameraRuntime.canAdjustManualFocusPosition(reason: "rulerStep") else { return .rejected }
         guard !cameraRuntime.isFocusExposureLocked else {
             cameraRuntime.captureHintText = "AE/AF 锁定中，长按画面解除后可调焦"
             return .rejected

@@ -474,6 +474,60 @@ enum ManualParameterAvailability: Equatable {
     }
 }
 
+enum ManualFocusCapability: Equatable {
+    case full
+    case lockCurrentOnly(reason: String)
+    case unsupported(reason: String)
+
+    var isFull: Bool {
+        if case .full = self { return true }
+        return false
+    }
+
+    var canEnterManualFocusMode: Bool {
+        switch self {
+        case .full, .lockCurrentOnly:
+            return true
+        case .unsupported:
+            return false
+        }
+    }
+
+    var reasonText: String {
+        switch self {
+        case .full:
+            return "full"
+        case .lockCurrentOnly(let reason),
+             .unsupported(let reason):
+            return reason
+        }
+    }
+
+    var userFacingHint: String {
+        switch self {
+        case .full:
+            return "MF 可用"
+        case .lockCurrentOnly:
+            return "当前镜头仅支持锁定焦点，暂不支持手动拖动"
+        case .unsupported(let reason):
+            switch reason {
+            case "noActiveSessionDevice":
+                return "相机尚未就绪"
+            case "lensSwitching":
+                return "镜头切换完成后再试"
+            case "previewRestricted":
+                return "当前拍摄处理中，稍后再调焦"
+            case "focusExposureLocked":
+                return "AE/AF 锁定中，长按画面解除后可进入 MF"
+            case "lockedFocusUnsupported":
+                return "当前镜头不支持手动对焦"
+            default:
+                return "当前摄像头不支持手动对焦"
+            }
+        }
+    }
+}
+
 enum PhysicalCameraProfile: Equatable {
     case ultraWide
     case wide
@@ -726,6 +780,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
     @Published var selectedAspectRatioPreset: CapturePhotoAspectRatioPreset = .ratio3x4
     @Published var selectedPixelPreset: CapturePhotoPixelPreset = .p1600
     @Published var isRAWCaptureSupported = false
+    @Published var isManualFocusEntrySupported = false
     @Published var isManualFocusSupported = false
     @Published var canSwitchCamera = false
     @Published var activeCameraPosition: AVCaptureDevice.Position = .back
@@ -2052,6 +2107,125 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
     }
 
+    @discardableResult
+    func manualFocusEntryCapability(reason: String) -> ManualFocusCapability {
+        guard !isFocusExposureLocked else {
+            let capability = ManualFocusCapability.unsupported(reason: "focusExposureLocked")
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: reason)
+            captureHintText = capability.userFacingHint
+            return capability
+        }
+        guard !isPreviewInteractionTemporarilyRestricted else {
+            let capability = ManualFocusCapability.unsupported(reason: "previewRestricted")
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: reason)
+            captureHintText = previewInteractionRestrictedHintText
+            return capability
+        }
+        guard !isSwitchingCamera else {
+            let capability = ManualFocusCapability.unsupported(reason: "lensSwitching")
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: reason)
+            captureHintText = capability.userFacingHint
+            return capability
+        }
+
+        let capability = updateFocusCapabilityState(
+            with: currentVideoInput?.device,
+            reason: reason,
+            resetsFocusMode: false
+        )
+        guard capability.canEnterManualFocusMode else {
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: reason)
+            captureHintText = capability.userFacingHint
+            return capability
+        }
+        return capability
+    }
+
+    @discardableResult
+    func canAdjustManualFocusPosition(reason: String) -> Bool {
+        let capability = manualFocusEntryCapability(reason: reason)
+        guard capability.isFull else {
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: reason)
+            captureHintText = capability.userFacingHint
+            return false
+        }
+        return true
+    }
+
+    func lockCurrentManualFocus(reason: String) {
+        guard !isFocusExposureLocked else {
+            let capability = ManualFocusCapability.unsupported(reason: "focusExposureLocked")
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: "lockCurrent:\(reason)")
+            captureHintText = capability.userFacingHint
+            return
+        }
+        guard !isPreviewInteractionTemporarilyRestricted else {
+            let capability = ManualFocusCapability.unsupported(reason: "previewRestricted")
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: "lockCurrent:\(reason)")
+            captureHintText = previewInteractionRestrictedHintText
+            return
+        }
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            guard let device = self.currentVideoInput?.device else {
+                DispatchQueue.main.async {
+                    let capability = ManualFocusCapability.unsupported(reason: "noActiveSessionDevice")
+                    self.logManualFocusGuard(device: nil, capability: capability, reason: "lockCurrent:\(reason)")
+                    self.isManualFocusEntrySupported = false
+                    self.isManualFocusSupported = false
+                    self.captureHintText = capability.userFacingHint
+                }
+                return
+            }
+            let capability = self.manualFocusCapability(for: device)
+            guard capability.canEnterManualFocusMode else {
+                self.logManualFocusGuard(device: device, capability: capability, reason: "lockCurrent:\(reason)")
+                DispatchQueue.main.async {
+                    self.isManualFocusEntrySupported = false
+                    self.isManualFocusSupported = false
+                    self.captureHintText = capability.userFacingHint
+                }
+                return
+            }
+            do {
+                try device.lockForConfiguration()
+                device.focusMode = .locked
+                let quantized = self.quantizedManualFocusPosition(device.lensPosition)
+                self.logManualFocusWrite(
+                    device: device,
+                    requested: quantized,
+                    applied: quantized,
+                    reason: "lockCurrent:\(reason)",
+                    success: true,
+                    error: nil
+                )
+                device.unlockForConfiguration()
+                DispatchQueue.main.async {
+                    self.isManualFocusEntrySupported = capability.canEnterManualFocusMode
+                    self.isManualFocusSupported = capability.isFull
+                    self.currentManualFocusPosition = quantized
+                    self.lastAppliedManualFocusPosition = quantized
+                    self.focusControlMode = .manual
+                    self.captureHintText = capability.isFull
+                        ? "MF \(self.manualFocusDisplayText)"
+                        : capability.userFacingHint
+                }
+            } catch {
+                self.logManualFocusWrite(
+                    device: device,
+                    requested: device.lensPosition,
+                    applied: device.lensPosition,
+                    reason: "lockCurrent:\(reason)",
+                    success: false,
+                    error: error
+                )
+                DispatchQueue.main.async {
+                    self.captureHintText = "锁定当前焦点失败"
+                }
+            }
+        }
+    }
+
     func setManualFocusLensPosition(_ requestedLensPosition: Float) {
         focusFeedbackTask?.cancel()
         focusFeedbackTask = nil
@@ -2059,16 +2233,26 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         lastManualFocusInteractionAt = Date()
         productSharpnessBlurryHitCount = 0
         hasProductFocusAssistTriggeredForCurrentBlurEpisode = false
-        guard isManualFocusSupported else {
-            captureHintText = "当前摄像头不支持手动对焦"
-            return
-        }
         guard !isFocusExposureLocked else {
+            let capability = ManualFocusCapability.unsupported(reason: "focusExposureLocked")
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: "writePreflight")
             captureHintText = "AE/AF 锁定中，先长按解锁后再切 MF"
             return
         }
         guard !isPreviewInteractionTemporarilyRestricted else {
+            let capability = ManualFocusCapability.unsupported(reason: "previewRestricted")
+            logManualFocusGuard(device: currentVideoInput?.device, capability: capability, reason: "writePreflight")
             captureHintText = previewInteractionRestrictedHintText
+            return
+        }
+        let preflightCapability = updateFocusCapabilityState(
+            with: currentVideoInput?.device,
+            reason: "writePreflight",
+            resetsFocusMode: false
+        )
+        guard preflightCapability.isFull else {
+            logManualFocusGuard(device: currentVideoInput?.device, capability: preflightCapability, reason: "writePreflight")
+            captureHintText = preflightCapability.userFacingHint
             return
         }
         let wasManualMode = focusControlMode == .manual
@@ -2076,10 +2260,26 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
 
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            guard let device = self.currentVideoInput?.device else { return }
-            guard device.isLockingFocusWithCustomLensPositionSupported else {
+            guard let device = self.currentVideoInput?.device else {
                 DispatchQueue.main.async {
-                    self.captureHintText = "当前摄像头不支持手动对焦"
+                    let capability = ManualFocusCapability.unsupported(reason: "noActiveSessionDevice")
+                    self.logManualFocusGuard(device: nil, capability: capability, reason: "writeQueue")
+                    self.isManualFocusEntrySupported = false
+                    self.isManualFocusSupported = false
+                    self.captureHintText = capability.userFacingHint
+                }
+                return
+            }
+            let capability = self.manualFocusCapability(for: device)
+            guard capability.isFull else {
+                self.logManualFocusGuard(device: device, capability: capability, reason: "writeQueue")
+                DispatchQueue.main.async {
+                    self.isManualFocusEntrySupported = capability.canEnterManualFocusMode
+                    self.isManualFocusSupported = false
+                    self.captureHintText = capability.userFacingHint
+                    if self.focusControlMode == .manual {
+                        self.focusControlMode = .auto
+                    }
                 }
                 return
             }
@@ -2097,14 +2297,32 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             do {
                 try device.lockForConfiguration()
                 device.setFocusModeLocked(lensPosition: quantized)
+                self.logManualFocusWrite(
+                    device: device,
+                    requested: requestedLensPosition,
+                    applied: quantized,
+                    reason: "user",
+                    success: true,
+                    error: nil
+                )
                 device.unlockForConfiguration()
                 DispatchQueue.main.async {
+                    self.isManualFocusEntrySupported = true
+                    self.isManualFocusSupported = true
                     self.currentManualFocusPosition = quantized
                     self.lastAppliedManualFocusPosition = quantized
                     self.focusControlMode = .manual
                     self.captureHintText = "MF \(self.manualFocusDisplayText)"
                 }
             } catch {
+                self.logManualFocusWrite(
+                    device: device,
+                    requested: requestedLensPosition,
+                    applied: quantized,
+                    reason: "user",
+                    success: false,
+                    error: error
+                )
                 DispatchQueue.main.async {
                     self.captureHintText = "手动对焦失败"
                 }
@@ -2123,24 +2341,35 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            guard let device = self.currentVideoInput?.device else { return }
+            guard let device = self.currentVideoInput?.device else {
+                self.logManualFocusRestoreAF(device: nil, mode: "none", reason: "user", success: false, error: nil)
+                return
+            }
             do {
                 try device.lockForConfiguration()
+                let appliedMode: String
                 if device.isFocusModeSupported(.continuousAutoFocus) {
                     device.focusMode = .continuousAutoFocus
+                    appliedMode = "continuousAutoFocus"
                 } else if device.isFocusModeSupported(.autoFocus) {
                     device.focusMode = .autoFocus
+                    appliedMode = "autoFocus"
+                } else {
+                    appliedMode = "unchanged:\(device.focusMode.rawValue)"
                 }
                 let updatedLensPosition = device.lensPosition
+                self.logManualFocusRestoreAF(device: device, mode: appliedMode, reason: "user", success: true, error: nil)
                 device.unlockForConfiguration()
                 DispatchQueue.main.async {
                     self.focusControlMode = .auto
                     let quantized = self.quantizedManualFocusPosition(updatedLensPosition)
                     self.currentManualFocusPosition = quantized
                     self.lastAppliedManualFocusPosition = quantized
+                    self.updateFocusCapabilityState(with: device, reason: "restoreAF", resetsFocusMode: false)
                     self.captureHintText = "已切回 AF"
                 }
             } catch {
+                self.logManualFocusRestoreAF(device: device, mode: "failed", reason: "user", success: false, error: error)
                 DispatchQueue.main.async {
                     self.captureHintText = "恢复 AF 失败"
                 }
@@ -2607,6 +2836,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
                 } else {
                     device.videoZoomFactor = clamped
                 }
+                self.reapplyManualFocusAfterZoomIfNeeded(on: device, reason: reason)
 #if DEBUG
                 let switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors
                     .map { String(format: "%.2f", CGFloat(truncating: $0)) }
@@ -2684,6 +2914,44 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         }
     }
 #endif
+
+    private func reapplyManualFocusAfterZoomIfNeeded(on device: AVCaptureDevice, reason: String) {
+        guard focusControlMode == .manual,
+              let manualPosition = lastAppliedManualFocusPosition else { return }
+        let capability = manualFocusCapability(for: device)
+        switch capability {
+        case .full:
+            let quantized = quantizedManualFocusPosition(manualPosition)
+            device.setFocusModeLocked(lensPosition: quantized)
+            logManualFocusWrite(
+                device: device,
+                requested: manualPosition,
+                applied: quantized,
+                reason: "zoomReapply:\(reason)",
+                success: true,
+                error: nil
+            )
+        case .lockCurrentOnly:
+            device.focusMode = .locked
+            let quantized = quantizedManualFocusPosition(device.lensPosition)
+            logManualFocusWrite(
+                device: device,
+                requested: quantized,
+                applied: quantized,
+                reason: "zoomReapplyLockOnly:\(reason)",
+                success: true,
+                error: nil
+            )
+        case .unsupported:
+            logManualFocusGuard(device: device, capability: capability, reason: "zoomReapply:\(reason)")
+            DispatchQueue.main.async {
+                self.isManualFocusEntrySupported = capability.canEnterManualFocusMode
+                self.isManualFocusSupported = capability.isFull
+                self.focusControlMode = .auto
+                self.captureHintText = capability.userFacingHint
+            }
+        }
+    }
 
     func applyStabilizerModeToConnections(reason: String = "refresh") {
         let requestedMode = selectedStabilizerMode.requestedVideoStabilizationMode
@@ -3996,11 +4264,49 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         return device
     }
 
-    private func updateFocusCapabilityState(with device: AVCaptureDevice) {
-        isManualFocusSupported = device.isLockingFocusWithCustomLensPositionSupported
-        currentManualFocusPosition = quantizedManualFocusPosition(device.lensPosition)
-        lastAppliedManualFocusPosition = currentManualFocusPosition
-        focusControlMode = .auto
+    @discardableResult
+    private func updateFocusCapabilityState(
+        with device: AVCaptureDevice,
+        reason: String = "capabilityUpdate",
+        resetsFocusMode: Bool = true
+    ) -> ManualFocusCapability {
+        updateFocusCapabilityState(with: Optional(device), reason: reason, resetsFocusMode: resetsFocusMode)
+    }
+
+    @discardableResult
+    private func updateFocusCapabilityState(
+        with device: AVCaptureDevice?,
+        reason: String,
+        resetsFocusMode: Bool
+    ) -> ManualFocusCapability {
+        let capability = manualFocusCapability(for: device)
+        isManualFocusEntrySupported = capability.canEnterManualFocusMode
+        isManualFocusSupported = capability.isFull
+        if let device {
+            let quantized = quantizedManualFocusPosition(device.lensPosition)
+            currentManualFocusPosition = quantized
+            if resetsFocusMode || focusControlMode != .manual {
+                lastAppliedManualFocusPosition = quantized
+            }
+        }
+        if resetsFocusMode {
+            focusControlMode = .auto
+        }
+        logManualFocusSupport(device: device, capability: capability, reason: reason)
+        return capability
+    }
+
+    private func manualFocusCapability(for device: AVCaptureDevice?) -> ManualFocusCapability {
+        guard let device else {
+            return .unsupported(reason: "noActiveSessionDevice")
+        }
+        guard device.isFocusModeSupported(.locked) else {
+            return .unsupported(reason: "lockedFocusUnsupported")
+        }
+        guard device.isLockingFocusWithCustomLensPositionSupported else {
+            return .lockCurrentOnly(reason: "customLensPositionUnsupported")
+        }
+        return .full
     }
 
     private func normalizedWhiteBalanceGains(
@@ -4877,6 +5183,103 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         ].joined(separator: "|")
     }
 
+    private func formattedManualFocusDeviceState(_ device: AVCaptureDevice?) -> String {
+        guard let device else {
+            return "device=nil type=nil uniqueID=nil isVirtual=false activePrimary=nil focusMode=nil focusLocked=false focusCustomLens=false lens=nil adjustingFocus=false selectedLens=\(selectedLensProfile?.displayText ?? "nil") selectedLensID=\(selectedLensProfileID)"
+        }
+        let activePrimary = device.activePrimaryConstituent.map { formattedLensDeviceCapability($0) } ?? "nil"
+        return [
+            "device=\(device.localizedName)",
+            "type=\(device.deviceType.rawValue)",
+            "uniqueID=\(device.uniqueID)",
+            "isVirtual=\(device.isVirtualDevice)",
+            "activePrimary=\(activePrimary)",
+            "zoom=\(String(format: "%.3f", device.videoZoomFactor))",
+            "focusMode=\(device.focusMode.rawValue)",
+            "focusLocked=\(device.isFocusModeSupported(.locked))",
+            "focusAuto=\(device.isFocusModeSupported(.autoFocus))",
+            "focusContinuous=\(device.isFocusModeSupported(.continuousAutoFocus))",
+            "focusCustomLens=\(device.isLockingFocusWithCustomLensPositionSupported)",
+            "lens=\(String(format: "%.3f", Double(device.lensPosition)))",
+            "adjustingFocus=\(device.isAdjustingFocus)",
+            "selectedLens=\(selectedLensProfile?.displayText ?? "nil")",
+            "selectedLensID=\(selectedLensProfileID)"
+        ].joined(separator: " ")
+    }
+
+    private func logManualFocusSupport(
+        device: AVCaptureDevice?,
+        capability: ManualFocusCapability,
+        reason: String
+    ) {
+#if DEBUG
+        print(
+            "[CaptureMFSupport] " +
+            "reason=\(reason) " +
+            "sessionRunning=\(session.isRunning) " +
+            "capability=\(capability.reasonText) " +
+            "supported=\(capability.isFull) " +
+            formattedManualFocusDeviceState(device)
+        )
+#endif
+    }
+
+    private func logManualFocusGuard(
+        device: AVCaptureDevice?,
+        capability: ManualFocusCapability,
+        reason: String
+    ) {
+#if DEBUG
+        print(
+            "[CaptureMFGuard] " +
+            "reason=\(reason) " +
+            "capability=\(capability.reasonText) " +
+            "supported=\(capability.isFull) " +
+            formattedManualFocusDeviceState(device)
+        )
+#endif
+    }
+
+    private func logManualFocusWrite(
+        device: AVCaptureDevice,
+        requested: Float,
+        applied: Float,
+        reason: String,
+        success: Bool,
+        error: Error?
+    ) {
+#if DEBUG
+        print(
+            "[CaptureMFWrite] " +
+            "reason=\(reason) " +
+            "success=\(success) " +
+            "requested=\(String(format: "%.3f", Double(requested))) " +
+            "applied=\(String(format: "%.3f", Double(applied))) " +
+            "error=\(error?.localizedDescription ?? "nil") " +
+            formattedManualFocusDeviceState(device)
+        )
+#endif
+    }
+
+    private func logManualFocusRestoreAF(
+        device: AVCaptureDevice?,
+        mode: String,
+        reason: String,
+        success: Bool,
+        error: Error?
+    ) {
+#if DEBUG
+        print(
+            "[CaptureMFRestoreAF] " +
+            "reason=\(reason) " +
+            "success=\(success) " +
+            "mode=\(mode) " +
+            "error=\(error?.localizedDescription ?? "nil") " +
+            formattedManualFocusDeviceState(device)
+        )
+#endif
+    }
+
     func logManualParameterCompatibilityForPanel(reason: String) {
 #if DEBUG
         sessionQueue.async { [weak self] in
@@ -4927,6 +5330,7 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
         let exposureTarget = "\(exposureDevice.localizedName)|\(exposureDevice.deviceType.rawValue)|\(exposureDevice.uniqueID)"
         let whiteBalanceDevice = manualWhiteBalanceControlDevice(for: device)
         let whiteBalanceTarget = "\(whiteBalanceDevice.localizedName)|\(whiteBalanceDevice.deviceType.rawValue)|\(whiteBalanceDevice.uniqueID)"
+        let focusCapability = manualFocusCapability(for: device)
         print(
             "[ManualParamCompat] " +
             "reason=\(reason) " +
@@ -4965,6 +5369,14 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             "grayGains=(\(String(format: "%.3f", grayGains.redGain)),\(String(format: "%.3f", grayGains.greenGain)),\(String(format: "%.3f", grayGains.blueGain))) " +
             "maxWBGain=\(String(format: "%.3f", device.maxWhiteBalanceGain)) " +
             "adjustingWB=\(device.isAdjustingWhiteBalance) " +
+            "focusMode=\(device.focusMode.rawValue) " +
+            "focusLocked=\(device.isFocusModeSupported(.locked)) " +
+            "focusAuto=\(device.isFocusModeSupported(.autoFocus)) " +
+            "focusContinuous=\(device.isFocusModeSupported(.continuousAutoFocus)) " +
+            "focusCustomLens=\(device.isLockingFocusWithCustomLensPositionSupported) " +
+            "lensPosition=\(String(format: "%.3f", Double(device.lensPosition))) " +
+            "adjustingFocus=\(device.isAdjustingFocus) " +
+            "mfAvailability=\(focusCapability.reasonText) " +
             "isoAvailability=\(manualExposureAvailability(for: device, parameter: "ISO").reasonText) " +
             "shutterAvailability=\(manualExposureAvailability(for: device, parameter: "Shutter").reasonText) " +
             "wbAvailability=\(manualWhiteBalanceAvailability(for: device).reasonText)"

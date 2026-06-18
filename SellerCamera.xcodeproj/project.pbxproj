@@ -7,11 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		1423CDE42F9BD0B300A1F596 /* SellerCamera.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = SellerCamera.xcodeproj; sourceTree = "<group>"; };
 		148245972F794E9E003C8259 /* SellerCamera.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SellerCamera.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		148245BF2F7BBE68003C8259 /* SellerCamera.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = SellerCamera.xcodeproj; sourceTree = "<group>"; };
-		148245DC2F7CBC73003C8259 /* SellerCamera.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = SellerCamera.xcodeproj; sourceTree = "<group>"; };
-		148245F82F7CC3CB003C8259 /* SellerCamera.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = SellerCamera.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,11 +29,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		1423CDE62F9BD0B300A1F596 /* Products */ = {
-			isa = PBXGroup;
-			name = Products;
-			sourceTree = "<group>";
-		};
 		1482458E2F794E9E003C8259 = {
 			isa = PBXGroup;
 			children = (
@@ -51,21 +42,6 @@
 			children = (
 				148245972F794E9E003C8259 /* SellerCamera.app */,
 			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		148245C12F7BBE68003C8259 /* Products */ = {
-			isa = PBXGroup;
-			name = Products;
-			sourceTree = "<group>";
-		};
-		148245DE2F7CBC73003C8259 /* Products */ = {
-			isa = PBXGroup;
-			name = Products;
-			sourceTree = "<group>";
-		};
-		148245FA2F7CC3CB003C8259 /* Products */ = {
-			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -121,24 +97,6 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 148245982F794E9E003C8259 /* Products */;
 			projectDirPath = "";
-			projectReferences = (
-				{
-					ProductGroup = 148245FA2F7CC3CB003C8259 /* Products */;
-					ProjectRef = 148245F82F7CC3CB003C8259 /* SellerCamera.xcodeproj */;
-				},
-				{
-					ProductGroup = 1423CDE62F9BD0B300A1F596 /* Products */;
-					ProjectRef = 1423CDE42F9BD0B300A1F596 /* SellerCamera.xcodeproj */;
-				},
-				{
-					ProductGroup = 148245DE2F7CBC73003C8259 /* Products */;
-					ProjectRef = 148245DC2F7CBC73003C8259 /* SellerCamera.xcodeproj */;
-				},
-				{
-					ProductGroup = 148245C12F7BBE68003C8259 /* Products */;
-					ProjectRef = 148245BF2F7BBE68003C8259 /* SellerCamera.xcodeproj */;
-				},
-			);
 			projectRoot = "";
 			targets = (
 				148245962F794E9E003C8259 /* SellerCamera */,
