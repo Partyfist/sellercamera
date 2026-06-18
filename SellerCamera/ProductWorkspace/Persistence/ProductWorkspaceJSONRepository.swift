@@ -98,6 +98,20 @@ nonisolated final class ProductWorkspaceJSONRepository: ProductProjectRepository
         }
     }
 
+    func restoreProject(id: UUID) throws {
+        try mutateSnapshot { snapshot in
+            guard let index = snapshot.projects.firstIndex(where: { $0.id == id }) else {
+                throw ProductWorkspaceError.projectNotFound(id)
+            }
+            var project = ProductWorkspaceMapper.domain(from: snapshot.projects[index])
+            project.status = .active
+            project.isArchived = false
+            project.updatedAt = Date()
+            snapshot.projects[index] = ProductWorkspaceMapper.record(from: project)
+            return ()
+        }
+    }
+
     func createAsset(_ asset: ProjectAsset) throws {
         try mutateSnapshot { snapshot in
             guard snapshot.projects.contains(where: { $0.id == asset.projectID }) else {
@@ -117,6 +131,13 @@ nonisolated final class ProductWorkspaceJSONRepository: ProductProjectRepository
             .map(ProductWorkspaceMapper.domain(from:))
     }
 
+    func fetchAssets(includeDeleted: Bool) throws -> [ProjectAsset] {
+        try readSnapshot().assets
+            .map(ProductWorkspaceMapper.domain(from:))
+            .filter { includeDeleted || !$0.isDeleted }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
     func fetchAssets(projectID: UUID) throws -> [ProjectAsset] {
         try readSnapshot().assets
             .filter { $0.projectID == projectID && !$0.isDeleted }
@@ -134,6 +155,7 @@ nonisolated final class ProductWorkspaceJSONRepository: ProductProjectRepository
         return ProjectAssetCounts(
             standard: assets.filter { $0.category == .standard }.count,
             detail: assets.filter { $0.category == .detail }.count,
+            sku: assets.filter { $0.category == .sku }.count,
             video: assets.filter { $0.category == .video }.count
         )
     }

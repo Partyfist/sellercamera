@@ -10,7 +10,30 @@ import Foundation
 nonisolated enum CaptureCategory: String, Codable, CaseIterable, Equatable {
     case standard
     case detail
+    case sku
     case video
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        switch rawValue {
+        case "whiteBackground", "white", "white_background":
+            self = .sku
+        default:
+            guard let value = CaptureCategory(rawValue: rawValue) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Unsupported capture category: \(rawValue)"
+                )
+            }
+            self = value
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 nonisolated enum ProjectAssetType: String, Codable, CaseIterable, Equatable {
@@ -34,8 +57,9 @@ nonisolated struct ProjectAsset: Identifiable, Codable, Equatable {
     var schemaVersion: Int
     var projectID: UUID
     var category: CaptureCategory
-    var assetType: ProjectAssetType
+    var mediaType: ProjectAssetType
     var origin: AssetOrigin
+    var originalFilename: String?
     var relativePath: String
     var thumbnailRelativePath: String?
     var createdAt: Date
@@ -48,6 +72,12 @@ nonisolated struct ProjectAsset: Identifiable, Codable, Equatable {
     var isDeleted: Bool
     var version: Int
     var parentAssetID: UUID?
+    var skuID: UUID?
+
+    var assetType: ProjectAssetType {
+        get { mediaType }
+        set { mediaType = newValue }
+    }
 
     init(
         id: UUID = UUID(),
@@ -56,6 +86,7 @@ nonisolated struct ProjectAsset: Identifiable, Codable, Equatable {
         category: CaptureCategory,
         assetType: ProjectAssetType = .photo,
         origin: AssetOrigin = .camera,
+        originalFilename: String? = nil,
         relativePath: String,
         thumbnailRelativePath: String? = nil,
         createdAt: Date = Date(),
@@ -67,14 +98,16 @@ nonisolated struct ProjectAsset: Identifiable, Codable, Equatable {
         isFavorite: Bool = false,
         isDeleted: Bool = false,
         version: Int = 1,
-        parentAssetID: UUID? = nil
+        parentAssetID: UUID? = nil,
+        skuID: UUID? = nil
     ) {
         self.id = id
         self.schemaVersion = schemaVersion
         self.projectID = projectID
         self.category = category
-        self.assetType = assetType
+        self.mediaType = assetType
         self.origin = origin
+        self.originalFilename = originalFilename
         self.relativePath = relativePath
         self.thumbnailRelativePath = thumbnailRelativePath
         self.createdAt = createdAt
@@ -87,5 +120,6 @@ nonisolated struct ProjectAsset: Identifiable, Codable, Equatable {
         self.isDeleted = isDeleted
         self.version = version
         self.parentAssetID = parentAssetID
+        self.skuID = skuID
     }
 }

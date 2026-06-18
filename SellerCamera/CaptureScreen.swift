@@ -17,6 +17,10 @@ struct CaptureScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isLatestReviewPresented = false
     @State private var isImportPickerPresented = false
+    @State private var isWorkspacePresented = false
+    @State private var isProfilePresented = false
+    @State private var isProjectQuickPanelPresented = false
+    @State private var isQuickCreateProjectPresented = false
     @State private var selectedImportPhotoItem: PhotosPickerItem?
     @State private var isImportingPhoto = false
     @State private var selectedCaptureIntent: CaptureIntentKind = .standard
@@ -157,25 +161,21 @@ struct CaptureScreen: View {
                 .padding(.horizontal, 14)
 
                 CaptureBottomActionBar(
-                    latestResult: cameraRuntime.latestStillPhotoResult,
-                    onTapLatestResult: {
-                        guard cameraRuntime.latestStillPhotoResult != nil else {
-                            cameraRuntime.captureHintText = "暂无最近结果，可先拍摄一张"
-                            return
-                        }
-                        cameraRuntime.prepareForReviewPresentation()
-                        isLatestReviewPresented = true
+                    onTapWorkspace: {
+                        dismissInlineControls()
+                        dismissMoreOptionsPanel()
+                        isCaptureOptionPanelPresented = false
+                        isWorkspacePresented = true
                     },
                     onShutterTap: {
                         cameraRuntime.setProjectCaptureCategory(selectedCaptureIntent.projectCategory)
                         cameraRuntime.triggerPhotoCapture()
                     },
-                    projectActionSymbol: productWorkspace.currentProject == nil ? "folder.badge.plus" : "folder.fill",
-                    projectActionTitle: "项目",
-                    onTapProjectPlaceholder: {
-                        Task {
-                            await handleProductProjectPlaceholderTap()
-                        }
+                    onTapProfile: {
+                        dismissInlineControls()
+                        dismissMoreOptionsPanel()
+                        isCaptureOptionPanelPresented = false
+                        isProfilePresented = true
                     }
                 )
                 .padding(.horizontal, 18)
@@ -432,6 +432,8 @@ struct CaptureScreen: View {
                     isRawCaptureSupported: cameraRuntime.isRAWCaptureSupported,
                     isCaptureOptionsPresented: isCaptureOptionPanelPresented,
                     onTapCaptureOptions: handleCaptureOptionTap,
+                    projectSummary: productWorkspace.currentProjectSummary,
+                    onTapProject: handleProjectCapsuleTap,
                     isGridEnabled: cameraRuntime.isGridEnabled,
                     onToggleGrid: cameraRuntime.toggleGrid,
                     isLevelIndicatorEnabled: cameraRuntime.isLevelIndicatorEnabled,
@@ -493,7 +495,10 @@ struct CaptureScreen: View {
                 .frame(maxHeight: .infinity)
                 .padding(.top, 0)
 
-                CaptureIntentSwitcherView(selectedIntent: $selectedCaptureIntent)
+                CaptureIntentSwitcherView(
+                    selectedIntent: $selectedCaptureIntent,
+                    counts: productWorkspace.currentCounts
+                )
                     .padding(.horizontal, 14)
                     .padding(.top, 1)
                     .padding(.bottom, 3)
@@ -597,6 +602,16 @@ struct CaptureScreen: View {
         .onChange(of: selectedCaptureIntent) { intent in
             cameraRuntime.setProjectCaptureCategory(intent.projectCategory)
             cameraRuntime.captureHintText = intent.hintText
+            Task {
+                await productWorkspace.selectCaptureCategory(intent.projectCategory)
+            }
+        }
+        .onChange(of: productWorkspace.selectedCaptureCategory) { category in
+            let intent = CaptureIntentKind(category: category)
+            if selectedCaptureIntent != intent {
+                selectedCaptureIntent = intent
+            }
+            cameraRuntime.setProjectCaptureCategory(intent.projectCategory)
         }
         .onChange(of: cameraRuntime.latestProjectArchiveStatusText) { _ in
             Task {
@@ -604,11 +619,55 @@ struct CaptureScreen: View {
             }
         }
         .task {
-            cameraRuntime.setProjectCaptureCategory(selectedCaptureIntent.projectCategory)
             await productWorkspace.restoreCurrentProject()
+            applyWorkspaceSelectionToCamera()
             if productWorkspace.currentProject != nil {
                 cameraRuntime.captureHintText = productWorkspace.lastStatusText
             }
+        }
+        .sheet(isPresented: $isWorkspacePresented) {
+            ProductWorkspaceView(
+                session: productWorkspace,
+                onContinueShooting: {
+                    isWorkspacePresented = false
+                }
+            )
+            .presentationDetents([.large])
+            .task {
+                await productWorkspace.refreshCurrentProjectState()
+            }
+        }
+        .sheet(isPresented: $isProfilePresented) {
+            SellerProfileShellView()
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $isProjectQuickPanelPresented) {
+            ProductProjectQuickPanel(
+                session: productWorkspace,
+                onCreateProject: {
+                    isProjectQuickPanelPresented = false
+                    isQuickCreateProjectPresented = true
+                },
+                onViewAllProjects: {
+                    isProjectQuickPanelPresented = false
+                    isWorkspacePresented = true
+                },
+                onSelectProject: { projectID in
+                    await productWorkspace.selectProject(id: projectID)
+                    applyWorkspaceSelectionToCamera()
+                    isProjectQuickPanelPresented = false
+                }
+            )
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $isQuickCreateProjectPresented) {
+            ProductQuickCreateProjectSheet { name in
+                await productWorkspace.createProject(name: name)
+                applyWorkspaceSelectionToCamera()
+                cameraRuntime.captureHintText = productWorkspace.lastStatusText
+                isQuickCreateProjectPresented = false
+            }
+            .presentationDetents([.medium])
         }
         .onChange(of: cameraRuntime.currentExposureBias) { value in
             guard let pendingExposureBiasWheelValue else { return }
@@ -829,6 +888,27 @@ struct CaptureScreen: View {
             await productWorkspace.refreshCurrentProjectState()
         }
         cameraRuntime.captureHintText = productWorkspace.lastStatusText
+    }
+
+    @MainActor
+    private func handleProjectCapsuleTap() {
+        dismissInlineControls()
+        dismissMoreOptionsPanel()
+        isCaptureOptionPanelPresented = false
+        if productWorkspace.currentProject == nil {
+            isQuickCreateProjectPresented = true
+        } else {
+            isProjectQuickPanelPresented = true
+        }
+    }
+
+    @MainActor
+    private func applyWorkspaceSelectionToCamera() {
+        let intent = CaptureIntentKind(category: productWorkspace.selectedCaptureCategory)
+        if selectedCaptureIntent != intent {
+            selectedCaptureIntent = intent
+        }
+        cameraRuntime.setProjectCaptureCategory(intent.projectCategory)
     }
 
     private func selectAspectRatioPreset(_ preset: CapturePhotoAspectRatioPreset) {
@@ -1549,9 +1629,20 @@ private struct CaptureOptionSelectionContext {
 private enum CaptureIntentKind: String, CaseIterable, Identifiable {
     case standard
     case detail
-    case whiteBackground
+    case sku
 
     var id: String { rawValue }
+
+    init(category: CaptureCategory) {
+        switch category {
+        case .standard, .video:
+            self = .standard
+        case .detail:
+            self = .detail
+        case .sku:
+            self = .sku
+        }
+    }
 
     var title: String {
         switch self {
@@ -1559,8 +1650,8 @@ private enum CaptureIntentKind: String, CaseIterable, Identifiable {
             return "标准"
         case .detail:
             return "细节"
-        case .whiteBackground:
-            return "白底"
+        case .sku:
+            return "SKU"
         }
     }
 
@@ -1570,23 +1661,37 @@ private enum CaptureIntentKind: String, CaseIterable, Identifiable {
             return "标准图 · 平衡构图"
         case .detail:
             return "细节图 · 清晰优先"
-        case .whiteBackground:
-            return "白底导向 · 保边界"
+        case .sku:
+            return "SKU 图 · 差异留档"
         }
     }
 
     var projectCategory: CaptureCategory {
         switch self {
-        case .standard, .whiteBackground:
+        case .standard:
             return .standard
         case .detail:
             return .detail
+        case .sku:
+            return .sku
+        }
+    }
+
+    func count(in counts: ProjectAssetCounts) -> Int {
+        switch self {
+        case .standard:
+            return counts.standard
+        case .detail:
+            return counts.detail
+        case .sku:
+            return counts.sku
         }
     }
 }
 
 private struct CaptureIntentSwitcherView: View {
     @Binding var selectedIntent: CaptureIntentKind
+    let counts: ProjectAssetCounts
 
     var body: some View {
         HStack(spacing: SellerCameraSpacing.md) {
@@ -1596,19 +1701,24 @@ private struct CaptureIntentSwitcherView: View {
                 Button {
                     selectedIntent = intent
                 } label: {
-                    Text(intent.title)
-                        .font(SellerCameraTypography.toolLabel)
-                        .foregroundStyle(isActive ? style.foreground : style.secondaryForeground)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SellerCameraSpacing.sm)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(style.fill)
-                        )
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(style.stroke, lineWidth: 1)
-                        )
+                    HStack(spacing: 5) {
+                        Text(intent.title)
+                        Text("\(intent.count(in: counts))")
+                            .monospacedDigit()
+                            .foregroundStyle(isActive ? style.foreground.opacity(0.86) : style.secondaryForeground.opacity(0.72))
+                    }
+                    .font(SellerCameraTypography.toolLabel)
+                    .foregroundStyle(isActive ? style.foreground : style.secondaryForeground)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SellerCameraSpacing.sm)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(style.fill)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(style.stroke, lineWidth: 1)
+                    )
                 }
                 .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.97))
                 .accessibilityValue(styleStateText(isActive: isActive))
@@ -1637,6 +1747,8 @@ private struct CaptureTopStatusBar: View {
     let isRawCaptureSupported: Bool
     let isCaptureOptionsPresented: Bool
     let onTapCaptureOptions: () -> Void
+    let projectSummary: CurrentProjectSummary?
+    let onTapProject: () -> Void
     let isGridEnabled: Bool
     let onToggleGrid: () -> Void
     let isLevelIndicatorEnabled: Bool
@@ -1653,57 +1765,68 @@ private struct CaptureTopStatusBar: View {
     var body: some View {
         VStack(spacing: SellerCameraSpacing.xs) {
             HStack(spacing: SellerCameraSpacing.md) {
-                Button(action: onTapFlash) {
-                    topToolButtonContent(
-                        symbol: flashMode.symbolName,
-                        text: flashMode.shortText,
-                        enabled: isFlashModeSupported
-                    )
+                HStack(spacing: SellerCameraSpacing.md) {
+                    Button(action: onTapFlash) {
+                        topToolButtonContent(
+                            symbol: flashMode.symbolName,
+                            text: flashMode.shortText,
+                            enabled: isFlashModeSupported
+                        )
+                    }
+                    .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
+                    .disabled(!isFlashModeSupported)
+                    .accessibilityLabel("闪光灯，\(flashMode.shortText)")
+                    .accessibilityHint(isFlashModeSupported ? "双击切换闪光灯模式" : "当前设备不支持闪光灯")
+
+                    Button(action: onTapCaptureOptions) {
+                        topToolButtonContent(
+                            symbol: "rectangle.on.rectangle.angled",
+                            text: "\(selectedAspectRatioPreset.displayText)·\(pixelCompactText(for: selectedPixelPreset))",
+                            enabled: true,
+                            showsSymbol: false,
+                            isActive: isCaptureOptionsPresented
+                        )
+                    }
+                    .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
+                    .accessibilityLabel("拍摄比例和输出像素")
+                    .accessibilityValue("\(selectedAspectRatioPreset.displayText)，\(pixelMenuText(for: selectedPixelPreset))")
+                    .accessibilityHint(isCaptureOptionsPresented ? "双击关闭比例和像素面板" : "双击打开比例和像素面板")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button(action: onTapProject) {
+                    projectCapsuleContent(summary: projectSummary)
                 }
                 .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
-                .disabled(!isFlashModeSupported)
-                .accessibilityLabel("闪光灯，\(flashMode.shortText)")
-                .accessibilityHint(isFlashModeSupported ? "双击切换闪光灯模式" : "当前设备不支持闪光灯")
+                .accessibilityLabel(projectSummary.map { "当前项目，\($0.projectName)" } ?? "创建项目")
+                .accessibilityHint(projectSummary == nil ? "双击快速创建项目" : "双击切换或查看项目")
 
-                Button(action: onTapCaptureOptions) {
-                    topToolButtonContent(
-                        symbol: "rectangle.on.rectangle.angled",
-                        text: "\(selectedAspectRatioPreset.displayText)·\(pixelCompactText(for: selectedPixelPreset))",
-                        enabled: true,
-                        showsSymbol: false,
-                        isActive: isCaptureOptionsPresented
-                    )
+                HStack(spacing: SellerCameraSpacing.md) {
+                    Button(action: onTapSwitchCamera) {
+                        topToolButtonContent(
+                            symbol: "camera.rotate",
+                            text: cameraPosition == .back ? "后摄" : "前摄",
+                            enabled: canSwitchCamera
+                        )
+                    }
+                    .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
+                    .disabled(!canSwitchCamera)
+                    .accessibilityLabel(cameraPosition == .back ? "当前后置相机" : "当前前置相机")
+                    .accessibilityHint(canSwitchCamera ? "双击切换前后摄像头" : "当前不可切换摄像头")
+
+                    Button(action: onTapMoreOptions) {
+                        topToolButtonContent(
+                            symbol: "ellipsis.circle",
+                            text: "更多",
+                            enabled: true,
+                            isActive: isMoreOptionsPresented
+                        )
+                    }
+                    .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
+                    .accessibilityLabel("更多拍摄选项")
+                    .accessibilityHint(isMoreOptionsPresented ? "双击关闭更多选项" : "双击打开更多选项")
                 }
-                .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
-                .accessibilityLabel("拍摄比例和输出像素")
-                .accessibilityValue("\(selectedAspectRatioPreset.displayText)，\(pixelMenuText(for: selectedPixelPreset))")
-                .accessibilityHint(isCaptureOptionsPresented ? "双击关闭比例和像素面板" : "双击打开比例和像素面板")
-
-                Spacer(minLength: 0)
-
-                Button(action: onTapSwitchCamera) {
-                    topToolButtonContent(
-                        symbol: "camera.rotate",
-                        text: cameraPosition == .back ? "后摄" : "前摄",
-                        enabled: canSwitchCamera
-                    )
-                }
-                .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
-                .disabled(!canSwitchCamera)
-                .accessibilityLabel(cameraPosition == .back ? "当前后置相机" : "当前前置相机")
-                .accessibilityHint(canSwitchCamera ? "双击切换前后摄像头" : "当前不可切换摄像头")
-
-                Button(action: onTapMoreOptions) {
-                    topToolButtonContent(
-                        symbol: "ellipsis.circle",
-                        text: "更多",
-                        enabled: true,
-                        isActive: isMoreOptionsPresented
-                    )
-                }
-                .buttonStyle(SellerCameraPressButtonStyle(pressedScale: 0.96))
-                .accessibilityLabel("更多拍摄选项")
-                .accessibilityHint(isMoreOptionsPresented ? "双击关闭更多选项" : "双击打开更多选项")
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
             Text(memoryStatusText)
@@ -1745,6 +1868,36 @@ private struct CaptureTopStatusBar: View {
             style.fill,
             in: Capsule()
         )
+        .overlay(
+            Capsule()
+                .stroke(style.stroke, lineWidth: 1)
+        )
+    }
+
+    private func projectCapsuleContent(summary: CurrentProjectSummary?) -> some View {
+        let state: SellerCameraControlState = summary == nil ? .active : .selected
+        let style = SellerCameraControlVisualStyle.style(for: state)
+        let title = summary?.projectName ?? "＋ 项目"
+
+        return HStack(spacing: SellerCameraSpacing.sm) {
+            Image(systemName: summary == nil ? "folder.badge.plus" : "folder.fill")
+                .sellerCameraGlyphStyle(state: state, prominence: .compact)
+            Text(title)
+                .font(SellerCameraTypography.toolLabel)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .minimumScaleFactor(0.75)
+            if summary != nil {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+            }
+        }
+        .foregroundStyle(style.foreground)
+        .padding(.horizontal, SellerCameraSpacing.md)
+        .padding(.vertical, SellerCameraSpacing.sm)
+        .frame(width: 128)
+        .frame(minHeight: SellerCameraSpacing.hitTarget - 12)
+        .background(style.fill, in: Capsule())
         .overlay(
             Capsule()
                 .stroke(style.stroke, lineWidth: 1)
@@ -4522,19 +4675,18 @@ private extension CaptureScreen {
 }
 
 private struct CaptureBottomActionBar: View {
-    let latestResult: CaptureStillPhotoResult?
-    let onTapLatestResult: () -> Void
+    let onTapWorkspace: () -> Void
     let onShutterTap: () -> Void
-    let projectActionSymbol: String
-    let projectActionTitle: String
-    let onTapProjectPlaceholder: () -> Void
+    let onTapProfile: () -> Void
 
     var body: some View {
         HStack {
-            CaptureBottomLatestResultButton(
-                latestResult: latestResult,
-                onTap: onTapLatestResult
-            )
+            Button(action: onTapWorkspace) {
+                sideControlCard(symbol: "square.grid.2x2", title: "工作台")
+            }
+            .buttonStyle(SellerCameraPressButtonStyle())
+            .accessibilityLabel("工作台")
+            .accessibilityHint("双击查看项目和图片")
 
             Spacer(minLength: 14)
 
@@ -4562,15 +4714,15 @@ private struct CaptureBottomActionBar: View {
 
             Spacer(minLength: 14)
 
-            Button(action: onTapProjectPlaceholder) {
+            Button(action: onTapProfile) {
                 sideControlCard(
-                    symbol: projectActionSymbol,
-                    title: projectActionTitle
+                    symbol: "person.crop.circle",
+                    title: "我的"
                 )
             }
             .buttonStyle(SellerCameraPressButtonStyle())
-            .accessibilityLabel("项目")
-            .accessibilityHint("双击创建或查看当前项目状态")
+            .accessibilityLabel("我的")
+            .accessibilityHint("双击打开账户、设置和帮助入口")
         }
         .frame(height: 86)
     }

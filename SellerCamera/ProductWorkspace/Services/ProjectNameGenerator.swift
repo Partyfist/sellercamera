@@ -19,7 +19,7 @@ nonisolated final class DefaultProjectNameGenerator: ProjectNameGenerating {
     }
 
     func generateName(existingNames: [String], date: Date) -> String {
-        let prefix = "商品 \(dateFormatter.string(from: date))"
+        let prefix = "商品项目 \(dateFormatter.string(from: date))"
         let pattern = #"^\#(prefix) ([0-9]{3})$"#
         let regex = try? NSRegularExpression(pattern: pattern)
         let maxIndex = existingNames.reduce(0) { currentMax, name in

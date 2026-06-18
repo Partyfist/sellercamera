@@ -13,11 +13,13 @@ nonisolated protocol ProductProjectRepository {
     func fetchProjects(includeArchived: Bool) throws -> [ProductProject]
     func updateProject(_ project: ProductProject) throws
     func archiveProject(id: UUID) throws
+    func restoreProject(id: UUID) throws
 }
 
 nonisolated protocol ProjectAssetRepository {
     func createAsset(_ asset: ProjectAsset) throws
     func fetchAsset(id: UUID) throws -> ProjectAsset?
+    func fetchAssets(includeDeleted: Bool) throws -> [ProjectAsset]
     func fetchAssets(projectID: UUID) throws -> [ProjectAsset]
     func fetchAssets(projectID: UUID, category: CaptureCategory) throws -> [ProjectAsset]
 }

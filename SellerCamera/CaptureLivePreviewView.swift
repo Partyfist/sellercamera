@@ -3546,7 +3546,8 @@ final class CaptureCameraRuntime: NSObject, ObservableObject {
             origin: origin,
             width: width,
             height: height,
-            metadata: result.metadata
+            metadata: result.metadata,
+            originalFilename: nil
         )
 
         let archiveService = projectAssetArchiveService

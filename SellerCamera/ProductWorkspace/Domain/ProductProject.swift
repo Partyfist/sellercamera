@@ -23,6 +23,7 @@ nonisolated struct ProductProject: Identifiable, Codable, Equatable {
     var coverAssetID: UUID?
     var isArchived: Bool
     var sortOrder: Int?
+    var lastSelectedCaptureCategory: CaptureCategory
 
     init(
         id: UUID = UUID(),
@@ -33,7 +34,8 @@ nonisolated struct ProductProject: Identifiable, Codable, Equatable {
         status: ProjectStatus = .active,
         coverAssetID: UUID? = nil,
         isArchived: Bool = false,
-        sortOrder: Int? = nil
+        sortOrder: Int? = nil,
+        lastSelectedCaptureCategory: CaptureCategory = .standard
     ) {
         self.id = id
         self.schemaVersion = schemaVersion
@@ -44,5 +46,6 @@ nonisolated struct ProductProject: Identifiable, Codable, Equatable {
         self.coverAssetID = coverAssetID
         self.isArchived = isArchived
         self.sortOrder = sortOrder
+        self.lastSelectedCaptureCategory = lastSelectedCaptureCategory
     }
 }

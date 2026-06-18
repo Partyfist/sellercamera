@@ -34,13 +34,15 @@ nonisolated final class ProductWorkspaceEnvironment {
         let currentProjectStore = UserDefaultsCurrentProjectStore(userDefaults: userDefaults)
         let nameGenerator = DefaultProjectNameGenerator()
         let thumbnailGenerator = ThumbnailGenerator()
+        let countService = ProjectAssetCountService(assetCounter: repository)
         let projectService = ProductProjectService(
             projectRepository: repository,
+            assetRepository: repository,
+            assetCounter: repository,
             currentProjectStore: currentProjectStore,
             nameGenerator: nameGenerator,
             fileStore: fileStore
         )
-        let countService = ProjectAssetCountService(assetCounter: repository)
         let archiveService = ProjectAssetArchiveService(
             projectService: projectService,
             projectRepository: repository,

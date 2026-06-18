@@ -15,6 +15,7 @@ nonisolated struct ProjectPhotoArchiveInput {
     var width: Int?
     var height: Int?
     var metadata: [String: String]
+    var originalFilename: String?
 }
 
 nonisolated struct ProjectAssetArchiveResult {
@@ -48,7 +49,8 @@ nonisolated final class ProjectAssetArchiveService {
     }
 
     func archivePhoto(_ input: ProjectPhotoArchiveInput) async throws -> ProjectAssetArchiveResult {
-        debugLog("asset archive started category=\(input.category.rawValue) origin=\(input.origin.rawValue)")
+        let startedAt = Date()
+        archiveLog("archive started category=\(input.category.rawValue) origin=\(input.origin.rawValue)")
         var savedRelativePaths: [String] = []
 
         do {
@@ -78,6 +80,7 @@ nonisolated final class ProjectAssetArchiveService {
                 category: input.category,
                 assetType: .photo,
                 origin: input.origin,
+                originalFilename: input.originalFilename,
                 relativePath: originalRelativePath,
                 thumbnailRelativePath: thumbnailRelativePath,
                 createdAt: input.capturedAt,
@@ -89,22 +92,31 @@ nonisolated final class ProjectAssetArchiveService {
             )
 
             try assetRepository.createAsset(asset)
-            debugLog("asset metadata saved project=\(project.id.uuidString) asset=\(asset.id.uuidString)")
+            archiveLog("metadata saved projectID=\(project.id.uuidString) assetID=\(asset.id.uuidString)")
 
             if project.coverAssetID == nil {
                 project.coverAssetID = asset.id
-                debugLog("project cover assigned project=\(project.id.uuidString) asset=\(asset.id.uuidString)")
+                archiveLog("project cover assigned projectID=\(project.id.uuidString) assetID=\(asset.id.uuidString)")
             }
             project.updatedAt = now
             try projectRepository.updateProject(project)
 
             let counts = try countService.counts(projectID: project.id)
+            let duration = Date().timeIntervalSince(startedAt)
+            archiveLog(
+                "archive succeeded projectID=\(project.id.uuidString) assetID=\(asset.id.uuidString) " +
+                "category=\(asset.category.rawValue) relativePath=\(asset.relativePath) duration=\(String(format: "%.3f", duration))"
+            )
+            statsLog(
+                "counts updated projectID=\(project.id.uuidString) " +
+                "standard=\(counts.standard) detail=\(counts.detail) sku=\(counts.sku) video=\(counts.video)"
+            )
             return ProjectAssetArchiveResult(project: project, asset: asset, counts: counts)
         } catch {
             for path in savedRelativePaths {
                 try? fileStore.deleteFile(relativePath: path)
             }
-            debugLog("asset archive failed error=\(error.localizedDescription)")
+            archiveLog("archive failed category=\(input.category.rawValue) error=\(error.localizedDescription)")
             throw error
         }
     }
@@ -126,16 +138,21 @@ nonisolated final class ProjectAssetArchiveService {
             savedRelativePaths.append(thumbnailPath)
             return thumbnailPath
         } catch {
-            debugLog("thumbnail generation failed asset=\(assetID.uuidString) error=\(error.localizedDescription)")
+            archiveLog("thumbnail generation failed assetID=\(assetID.uuidString) error=\(error.localizedDescription)")
             return nil
         }
     }
 }
 
 #if DEBUG
-nonisolated private func debugLog(_ message: String) {
-    print("[ProductWorkspace] \(message)")
+nonisolated private func archiveLog(_ message: String) {
+    print("[AssetArchive] \(message)")
+}
+
+nonisolated private func statsLog(_ message: String) {
+    print("[ProjectStats] \(message)")
 }
 #else
-nonisolated private func debugLog(_ message: String) {}
+nonisolated private func archiveLog(_ message: String) {}
+nonisolated private func statsLog(_ message: String) {}
 #endif

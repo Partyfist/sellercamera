@@ -27,6 +27,7 @@ nonisolated final class ProjectFileStore: ProjectFileStoring {
             "\(projectRootRelativePath(projectID: projectID))/manifest",
             originalDirectoryRelativePath(projectID: projectID, category: .standard),
             originalDirectoryRelativePath(projectID: projectID, category: .detail),
+            originalDirectoryRelativePath(projectID: projectID, category: .sku),
             originalDirectoryRelativePath(projectID: projectID, category: .video),
             "\(projectRootRelativePath(projectID: projectID))/thumbnails",
             "\(projectRootRelativePath(projectID: projectID))/processed",
